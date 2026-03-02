@@ -17,8 +17,6 @@ on:
         default: 'com.example.myapp'
   push:
     branches: [ main ]
-    # On push to main, you can define default values or use secrets
-    # The icon URL could come from a repository variable/secret if needed.
 
 jobs:
   build:
@@ -31,9 +29,9 @@ jobs:
       - name: Show payload (debug)
         run: |
           echo "Event name: ${{ github.event_name }}"
-          echo "Icon URL: ${{ github.event.inputs.icon_url }}"
-          echo "App name: ${{ github.event.inputs.app_name }}"
-          echo "Package name: ${{ github.event.inputs.package_name }}"
+          echo "Icon URL (input): ${{ github.event.inputs.icon_url }}"
+          echo "App name (input): ${{ github.event.inputs.app_name }}"
+          echo "Package name (input): ${{ github.event.inputs.package_name }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -41,20 +39,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Set up Android SDK (already present on runner, but we ensure build-tools and platform)
-      - name: Install Android SDK components
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+      # ✅ CORRECT ANDROID SDK SETUP – uses a maintained action
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Download icon from URL
         id: download_icon
         run: |
-          # Determine icon URL (from input or fallback)
           if [ "${{ github.event_name }}" = "push" ]; then
-            # On push, use a default icon (you can also use a repository variable)
             ICON_URL="https://placehold.co/512x512/3a86ff/ffffff/png?text=App"
           else
             ICON_URL="${{ github.event.inputs.icon_url }}"
@@ -63,10 +55,23 @@ jobs:
           curl -f -o app-icon.png "$ICON_URL" || { echo "Failed to download icon"; exit 1; }
           echo "Icon downloaded successfully."
 
+      - name: Set app variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "APP_NAME=MyApp" >> $GITHUB_ENV
+            echo "PACKAGE_NAME=com.example.myapp" >> $GITHUB_ENV
+          else
+            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
+            echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
+          fi
+
       - name: Generate Android project
         run: |
-          # Create directory structure
-          PACKAGE_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
+          APP_NAME="$APP_NAME"
+          PACKAGE_NAME="$PACKAGE_NAME"
+          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
@@ -77,25 +82,21 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-          # Copy icon to drawable and also to mipmap folders (for launcher)
           cp app-icon.png app/src/main/res/drawable/ic_launcher.png
-          # Create simple launcher icons by copying (you may want to resize later)
           cp app-icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          # Create AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ github.event.inputs.package_name }}">
-
+              package="$PACKAGE_NAME">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="${{ github.event.inputs.app_name }}"
+                  android:label="$APP_NAME"
                   android:theme="@style/AppTheme">
                   <activity
                       android:name=".MainActivity"
@@ -106,30 +107,25 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-
           </manifest>
           EOF
 
-          # Create MainActivity.java
           cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java <<EOF
-          package ${{ github.event.inputs.package_name }};
-
+          package $PACKAGE_NAME;
           import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
-
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   TextView tv = new TextView(this);
-                  tv.setText("Hello from ${{ github.event.inputs.app_name }}!");
+                  tv.setText("Hello from $APP_NAME!");
                   setContentView(tv);
               }
           }
           EOF
 
-          # Create a simple layout (not used, but kept for completeness)
           cat > app/src/main/res/layout/activity_main.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -144,24 +140,20 @@ jobs:
           </LinearLayout>
           EOF
 
-          # Create styles.xml
           cat > app/src/main/res/values/styles.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="android:Theme.Light">
-                  <!-- Customize your theme here -->
               </style>
           </resources>
           EOF
 
-          # Create build.gradle (app level)
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
-
           android {
               compileSdkVersion 34
               defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
+                  applicationId "$PACKAGE_NAME"
                   minSdkVersion 21
                   targetSdkVersion 34
                   versionCode 1
@@ -173,13 +165,11 @@ jobs:
                   }
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
 
-          # Create project-level build.gradle
           cat > build.gradle <<EOF
           buildscript {
               repositories {
@@ -190,39 +180,30 @@ jobs:
                   classpath 'com.android.tools.build:gradle:8.2.0'
               }
           }
-
           allprojects {
               repositories {
                   google()
                   mavenCentral()
               }
           }
-
           task clean(type: Delete) {
               delete rootProject.buildDir
           }
           EOF
 
-          # Create settings.gradle
           cat > settings.gradle <<EOF
-          rootProject.name = "${{ github.event.inputs.app_name }}"
+          rootProject.name = "$APP_NAME"
           include ':app'
           EOF
 
-          # Create gradle wrapper (if you have gradle wrapper files in the repo, you can skip this)
-          # But we'll assume the runner can use the 'gradle' command directly or we can generate a simple wrapper.
-          # For simplicity, we'll use the system gradle (requires Android SDK setup already done).
-          # However, to ensure consistency, we can create a minimal gradlew wrapper.
-          # We'll use the gradle wrapper task if gradle is installed.
-          # Since we have gradle from SDK, we can run 'gradle wrapper' but that needs gradle installed.
-          # Instead, we'll just use the 'gradle' command directly. The runner has it.
-
+          # Create gradle wrapper
+          gradle wrapper --gradle-version=8.2
+          chmod +x gradlew
           echo "Android project generated."
 
       - name: Build APK
         run: |
-          # Use the local gradle (from Android SDK) to build
-          gradle assembleDebug
+          ./gradlew assembleDebug
           echo "APK built successfully."
 
       - name: Upload APK (artifact)
@@ -231,7 +212,6 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # Automatically create a release when pushing to main
       - name: Create Release
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -241,7 +221,7 @@ jobs:
           tag_name: v${{ github.run_number }}
           body: |
             Automated APK build from commit ${{ github.sha }}.
-            App name: ${{ github.event.inputs.app_name || 'MyApp' }}
-            Package: ${{ github.event.inputs.package_name || 'com.example.myapp' }}
+            App name: ${{ env.APP_NAME }}
+            Package: ${{ env.PACKAGE_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
