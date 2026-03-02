@@ -39,9 +39,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ✅ CORRECT ANDROID SDK SETUP – uses a maintained action
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      # Install the specific SDK platform and build-tools needed
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses || true
 
       - name: Download icon from URL
         id: download_icon
@@ -89,6 +94,7 @@ jobs:
           cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
+          # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -110,6 +116,7 @@ jobs:
           </manifest>
           EOF
 
+          # MainActivity.java
           cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java <<EOF
           package $PACKAGE_NAME;
           import android.app.Activity;
@@ -126,6 +133,7 @@ jobs:
           }
           EOF
 
+          # layout (optional)
           cat > app/src/main/res/layout/activity_main.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -140,6 +148,7 @@ jobs:
           </LinearLayout>
           EOF
 
+          # styles.xml
           cat > app/src/main/res/values/styles.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -148,6 +157,7 @@ jobs:
           </resources>
           EOF
 
+          # app/build.gradle
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
           android {
@@ -170,6 +180,7 @@ jobs:
           }
           EOF
 
+          # project build.gradle
           cat > build.gradle <<EOF
           buildscript {
               repositories {
@@ -191,19 +202,31 @@ jobs:
           }
           EOF
 
+          # settings.gradle
           cat > settings.gradle <<EOF
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
 
-          # Create gradle wrapper
+          # Create gradle wrapper with a fixed version (compatible with AGP 8.2.0)
           gradle wrapper --gradle-version=8.2
           chmod +x gradlew
+
           echo "Android project generated."
+
+      # Diagnostic step: show Gradle version and project structure
+      - name: Diagnose project
+        run: |
+          echo "Gradle version:"
+          ./gradlew --version
+          echo "Project files:"
+          find . -type f -name "*.gradle" -o -name "*.xml" -o -name "*.java" | head -20
+          echo "Attempting to list tasks..."
+          ./gradlew tasks --no-build-cache || true
 
       - name: Build APK
         run: |
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
           echo "APK built successfully."
 
       - name: Upload APK (artifact)
