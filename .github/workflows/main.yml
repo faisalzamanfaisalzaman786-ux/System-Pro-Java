@@ -234,7 +234,7 @@ jobs:
         with:
           files: app/build/outputs/apk/debug/app-debug.apk
           name: Release ${{ github.run_number }}
-          tag_name: v${{ github.run_number }}
+          tag_name: run-${{ github.run_id }}   # run_id پر مبنی ٹیگ تاکہ HTML میں ڈھونڈ سکیں
           body: |
             خودکار APK بلڈ از commit ${{ github.sha }}
             ایپ کا نام: ${{ env.APP_NAME }}
