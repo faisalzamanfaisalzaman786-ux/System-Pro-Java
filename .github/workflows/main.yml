@@ -42,13 +42,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Install required SDK platforms and build-tools
       - name: Install Android SDK components
         run: |
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
 
-      # Set up Gradle 8.2 (compatible with AGP 8.2.0)
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -99,6 +97,12 @@ jobs:
           cp app-icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # gradle.properties (for AndroidX)
+          cat > gradle.properties <<EOF
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
 
           # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
@@ -163,15 +167,17 @@ jobs:
           </resources>
           EOF
 
-          # app/build.gradle
+          # app/build.gradle (modern DSL)
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
+
           android {
-              compileSdkVersion 34
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
               defaultConfig {
                   applicationId "$PACKAGE_NAME"
-                  minSdkVersion 21
-                  targetSdkVersion 34
+                  minSdk 21
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
@@ -181,6 +187,7 @@ jobs:
                   }
               }
           }
+
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
@@ -216,20 +223,12 @@ jobs:
 
           echo "Android project generated."
 
-      # Diagnostic step to verify Gradle version and project structure
-      - name: Diagnose project
-        run: |
-          echo "Gradle version:"
-          gradle --version
-          echo "Project files:"
-          find . -type f -name "*.gradle" -o -name "*.xml" -o -name "*.java" | head -20
-          echo "Attempting to list tasks..."
-          gradle tasks --no-build-cache || true
+      # Verify Gradle configuration (dry run) – will fail if there are issues
+      - name: Check Gradle configuration
+        run: gradle assembleDebug --dry-run --stacktrace
 
       - name: Build APK
-        run: |
-          gradle assembleDebug --stacktrace
-          echo "APK built successfully."
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
