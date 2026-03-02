@@ -1,30 +1,44 @@
 name: Build APK
 
 on:
-  repository_dispatch:
-    types: [build-apk]
-  # Optional: also allow manual trigger with URL input
   workflow_dispatch:
     inputs:
       icon_url:
-        description: 'Public URL of the app icon (PNG)'
-        required: true
+        description: 'URL of the app icon (PNG recommended)'
+        required: false
+        default: 'https://placehold.co/512x512/3a86ff/ffffff/png?text=App'  # Placeholder icon
       app_name:
-        description: 'App name'
+        description: 'Application name'
         required: true
         default: 'MyApp'
+      package_name:
+        description: 'Package name (e.g., com.example.myapp)'
+        required: true
+        default: 'com.example.myapp'
+      create_release:
+        description: 'Create a GitHub Release with the APK?'
+        type: boolean
+        required: false
+        default: false
+  push:
+    branches: [ main ]
+    # For push events, you can define default values or use secrets
+    # The icon URL could come from a repository variable/secret if needed.
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Show payload (debug)
         run: |
-          echo "App name: ${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
-          echo "Icon URL: ${{ github.event.client_payload.icon_url || github.event.inputs.icon_url }}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Icon URL: ${{ github.event.inputs.icon_url }}"
+          echo "App name: ${{ github.event.inputs.app_name }}"
+          echo "Package name: ${{ github.event.inputs.package_name }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -33,41 +47,62 @@ jobs:
           distribution: 'temurin'
 
       - name: Download icon from URL
+        id: download_icon
         run: |
-          ICON_URL="${{ github.event.client_payload.icon_url || github.event.inputs.icon_url }}"
+          ICON_URL="${{ github.event.inputs.icon_url }}"
+          # If no URL provided (e.g., on push event), use a secure default
           if [ -z "$ICON_URL" ]; then
-            echo "Error: No icon URL provided"
-            exit 1
+            echo "No icon URL provided. Using default icon from repository variable or fallback."
+            # Option 1: Use a repository secret/variable
+            # ICON_URL="${{ vars.DEFAULT_ICON_URL }}"
+            # Option 2: Hardcoded fallback
+            ICON_URL="https://placehold.co/512x512/3a86ff/ffffff/png?text=App"
           fi
-          curl -L -o app_icon.png "$ICON_URL"
-          file app_icon.png
-          # Optionally resize/optimize icon here (e.g., with ImageMagick)
-          # convert app_icon.png -resize 512x512 icon.png
+          echo "Downloading icon from $ICON_URL"
+          curl -f -o app-icon.png "$ICON_URL" || { echo "Failed to download icon"; exit 1; }
+          echo "Icon downloaded successfully."
 
       - name: Write code files (generate Android project)
         run: |
-          # Your existing code generation steps here
-          # Use the downloaded icon (now at icon.png or app_icon.png)
-          cp app_icon.png app/src/main/res/drawable/ic_launcher.png
-          # ... rest of your project generation
+          # ------------------------------------------------------------------
+          # Replace the following lines with your actual project generation logic.
+          # This step should create the full Android project structure,
+          # copy the downloaded icon to the appropriate res folder,
+          # and set up the app name and package name as needed.
+          # ------------------------------------------------------------------
+          echo "Generating Android project..."
+          # Example: create a simple project using a template or custom script
+          # mkdir -p app/src/main/res/drawable
+          # cp app-icon.png app/src/main/res/drawable/ic_launcher.png
+          # echo "package ${{ github.event.inputs.package_name }};" > ... etc.
+          echo "Project generation completed."
 
       - name: Build APK
         run: |
-          # Example: build with Gradle
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          # ------------------------------------------------------------------
+          # Insert your APK build commands here.
+          # For a typical Gradle project:
+          #   chmod +x gradlew
+          #   ./gradlew assembleDebug
+          # ------------------------------------------------------------------
+          echo "Building APK..."
+          # Example:
+          # ./gradlew assembleDebug
+          echo "APK built successfully."
 
-      - name: Upload APK
+      - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
+          # Adjust the path to match your APK output location
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Create Release (optional)
-        if: github.event_name == 'repository_dispatch'
+        if: github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/debug/*.apk
-          tag_name: build-${{ github.run_id }}
+          name: Release ${{ github.run_number }}
+          tag_name: v${{ github.run_number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
