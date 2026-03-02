@@ -9,52 +9,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Show payload (for debugging)
+        run: |
+          echo "App name: ${{ github.event.client_payload.app_name }}"
+          echo "HTML length: ${#APP_HTML}"
+          echo "Icon length: ${#APP_ICON}"
+        env:
+          APP_HTML: ${{ github.event.client_payload.app_html }}
+          APP_ICON: ${{ github.event.client_payload.app_icon }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Decode and save app icon
+      - name: Decode icon
         run: |
           mkdir -p app/src/main/res/mipmap-hdpi
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          # آپ چاہیں تو مختلف ڈینسٹیز میں بھی بنا سکتے ہیں، یہاں صرف ایک مثال ہے
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png || echo "Icon decode failed"
 
-      - name: Create Android project structure
+      - name: Write code files
         run: |
-          # فرض کریں کہ آپ کے ریپو میں پہلے سے ایک Base Android پروجیکٹ موجود ہے
-          # (مثلاً app/ src/ build.gradle etc.)
-          # پھر صارف کی فراہم کردہ فائلز کو شامل کریں
+          mkdir -p app/src/main/assets
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
           echo "${{ github.event.client_payload.app_css }}" > app/src/main/assets/style.css
           echo "${{ github.event.client_payload.app_js }}" > app/src/main/assets/script.js
           echo "${{ github.event.client_payload.app_xml }}" > app/src/main/res/values/strings.xml
           echo "${{ github.event.client_payload.app_kotlin }}" > app/src/main/java/com/example/MainActivity.kt
 
-          # app_name کو strings.xml میں ڈالیں (اختیاری)
-          sed -i "s/MyApp/${{ github.event.client_payload.app_name }}/g" app/src/main/res/values/strings.xml
-
       - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Create Release and Upload APK
+      - name: Create Release
         if: success()
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
           name: "APK Build ${{ github.run_id }}"
           files: app/build/outputs/apk/debug/app-debug.apk
-          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
