@@ -1,8 +1,18 @@
-name: Build APK from Dispatch
+name: Build APK
 
 on:
   repository_dispatch:
     types: [build-apk]
+  # Optional: also allow manual trigger with URL input
+  workflow_dispatch:
+    inputs:
+      icon_url:
+        description: 'Public URL of the app icon (PNG)'
+        required: true
+      app_name:
+        description: 'App name'
+        required: true
+        default: 'MyApp'
 
 jobs:
   build:
@@ -11,37 +21,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show payload (for debugging)
+      - name: Show payload (debug)
         run: |
-          echo "App name: ${{ github.event.client_payload.app_name }}"
-          echo "HTML length: ${#APP_HTML}"
-          echo "Icon length: ${#APP_ICON}"
-        env:
-          APP_HTML: ${{ github.event.client_payload.app_html }}
-          APP_ICON: ${{ github.event.client_payload.app_icon }}
+          echo "App name: ${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
+          echo "Icon URL: ${{ github.event.client_payload.icon_url || github.event.inputs.icon_url }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Decode icon
+      - name: Download icon from URL
         run: |
-          mkdir -p app/src/main/res/mipmap-hdpi
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png || echo "Icon decode failed"
+          ICON_URL="${{ github.event.client_payload.icon_url || github.event.inputs.icon_url }}"
+          if [ -z "$ICON_URL" ]; then
+            echo "Error: No icon URL provided"
+            exit 1
+          fi
+          curl -L -o app_icon.png "$ICON_URL"
+          file app_icon.png
+          # Optionally resize/optimize icon here (e.g., with ImageMagick)
+          # convert app_icon.png -resize 512x512 icon.png
 
-      - name: Write code files
+      - name: Write code files (generate Android project)
         run: |
-          mkdir -p app/src/main/assets
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-          echo "${{ github.event.client_payload.app_css }}" > app/src/main/assets/style.css
-          echo "${{ github.event.client_payload.app_js }}" > app/src/main/assets/script.js
-          echo "${{ github.event.client_payload.app_xml }}" > app/src/main/res/values/strings.xml
-          echo "${{ github.event.client_payload.app_kotlin }}" > app/src/main/java/com/example/MainActivity.kt
+          # Your existing code generation steps here
+          # Use the downloaded icon (now at icon.png or app_icon.png)
+          cp app_icon.png app/src/main/res/drawable/ic_launcher.png
+          # ... rest of your project generation
 
       - name: Build APK
         run: |
+          # Example: build with Gradle
           chmod +x gradlew
           ./gradlew assembleDebug
 
@@ -49,14 +61,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
 
-      - name: Create Release
-        if: success()
+      - name: Create Release (optional)
+        if: github.event_name == 'repository_dispatch'
         uses: softprops/action-gh-release@v2
         with:
+          files: app/build/outputs/apk/debug/*.apk
           tag_name: build-${{ github.run_id }}
-          name: "APK Build ${{ github.run_id }}"
-          files: app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
