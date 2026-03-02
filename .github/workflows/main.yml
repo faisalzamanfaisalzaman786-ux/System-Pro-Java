@@ -1,4 +1,4 @@
-name: Build APK from Smart Studio
+name: Smart Studio – Code to APK
 
 on:
   repository_dispatch:
@@ -8,208 +8,97 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (optional)
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
-      - name: Install Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Create Android project structure
+      - name: Install ImageMagick (icon conversion)
         run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/java/com/example/myapp   # fallback package
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
 
-      # Save client payload to files for easy reference
-      - name: Write client payload to files
+      - name: Decode and convert icon to PNG
         run: |
-          echo '${{ toJson(github.event.client_payload) }}' > payload.json
-          APPS_NAME=$(jq -r '.app_name' payload.json)
-          echo "APP_NAME=$APPS_NAME" >> $GITHUB_ENV
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
+          convert icon_raw -resize 512x512! icon.png
 
-          echo '${{ github.event.client_payload.app_icon }}' | base64 -d > app/src/main/res/drawable/ic_launcher_foreground.png
-
-          # Create HTML with CSS/JS embedded
-          HTML_CONTENT='${{ github.event.client_payload.app_html }}'
-          CSS_CONTENT='${{ github.event.client_payload.app_css }}'
-          JS_CONTENT='${{ github.event.client_payload.app_js }}'
-          cat > app/src/main/assets/index.html <<EOF
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="UTF-8">
-          <style>${CSS_CONTENT}</style>
-          </head>
-          <body>${HTML_CONTENT}
-          <script>${JS_CONTENT}</script>
-          </body>
-          </html>
-          EOF
-
-          # Write XML as strings.xml (if it looks like resources, else save as raw)
-          XML_CONTENT='${{ github.event.client_payload.app_xml }}'
-          echo "$XML_CONTENT" > app/src/main/res/values/strings.xml
-
-          # Write Kotlin file
-          KOTLIN_CONTENT='${{ github.event.client_payload.app_kotlin }}'
-          # Extract package name from Kotlin content
-          PACKAGE_NAME=$(echo "$KOTLIN_CONTENT" | grep -oP 'package\s+\K[^;]+' | head -1)
-          if [ -z "$PACKAGE_NAME" ]; then
-            PACKAGE_NAME="com.example.myapp"
-          fi
-          PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          mkdir -p app/src/main/java/$PACKAGE_PATH
-          echo "$KOTLIN_CONTENT" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-
-      - name: Generate AndroidManifest.xml
-        run: |
-          cat > app/src/main/AndroidManifest.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ env.PACKAGE_NAME }}">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="${{ env.APP_NAME }}"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Generate build.gradle (app level)
-        run: |
-          cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-          }
-
-          android {
-              namespace '${{ env.PACKAGE_NAME }}'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "${{ env.PACKAGE_NAME }}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.webkit:webkit:1.10.0'
-          }
-          EOF
-
-      - name: Generate settings.gradle and top-level build.gradle
-        run: |
-          cat > settings.gradle <<EOF
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "SmartStudioApp"
-          include ':app'
-          EOF
-
-          cat > build.gradle <<EOF
-          // Top-level build file
-          plugins {
-              id 'com.android.application' version '8.2.0' apply false
-              id 'com.android.library' version '8.2.0' apply false
-              id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
-          }
-          EOF
-
-      - name: Generate style and launcher icons
-        run: |
-          cat > app/src/main/res/values/styles.xml <<EOF
-          <resources>
-              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-              </style>
-          </resources>
-          EOF
-
-          # Create launcher icons from the uploaded icon (simple resize – for production use ImageMagick or Android asset tool)
-          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-      - name: Build APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: app-release
-          path: app/build/outputs/apk/release/app-release.apk
+          node-version: 20
 
-      - name: Create GitHub Release (optional)
-        if: success()
-        uses: softprops/action-gh-release@v1
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Generate unique package name
+        id: package
+        run: |
+          SANITIZED=$(echo "${{ github.event.client_payload.app_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
+          if [[ $SANITIZED =~ ^[0-9] ]]; then
+            SANITIZED="app${SANITIZED}"
+          fi
+          TIMESTAMP=$(date +%s)
+          PACKAGE_NAME="com.userbuild.${SANITIZED}.ts${TIMESTAMP}"
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Generated package name: $PACKAGE_NAME"
+
+      - name: Create Cordova project
+        run: |
+          cordova create MyApp ${{ steps.package.outputs.package_name }} "${{ github.event.client_payload.app_name }}"
+          cd MyApp
+          cordova platform add android
+
+      - name: Add icon to project
+        run: |
+          cp icon.png MyApp/www/icon.png
+          cd MyApp
+          sed -i '/<\/widget>/i \ \ <platform name="android">\n    <icon src="www\/icon.png" density="hdpi" \/>\n  <\/platform>' config.xml
+
+      - name: Write HTML/CSS/JS files
+        run: |
+          echo "${{ github.event.client_payload.app_html }}" > MyApp/www/index.html
+          echo "${{ github.event.client_payload.app_css }}" > MyApp/www/styles.css
+          echo "${{ github.event.client_payload.app_js }}" > MyApp/www/script.js
+
+      - name: Build APK (debug)
+        run: |
+          cd MyApp
+          cordova build android --debug
+
+      - name: Find and copy APK
+        run: |
+          echo "🔍 Searching for APK..."
+          find MyApp -name "*.apk" -type f
+          APK_PATH=$(find MyApp -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found!"
+            exit 1
+          fi
+          echo "✅ Found APK at: $APK_PATH"
+          cp "$APK_PATH" app.apk
+
+      - name: Upload APK as artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-apk
+          path: app.apk
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
-          name: Build ${{ github.run_id }} – ${{ env.APP_NAME }}
-          files: app/build/outputs/apk/release/app-release.apk
+          name: "APK Build #${{ github.run_id }}"
+          body: "✅ App: ${{ github.event.client_payload.app_name }}"
+          files: app.apk
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
