@@ -98,13 +98,11 @@ jobs:
           cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          # gradle.properties (for AndroidX)
           cat > gradle.properties <<EOF
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
-          # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -126,7 +124,6 @@ jobs:
           </manifest>
           EOF
 
-          # MainActivity.java
           cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java <<EOF
           package $PACKAGE_NAME;
           import android.app.Activity;
@@ -143,7 +140,6 @@ jobs:
           }
           EOF
 
-          # layout (optional)
           cat > app/src/main/res/layout/activity_main.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -158,7 +154,6 @@ jobs:
           </LinearLayout>
           EOF
 
-          # styles.xml
           cat > app/src/main/res/values/styles.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -167,7 +162,6 @@ jobs:
           </resources>
           EOF
 
-          # app/build.gradle (modern DSL)
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
 
@@ -193,7 +187,6 @@ jobs:
           }
           EOF
 
-          # project build.gradle
           cat > build.gradle <<EOF
           buildscript {
               repositories {
@@ -215,7 +208,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           cat > settings.gradle <<EOF
           rootProject.name = "$APP_NAME"
           include ':app'
@@ -223,7 +215,6 @@ jobs:
 
           echo "Android project generated."
 
-      # Verify Gradle configuration (dry run) – will fail if there are issues
       - name: Check Gradle configuration
         run: gradle assembleDebug --dry-run --stacktrace
 
@@ -236,6 +227,7 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
+      # خودکار GitHub Release تخلیق کریں (صرف main برانچ پر push ہونے پر)
       - name: Create Release
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -244,8 +236,8 @@ jobs:
           name: Release ${{ github.run_number }}
           tag_name: v${{ github.run_number }}
           body: |
-            Automated APK build from commit ${{ github.sha }}.
-            App name: ${{ env.APP_NAME }}
-            Package: ${{ env.PACKAGE_NAME }}
+            خودکار APK بلڈ از commit ${{ github.sha }}
+            ایپ کا نام: ${{ env.APP_NAME }}
+            پیکج: ${{ env.PACKAGE_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
