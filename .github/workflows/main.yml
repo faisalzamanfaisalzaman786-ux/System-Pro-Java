@@ -42,11 +42,17 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Install the specific SDK platform and build-tools needed
+      # Install required SDK platforms and build-tools
       - name: Install Android SDK components
         run: |
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
+
+      # Set up Gradle 8.2 (compatible with AGP 8.2.0)
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
 
       - name: Download icon from URL
         id: download_icon
@@ -208,25 +214,21 @@ jobs:
           include ':app'
           EOF
 
-          # Create gradle wrapper with a fixed version (compatible with AGP 8.2.0)
-          gradle wrapper --gradle-version=8.2
-          chmod +x gradlew
-
           echo "Android project generated."
 
-      # Diagnostic step: show Gradle version and project structure
+      # Diagnostic step to verify Gradle version and project structure
       - name: Diagnose project
         run: |
           echo "Gradle version:"
-          ./gradlew --version
+          gradle --version
           echo "Project files:"
           find . -type f -name "*.gradle" -o -name "*.xml" -o -name "*.java" | head -20
           echo "Attempting to list tasks..."
-          ./gradlew tasks --no-build-cache || true
+          gradle tasks --no-build-cache || true
 
       - name: Build APK
         run: |
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
           echo "APK built successfully."
 
       - name: Upload APK (artifact)
