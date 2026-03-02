@@ -1,216 +1,215 @@
-# System Pro - YAML Build Logic
-# ورژن: 2.0
-# یہ فائل مختلف ان پٹس سے APK بنانے کے لیے ایک لچکدار پائپ لائن کی وضاحت کرتی ہے۔
+name: Build APK from Smart Studio
 
-name: "سسٹم پرو بلڈر"
-description: "HTML/CSS/JS/XML/Kotlin سے خودکار APK جنریشن"
+on:
+  repository_dispatch:
+    types: [build-apk]
 
-# ان پٹ کی تعریف
-inputs:
-  html:
-    source: "htmlCode"
-    optional: true
-    default: "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>My App</title></head><body><h1>Hello World</h1></body></html>"
-  css:
-    source: "cssCode"
-    optional: true
-    default: "body { font-family: sans-serif; text-align: center; }"
-  js:
-    source: "jsCode"
-    optional: true
-    default: "console.log('App started');"
-  xml:
-    source: "xmlCode"
-    optional: true
-    default: "activity_main.xml"  # اگر xml نہ دیا جائے تو ڈیفالٹ لے آؤٹ استعمال ہو گا
-  kotlin:
-    source: "ktCode"
-    optional: true
-    default: "MainActivity.kt"     # اگر kotlin نہ دیا جائے تو ڈیفالٹ ایکٹیویٹی استعمال ہو گی
-  icon:
-    source: "appIcon"
-    optional: true
-    default: "ic_launcher.png"     # ڈیفالٹ آئیکون
-  settings:
-    github_token:
-      source: "ghToken"
-      optional: true
-    repo_name:
-      source: "repoName"
-      optional: true
-    user_name:
-      source: "userName"
-      optional: true
-      default: "User"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (optional)
+        uses: actions/checkout@v3
 
-# بلڈ کے مراحل
-steps:
-  - name: "ان پٹ کی تصدیق اور ڈیفالٹس کا استعمال"
-    actions:
-      - if: "!inputs.html.exists"
-        then: "inputs.html.value = inputs.html.default"
-      - if: "!inputs.css.exists"
-        then: "inputs.css.value = inputs.css.default"
-      - if: "!inputs.js.exists"
-        then: "inputs.js.value = inputs.js.default"
-      - if: "!inputs.xml.exists"
-        then: "inputs.xml.value = generateDefaultXml()"  # فرضی فنکشن
-      - if: "!inputs.kotlin.exists"
-        then: "inputs.kotlin.value = generateDefaultKotlin()"
-      - if: "!inputs.icon.exists"
-        then: "inputs.icon.value = inputs.icon.default"
-    on_error: "continue"  # اگر تصدیق میں خرابی ہو تو اگلے مرحلے پر چلے جائیں
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-  - name: "اینڈرائیڈ پروجیکٹ کا ڈھانچہ تیار کریں"
-    run: |
-      mkdir -p app/src/main/java/com/systempro/app
-      mkdir -p app/src/main/res/layout
-      mkdir -p app/src/main/res/drawable
-      mkdir -p app/src/main/res/values
-      mkdir -p app/src/main/assets
-    on_error: "fail"  # اگر ڈائریکٹری نہ بن سکے تو بلڈ روک دیں
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
 
-  - name: "ویب فائلز (HTML/CSS/JS) کو assets میں کاپی کریں"
-    run:
-      - cp inputs.html.value app/src/main/assets/index.html
-      - cp inputs.css.value app/src/main/assets/style.css
-      - cp inputs.js.value app/src/main/assets/script.js
-    on_error: "continue"  # اگر کوئی فائل نہ بھی ہو تو آگے بڑھیں
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
 
-  - name: "XML لے آؤٹ فائل تیار کریں"
-    run: |
-      if inputs.xml.value is file:
-        cp inputs.xml.value app/src/main/res/layout/activity_main.xml
-      else:
-        # ڈیفالٹ XML لے آؤٹ بنائیں
-        echo '<?xml version="1.0" encoding="utf-8"?>
-        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-          android:layout_width="match_parent"
-          android:layout_height="match_parent"
-          android:orientation="vertical">
-          <WebView android:id="@+id/webview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-        </LinearLayout>' > app/src/main/res/layout/activity_main.xml
-    on_error: "continue"
+      - name: Create Android project structure
+        run: |
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/java/com/example/myapp   # fallback package
 
-  - name: "Kotlin ایکٹیویٹی فائل تیار کریں"
-    run: |
-      if inputs.kotlin.value is file:
-        cp inputs.kotlin.value app/src/main/java/com/systempro/app/MainActivity.kt
-      else:
-        # ڈیفالٹ Kotlin ایکٹیویٹی جو WebView لوڈ کرے
-        echo 'package com.systempro.app
-        import android.os.Bundle
-        import android.webkit.WebView
-        import androidx.appcompat.app.AppCompatActivity
-        class MainActivity : AppCompatActivity() {
-          override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContentView(R.layout.activity_main)
-            val webView = findViewById<WebView>(R.id.webview)
-            webView.settings.javaScriptEnabled = true
-            webView.loadUrl("file:///android_asset/index.html")
+      # Save client payload to files for easy reference
+      - name: Write client payload to files
+        run: |
+          echo '${{ toJson(github.event.client_payload) }}' > payload.json
+          APPS_NAME=$(jq -r '.app_name' payload.json)
+          echo "APP_NAME=$APPS_NAME" >> $GITHUB_ENV
+
+          echo '${{ github.event.client_payload.app_icon }}' | base64 -d > app/src/main/res/drawable/ic_launcher_foreground.png
+
+          # Create HTML with CSS/JS embedded
+          HTML_CONTENT='${{ github.event.client_payload.app_html }}'
+          CSS_CONTENT='${{ github.event.client_payload.app_css }}'
+          JS_CONTENT='${{ github.event.client_payload.app_js }}'
+          cat > app/src/main/assets/index.html <<EOF
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="UTF-8">
+          <style>${CSS_CONTENT}</style>
+          </head>
+          <body>${HTML_CONTENT}
+          <script>${JS_CONTENT}</script>
+          </body>
+          </html>
+          EOF
+
+          # Write XML as strings.xml (if it looks like resources, else save as raw)
+          XML_CONTENT='${{ github.event.client_payload.app_xml }}'
+          echo "$XML_CONTENT" > app/src/main/res/values/strings.xml
+
+          # Write Kotlin file
+          KOTLIN_CONTENT='${{ github.event.client_payload.app_kotlin }}'
+          # Extract package name from Kotlin content
+          PACKAGE_NAME=$(echo "$KOTLIN_CONTENT" | grep -oP 'package\s+\K[^;]+' | head -1)
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME="com.example.myapp"
+          fi
+          PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+          mkdir -p app/src/main/java/$PACKAGE_PATH
+          echo "$KOTLIN_CONTENT" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+
+      - name: Generate AndroidManifest.xml
+        run: |
+          cat > app/src/main/AndroidManifest.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${{ env.PACKAGE_NAME }}">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="${{ env.APP_NAME }}"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Generate build.gradle (app level)
+        run: |
+          cat > app/build.gradle <<EOF
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
           }
-        }' > app/src/main/java/com/systempro/app/MainActivity.kt
-    on_error: "continue"
 
-  - name: "AndroidManifest.xml تیار کریں"
-    run: |
-      echo '<?xml version="1.0" encoding="utf-8"?>
-      <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        package="com.systempro.app">
-        <application
-          android:allowBackup="true"
-          android:icon="@drawable/ic_launcher"
-          android:label="System Pro App"
-          android:theme="@style/Theme.AppCompat.Light">
-          <activity android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-              <action android:name="android.intent.action.MAIN" />
-              <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-          </activity>
-        </application>
-      </manifest>' > app/src/main/AndroidManifest.xml
-    on_error: "fail"
+          android {
+              namespace '${{ env.PACKAGE_NAME }}'
+              compileSdk 34
 
-  - name: "آئیکون کو res/drawable میں کاپی کریں"
-    run: |
-      if inputs.icon.value is file:
-        cp inputs.icon.value app/src/main/res/drawable/ic_launcher.png
-      else:
-        # ڈیفالٹ آئیکون ڈاؤن لوڈ کریں یا ایک چھوٹا PNG بنائیں
-        wget -O app/src/main/res/drawable/ic_launcher.png https://example.com/default_icon.png || touch app/src/main/res/drawable/ic_launcher.png
-    on_error: "continue"
+              defaultConfig {
+                  applicationId "${{ env.PACKAGE_NAME }}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
 
-  - name: "Gradle فائلیں تیار کریں (build.gradle)"
-    run: |
-      # پروجیکٹ لیول build.gradle
-      echo 'buildscript {
-        ext.kotlin_version = "1.8.0"
-        repositories { google() mavenCentral() }
-        dependencies { classpath "com.android.tools.build:gradle:7.4.0" classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
-      }' > build.gradle
-      
-      # ایپ ماڈیول build.gradle
-      echo 'plugins {
-        id "com.android.application"
-        id "kotlin-android"
-      }
-      android {
-        compileSdk 33
-        defaultConfig {
-          applicationId "com.systempro.app"
-          minSdk 21
-          targetSdk 33
-          versionCode 1
-          versionName "1.0"
-        }
-        buildTypes { release { minifyEnabled false } }
-      }
-      dependencies {
-        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-        implementation "androidx.appcompat:appcompat:1.6.1"
-        implementation "androidx.webkit:webkit:1.6.0"
-      }' > app/build.gradle
-    on_error: "fail"
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
 
-  - name: "Gradle کے ساتھ APK بنائیں"
-    run: |
-      chmod +x gradlew
-      ./gradlew assembleRelease --no-daemon
-    on_error: "retry"  # اگر ناکام ہو تو دوبارہ کوشش کریں
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.webkit:webkit:1.10.0'
+          }
+          EOF
 
-  - name: "APK پر دستخط کریں"
-    run: |
-      # اگر کلید موجود ہو تو اس سے دستخط کریں، ورنہ ڈیفالٹ کلید استعمال کریں
-      if [ -f "keystore.jks" ]; then
-        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore keystore.jks app/build/outputs/apk/release/app-release-unsigned.apk alias_name
-      else
-        # ڈیفالٹ کلید بنائیں اور دستخط کریں
-        keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US"
-        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore app/build/outputs/apk/release/app-release-unsigned.apk debug -storepass android -keypass android
-      fi
-      # APK کو zipalign کریں
-      zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk SystemProApp.apk
-    on_error: "continue"  # اگر دستخط ناکام ہو تب بھی بنا ہوا APK محفوظ رہے
+      - name: Generate settings.gradle and top-level build.gradle
+        run: |
+          cat > settings.gradle <<EOF
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SmartStudioApp"
+          include ':app'
+          EOF
 
-  - name: "تیار شدہ APK کو آؤٹ پٹ کریں"
-    run: |
-      cp SystemProApp.apk /output/SystemProApp.apk
-      echo "APK کامیابی سے بن گیا: /output/SystemProApp.apk"
-    on_error: "continue"
+          cat > build.gradle <<EOF
+          // Top-level build file
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+              id 'com.android.library' version '8.2.0' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
+          }
+          EOF
 
-# بلڈ کے بعد صفائی
-post_build:
-  - name: "عارضی فائلیں حذف کریں"
-    run: "rm -rf app/build intermediates"
-    on_error: "ignore"
+      - name: Generate style and launcher icons
+        run: |
+          cat > app/src/main/res/values/styles.xml <<EOF
+          <resources>
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+              </style>
+          </resources>
+          EOF
 
-# خرابی سے نجات کے طریقے
-error_handling:
-  default_action: "continue"  # عمومی طور پر خرابی کو نظر انداز کریں
-  retry_limit: 3              # دوبارہ کوشش کی حد
-  fallback: "use_default"     # اگر کوئی ان پٹ نہ ہو تو ڈیفالٹ استعمال کریں
+          # Create launcher icons from the uploaded icon (simple resize – for production use ImageMagick or Android asset tool)
+          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp app/src/main/res/drawable/ic_launcher_foreground.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Create GitHub Release (optional)
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: Build ${{ github.run_id }} – ${{ env.APP_NAME }}
+          files: app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
