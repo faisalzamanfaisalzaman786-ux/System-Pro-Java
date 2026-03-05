@@ -7,11 +7,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -20,13 +21,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install SDK components
+      - name: Install Android SDK components
         run: |
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
 
-      - name: Extract payload
-        id: payload
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Extract client payload into environment variables
+      - name: Extract payload data
         run: |
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
           echo "ICON_BASE64=${{ github.event.client_payload.app_icon }}" >> $GITHUB_ENV
@@ -36,17 +40,177 @@ jobs:
           echo "XML=${{ github.event.client_payload.app_xml }}" >> $GITHUB_ENV
           echo "KOTLIN=${{ github.event.client_payload.app_kotlin }}" >> $GITHUB_ENV
 
-      - name: Decode icon
-        run: echo "$ICON_BASE64" | base64 -d > app-icon.png
-
-      - name: Generate Android project
+      - name: Decode and save app icon
         run: |
-          # اپنا پروجیکٹ بنانے کے احکامات یہ لکھیں
-          # (اوپر دیے گئے مکمل YAML میں سے کاپی کر لیں)
-          # ...
+          echo "$ICON_BASE64" | base64 -d > app-icon.png
 
-      - name: Build APK
-        run: ./gradlew assembleDebug
+      - name: Generate Android project structure
+        run: |
+          APP_NAME="$APP_NAME"
+          # Create a simple package name based on app name (lowercase, no spaces)
+          PACKAGE_NAME="com.${APP_NAME// /}.app"
+          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+
+          # Create necessary directories
+          mkdir -p app/src/main/java/$PACKAGE_PATH
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+          # Copy icon to all required locations
+          cp app-icon.png app/src/main/res/drawable/ic_launcher.png
+          cp app-icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp app-icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp app-icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Write XML resource file (if provided, else default)
+          if [ -n "$XML" ]; then
+            echo "$XML" > app/src/main/res/values/strings.xml
+          else
+            cat > app/src/main/res/values/strings.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+          fi
+
+          # Write Kotlin MainActivity (if provided, else a WebView-based fallback)
+          if [ -n "$KOTLIN" ]; then
+            echo "$KOTLIN" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
+          else
+            # Escape HTML, CSS, JS for embedding in Kotlin string
+            ESCAPED_HTML=$(echo "$HTML" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            ESCAPED_CSS=$(echo "$CSS" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            ESCAPED_JS=$(echo "$JS" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
+          package $PACKAGE_NAME
+
+          import android.os.Bundle
+          import androidx.appcompat.app.AppCompatActivity
+          import android.webkit.WebView
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  val html = "$ESCAPED_HTML"
+                  val css = "$ESCAPED_CSS"
+                  val js = "$ESCAPED_JS"
+                  val content = "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>\" + css + \"</style></head><body>\" + html + \"<script>\" + js + \"</script></body></html>"
+                  webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
+                  setContentView(webView)
+              }
+          }
+          EOF
+          fi
+
+          # Write AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PACKAGE_NAME">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="$APP_NAME"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Write styles.xml
+          cat > app/src/main/res/values/styles.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+              </style>
+          </resources>
+          EOF
+
+          # Write build.gradle for app module
+          cat > app/build.gradle <<EOF
+          apply plugin: 'com.android.application'
+          apply plugin: 'org.jetbrains.kotlin.android'
+
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PACKAGE_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.webkit:webkit:1.9.0'
+          }
+          EOF
+
+          # Write root build.gradle
+          cat > build.gradle <<EOF
+          buildscript {
+              ext.kotlin_version = '1.9.20'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          # Write settings.gradle
+          cat > settings.gradle <<EOF
+          rootProject.name = "$APP_NAME"
+          include ':app'
+          EOF
+
+          # Write gradle.properties
+          cat > gradle.properties <<EOF
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+          echo "Android project generated successfully."
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
@@ -54,10 +218,15 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/debug/app-debug.apk
+          name: Build ${{ github.run_id }}
           tag_name: run-${{ github.run_id }}
+          body: |
+            APK built from repository dispatch event.
+            - App name: ${{ env.APP_NAME }}
+            - Run ID: ${{ github.run_id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
