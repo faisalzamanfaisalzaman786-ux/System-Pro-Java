@@ -29,26 +29,29 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # Install ImageMagick for icon resizing
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      # Extract client payload
-      - name: Extract payload data
-        run: |
-          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
-          echo "ICON_BASE64=${{ github.event.client_payload.app_icon }}" >> $GITHUB_ENV
-          echo "HTML=${{ github.event.client_payload.app_html }}" >> $GITHUB_ENV
-          echo "CSS=${{ github.event.client_payload.app_css }}" >> $GITHUB_ENV
-          echo "JS=${{ github.event.client_payload.app_js }}" >> $GITHUB_ENV
-          echo "XML=${{ github.event.client_payload.app_xml }}" >> $GITHUB_ENV
-          echo "KOTLIN=${{ github.event.client_payload.app_kotlin }}" >> $GITHUB_ENV
+      # پے لوڈ کو JSON فائل میں محفوظ کریں
+      - name: Save client payload
+        run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
 
-      - name: Decode and save original icon
+      # jq کے ذریعے ڈیٹا نکالیں اور فائلیں بنائیں
+      - name: Extract payload and write files
         run: |
+          APP_NAME=$(jq -r '.app_name // "MyApp"' payload.json)
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+
+          ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           echo "$ICON_BASE64" | base64 -d > app-icon-original.png
 
-      # Resize icon to Android standard dimensions
+          # کوڈ فائلیں بنائیں
+          jq -r '.app_html // ""' payload.json > app_html.html
+          jq -r '.app_css // ""' payload.json > app_css.css
+          jq -r '.app_js // ""' payload.json > app_js.js
+          jq -r '.app_xml // ""' payload.json > app_xml.xml
+          jq -r '.app_kotlin // ""' payload.json > app_kotlin.kt
+
       - name: Resize icon for all densities
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
@@ -57,36 +60,28 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-          # Mdpi (48x48)
           convert app-icon-original.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-          # Hdpi (72x72)
           convert app-icon-original.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-          # Xhdpi (96x96)
           convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          # Xxhdpi (144x144)
           convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          # Xxxhdpi (192x192)
           convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          # Also copy to drawable for fallback
           mkdir -p app/src/main/res/drawable
           cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
 
       - name: Generate Android project
         run: |
           APP_NAME="$APP_NAME"
-          # Create a simple package name based on app name (lowercase, no spaces)
           PACKAGE_NAME="com.${APP_NAME// /}.app"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
 
-          # Create necessary directories
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # Write XML resource file (if provided, else default)
-          if [ -n "$XML" ]; then
-            echo "$XML" > app/src/main/res/values/strings.xml
+          # XML فائل (اگر فراہم کی گئی ہو)
+          if [ -s app_xml.xml ]; then
+            cp app_xml.xml app/src/main/res/values/strings.xml
           else
             cat > app/src/main/res/values/strings.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -96,14 +91,14 @@ jobs:
           EOF
           fi
 
-          # Write Kotlin MainActivity (if provided, else a WebView-based fallback)
-          if [ -n "$KOTLIN" ]; then
-            echo "$KOTLIN" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
+          # Kotlin ایکٹیویٹی (اگر فراہم کی گئی ہو)
+          if [ -s app_kotlin.kt ]; then
+            cp app_kotlin.kt app/src/main/java/$PACKAGE_PATH/MainActivity.kt
           else
-            # Escape HTML, CSS, JS for embedding in Kotlin string
-            ESCAPED_HTML=$(echo "$HTML" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            ESCAPED_CSS=$(echo "$CSS" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            ESCAPED_JS=$(echo "$JS" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            # WebView پر مبنی ڈیفالٹ ایکٹیویٹی
+            HTML_CONTENT=$(cat app_html.html | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            CSS_CONTENT=$(cat app_css.css | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            JS_CONTENT=$(cat app_js.js | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
           package $PACKAGE_NAME
 
@@ -116,9 +111,9 @@ jobs:
                   super.onCreate(savedInstanceState)
                   val webView = WebView(this)
                   webView.settings.javaScriptEnabled = true
-                  val html = "$ESCAPED_HTML"
-                  val css = "$ESCAPED_CSS"
-                  val js = "$ESCAPED_JS"
+                  val html = "$HTML_CONTENT"
+                  val css = "$CSS_CONTENT"
+                  val js = "$JS_CONTENT"
                   val content = "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>\" + css + \"</style></head><body>\" + html + \"<script>\" + js + \"</script></body></html>"
                   webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
                   setContentView(webView)
@@ -127,7 +122,7 @@ jobs:
           EOF
           fi
 
-          # Write AndroidManifest.xml
+          # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -149,7 +144,7 @@ jobs:
           </manifest>
           EOF
 
-          # Write styles.xml
+          # styles.xml
           cat > app/src/main/res/values/styles.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -158,7 +153,7 @@ jobs:
           </resources>
           EOF
 
-          # Write build.gradle for app module
+          # Gradle فائلیں
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
@@ -188,7 +183,6 @@ jobs:
           }
           EOF
 
-          # Write root build.gradle
           cat > build.gradle <<EOF
           buildscript {
               ext.kotlin_version = '1.9.20'
@@ -209,13 +203,11 @@ jobs:
           }
           EOF
 
-          # Write settings.gradle
           cat > settings.gradle <<EOF
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
 
-          # Write gradle.properties
           cat > gradle.properties <<EOF
           android.useAndroidX=true
           android.enableJetifier=true
