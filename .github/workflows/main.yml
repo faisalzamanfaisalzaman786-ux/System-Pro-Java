@@ -45,7 +45,6 @@ jobs:
           ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           echo "$ICON_BASE64" | base64 -d > app-icon-original.png
 
-          # کوڈ فائلیں بنائیں
           jq -r '.app_html // ""' payload.json > app_html.html
           jq -r '.app_css // ""' payload.json > app_css.css
           jq -r '.app_js // ""' payload.json > app_js.js
@@ -79,7 +78,7 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # XML فائل (اگر فراہم کی گئی ہو)
+          # XML فائل
           if [ -s app_xml.xml ]; then
             cp app_xml.xml app/src/main/res/values/strings.xml
           else
@@ -91,11 +90,10 @@ jobs:
           EOF
           fi
 
-          # Kotlin ایکٹیویٹی (اگر فراہم کی گئی ہو)
+          # Kotlin ایکٹیویٹی
           if [ -s app_kotlin.kt ]; then
             cp app_kotlin.kt app/src/main/java/$PACKAGE_PATH/MainActivity.kt
           else
-            # WebView پر مبنی ڈیفالٹ ایکٹیویٹی
             HTML_CONTENT=$(cat app_html.html | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             CSS_CONTENT=$(cat app_css.css | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             JS_CONTENT=$(cat app_js.js | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
@@ -214,6 +212,12 @@ jobs:
           EOF
 
           echo "Android project generated successfully."
+
+      # نیا مرحلہ: Gradle Wrapper بنائیں
+      - name: Generate Gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
