@@ -1,4 +1,13 @@
-name: Build APK from Dispatch
+info --stacktrace
+
+      # Upload APK as artifact
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+    name: Build APK from Dispatch
 
 on:
   repository_dispatch:
@@ -274,6 +283,19 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       # Create GitHub Release with a tag based on run ID
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/app-debug.apk
+          name: Build ${{ github.run_id }}
+          tag_name: run-${{ github.run_id }}
+          body: |
+            APK built from repository dispatch event.
+            - App name: ${{ env.APP_NAME }}
+            - Package: ${{ env.PACKAGE_NAME }}
+            - Run ID: ${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Create GitHub Release with a tag based on run ID
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
