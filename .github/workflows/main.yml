@@ -32,18 +32,17 @@ jobs:
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      # پے لوڈ کو JSON فائل میں محفوظ کریں
+      # Save client payload as JSON
       - name: Save client payload
         run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
 
-      # jq کے ذریعے ڈیٹا نکالیں اور فائلیں بنائیں
+      # Extract data using jq and create files
       - name: Extract payload and write files
         run: |
           APP_NAME=$(jq -r '.app_name // "MyApp"' payload.json)
-          # ایپ کے نام سے تمام غیر حروفِ تہجی ہٹا کر پیکج نام بنائیں
+          # Safe package name: lowercase alphanumeric only
           SAFE_APP_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
           [ -z "$SAFE_APP_NAME" ] && SAFE_APP_NAME="myapp"
-          # پیکج نام میں ڈبل کوٹ نہ ہو اس کا خیال رکھا
           PACKAGE_NAME="com.${SAFE_APP_NAME}.app"
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
@@ -61,6 +60,7 @@ jobs:
           jq -r '.app_xml // ""' payload.json > app_xml.xml
           jq -r '.app_kotlin // ""' payload.json > app_kotlin.kt
 
+      # Resize icon for all Android densities
       - name: Resize icon for all densities
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
@@ -76,6 +76,7 @@ jobs:
             convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           else
+            # Fallback: generate a gray square icon
             for size in 48 72 96 144 192; do
               convert -size ${size}x${size} xc:gray -fill white -gravity center -pointsize 20 -annotate 0 "App" app/src/main/res/mipmap-${size}/ic_launcher.png
             done
@@ -83,6 +84,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
 
+      # Generate complete Android project structure
       - name: Generate Android project
         run: |
           APP_NAME="$APP_NAME"
@@ -105,11 +107,11 @@ jobs:
           EOF
           fi
 
-          # Kotlin MainActivity
+          # MainActivity.kt (fallback to WebView if no Kotlin provided)
           if [ -s app_kotlin.kt ]; then
             cp app_kotlin.kt app/src/main/java/$PACKAGE_PATH/MainActivity.kt
           else
-            # HTML/CSS/JS کو escape کریں (بیک سلیش، ڈبل کوٹ، ڈالر، نئی لائن)
+            # Escape HTML/CSS/JS for embedding in Kotlin string
             HTML_ESCAPED=$(cat app_html.html | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             CSS_ESCAPED=$(cat app_css.css | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             JS_ESCAPED=$(cat app_js.js | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
@@ -231,9 +233,9 @@ jobs:
           android.enableJetifier=true
           EOF
 
-          echo "✅ Android project generated."
+          echo "✅ Android project generated successfully."
 
-      # ڈیبگنگ: اہم فائلوں کا مواد دکھائیں
+      # Debug: show critical files
       - name: Debug - show settings.gradle
         run: cat settings.gradle
 
@@ -246,20 +248,22 @@ jobs:
       - name: Debug - show MainActivity.kt (first 20 lines)
         run: head -20 app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.kt
 
-      # Gradle پروجیکٹ کی تصدیق
+      # Verify Gradle project (this helps catch configuration errors early)
       - name: Verify Gradle project
         run: gradle projects --stacktrace
 
-      # Build with detailed logs
+      # Build APK with detailed logging
       - name: Build debug APK
         run: gradle assembleDebug --info --stacktrace
 
+      # Upload APK as artifact
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
+      # Create GitHub Release with a tag based on run ID
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
