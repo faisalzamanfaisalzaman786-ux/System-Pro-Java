@@ -40,10 +40,20 @@ jobs:
       - name: Extract payload and write files
         run: |
           APP_NAME=$(jq -r '.app_name // "MyApp"' payload.json)
+          # پیکج نام کو محفوظ بنائیں: صرف حروف، اعداد، ڈاٹ
+          SAFE_APP_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
+          [ -z "$SAFE_APP_NAME" ] && SAFE_APP_NAME="myapp"
+          PACKAGE_NAME="com.${SAFE_APP_NAME}.app"
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
 
           ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
-          echo "$ICON_BASE64" | base64 -d > app-icon-original.png
+          if [ -n "$ICON_BASE64" ]; then
+            echo "$ICON_BASE64" | base64 -d > app-icon-original.png
+          else
+            # اگر آئیکون نہ ہو تو ایک خالی فائل بنا دیں (بعد میں convert ناکام نہ ہو)
+            touch app-icon-original.png
+          fi
 
           jq -r '.app_html // ""' payload.json > app_html.html
           jq -r '.app_css // ""' payload.json > app_css.css
@@ -59,11 +69,18 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-          convert app-icon-original.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert app-icon-original.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          if [ -s app-icon-original.png ]; then
+            convert app-icon-original.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert app-icon-original.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            # اگر آئیکون نہ ہو تو ڈیفالٹ رنگی مربع بنا دیں
+            for size in 48 72 96 144 192; do
+              convert -size ${size}x${size} xc:gray -fill white -gravity center -pointsize 20 -annotate 0 "App" app/src/main/res/mipmap-${size}/ic_launcher.png
+            done
+          fi
 
           mkdir -p app/src/main/res/drawable
           cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
@@ -71,21 +88,21 @@ jobs:
       - name: Generate Android project
         run: |
           APP_NAME="$APP_NAME"
-          PACKAGE_NAME="com.${APP_NAME// /}.app"
+          PACKAGE_NAME="$PACKAGE_NAME"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
 
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # XML فائل
+          # XML فائل (strings.xml)
           if [ -s app_xml.xml ]; then
             cp app_xml.xml app/src/main/res/values/strings.xml
           else
-            cat > app/src/main/res/values/strings.xml <<EOF
+            cat > app/src/main/res/values/strings.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">$APP_NAME</string>
+              <string name="app_name">'"$APP_NAME"'</string>
           </resources>
           EOF
           fi
@@ -94,10 +111,13 @@ jobs:
           if [ -s app_kotlin.kt ]; then
             cp app_kotlin.kt app/src/main/java/$PACKAGE_PATH/MainActivity.kt
           else
-            HTML_CONTENT=$(cat app_html.html | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            CSS_CONTENT=$(cat app_css.css | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            JS_CONTENT=$(cat app_js.js | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
+            # HTML/CSS/JS کو Kotlin string میں محفوظ طریقے سے شامل کریں
+            # بیکٹِک، ڈالر کے نشان وغیرہ سے بچیں
+            HTML_ESCAPED=$(cat app_html.html | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            CSS_ESCAPED=$(cat app_css.css | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+            JS_ESCAPED=$(cat app_js.js | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<'EOF'
           package $PACKAGE_NAME
 
           import android.os.Bundle
@@ -109,9 +129,9 @@ jobs:
                   super.onCreate(savedInstanceState)
                   val webView = WebView(this)
                   webView.settings.javaScriptEnabled = true
-                  val html = "$HTML_CONTENT"
-                  val css = "$CSS_CONTENT"
-                  val js = "$JS_CONTENT"
+                  val html = "$HTML_ESCAPED"
+                  val css = "$CSS_ESCAPED"
+                  val js = "$JS_ESCAPED"
                   val content = "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>\" + css + \"</style></head><body>\" + html + \"<script>\" + js + \"</script></body></html>"
                   webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
                   setContentView(webView)
@@ -121,7 +141,7 @@ jobs:
           fi
 
           # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml <<EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="$PACKAGE_NAME">
@@ -143,7 +163,7 @@ jobs:
           EOF
 
           # styles.xml
-          cat > app/src/main/res/values/styles.xml <<EOF
+          cat > app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
@@ -152,7 +172,7 @@ jobs:
           EOF
 
           # Gradle فائلیں
-          cat > app/build.gradle <<EOF
+          cat > app/build.gradle <<'EOF'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
 
@@ -181,7 +201,7 @@ jobs:
           }
           EOF
 
-          cat > build.gradle <<EOF
+          cat > build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.20'
               repositories {
@@ -190,7 +210,7 @@ jobs:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
           allprojects {
@@ -201,19 +221,26 @@ jobs:
           }
           EOF
 
-          cat > settings.gradle <<EOF
+          cat > settings.gradle <<'EOF'
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
 
-          cat > gradle.properties <<EOF
+          cat > gradle.properties <<'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
           echo "Android project generated successfully."
 
-      # wrapper کا مرحلہ ہٹا دیا گیا – براہ راست system Gradle استعمال کریں
+      # ڈیبگنگ کے لیے پروجیکٹ کی ساخت دیکھیں
+      - name: List project files
+        run: find . -type f | head -50
+
+      # Gradle پروجیکٹ کو تسلیم کرتا ہے یا نہیں چیک کریں
+      - name: Check Gradle projects
+        run: gradle projects --stacktrace || true
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
 
@@ -232,6 +259,7 @@ jobs:
           body: |
             APK built from repository dispatch event.
             - App name: ${{ env.APP_NAME }}
+            - Package: ${{ env.PACKAGE_NAME }}
             - Run ID: ${{ github.run_id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
