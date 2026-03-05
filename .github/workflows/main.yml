@@ -1,22 +1,8 @@
-name: Build APK
+name: Build APK from Dispatch
 
 on:
-  workflow_dispatch:
-    inputs:
-      icon_url:
-        description: 'URL of the app icon (PNG recommended)'
-        required: false
-        default: 'https://placehold.co/512x512/3a86ff/ffffff/png?text=App'
-      app_name:
-        description: 'Application name'
-        required: true
-        default: 'MyApp'
-      package_name:
-        description: 'Package name (e.g., com.example.myapp)'
-        required: true
-        default: 'com.example.myapp'
-  push:
-    branches: [ main ]
+  repository_dispatch:
+    types: [build-apk]
 
 jobs:
   build:
@@ -25,13 +11,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Show payload (debug)
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Icon URL (input): ${{ github.event.inputs.icon_url }}"
-          echo "App name (input): ${{ github.event.inputs.app_name }}"
-          echo "Package name (input): ${{ github.event.inputs.package_name }}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -49,31 +28,23 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
 
-      - name: Download icon from URL
-        id: download_icon
+      # Extract client payload
+      - name: Read client payload
+        id: payload
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            ICON_URL="https://placehold.co/512x512/3a86ff/ffffff/png?text=App"
-          else
-            ICON_URL="${{ github.event.inputs.icon_url }}"
-          fi
-          echo "Downloading icon from $ICON_URL"
-          curl -f -o app-icon.png "$ICON_URL" || { echo "Failed to download icon"; exit 1; }
-          echo "Icon downloaded successfully."
+          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=com.${{ github.event.client_payload.app_name | lower | replace(' ', '') }}.app" >> $GITHUB_ENV   # generate a simple package name
+          echo "ICON_BASE64=${{ github.event.client_payload.app_icon }}" >> $GITHUB_ENV
+          echo "HTML=${{ github.event.client_payload.app_html }}" >> $GITHUB_ENV
+          echo "CSS=${{ github.event.client_payload.app_css }}" >> $GITHUB_ENV
+          echo "JS=${{ github.event.client_payload.app_js }}" >> $GITHUB_ENV
+          echo "XML=${{ github.event.client_payload.app_xml }}" >> $GITHUB_ENV
+          echo "KOTLIN=${{ github.event.client_payload.app_kotlin }}" >> $GITHUB_ENV
 
-      - name: Set app variables
-        id: vars
+      - name: Decode and save icon
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "APP_NAME=MyApp" >> $GITHUB_ENV
-            echo "PACKAGE_NAME=com.example.myapp" >> $GITHUB_ENV
-          else
-            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
-            echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
-          fi
+          echo "$ICON_BASE64" | base64 -d > app-icon.png
 
       - name: Generate Android project
         run: |
@@ -91,6 +62,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
+          # Copy icon to all required places
           cp app-icon.png app/src/main/res/drawable/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
@@ -98,12 +70,48 @@ jobs:
           cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          cat > gradle.properties <<EOF
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
+          # Write the XML resource file (if provided)
+          if [ -n "$XML" ]; then
+            echo "$XML" > app/src/main/res/values/strings.xml
+          else
+            cat > app/src/main/res/values/strings.xml <<EOFX
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOFX
+          fi
 
-          cat > app/src/main/AndroidManifest.xml <<EOF
+          # Write the Kotlin activity code (if provided)
+          if [ -n "$KOTLIN" ]; then
+            echo "$KOTLIN" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
+          else
+            # fallback simple activity
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOFK
+          package $PACKAGE_NAME
+
+          import android.os.Bundle
+          import androidx.appcompat.app.AppCompatActivity
+          import android.webkit.WebView
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  val html = "${HTML//\"/\\\"}"  // escape quotes
+                  val css = "${CSS//\"/\\\"}"
+                  val js = "${JS//\"/\\\"}"
+                  val content = "<!DOCTYPE html><html><head><style>\$css</style></head><body>\$html<script>\$js<\/script></body></html>"
+                  webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
+                  setContentView(webView)
+              }
+          }
+          EOFK
+          fi
+
+          # Write AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml <<EOFM
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="$PACKAGE_NAME">
@@ -122,48 +130,12 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          EOF
+          EOFM
 
-          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java <<EOF
-          package $PACKAGE_NAME;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  TextView tv = new TextView(this);
-                  tv.setText("Hello from $APP_NAME!");
-                  setContentView(tv);
-              }
-          }
-          EOF
-
-          cat > app/src/main/res/layout/activity_main.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical">
-              <TextView
-                  android:id="@+id/text"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Hello World!" />
-          </LinearLayout>
-          EOF
-
-          cat > app/src/main/res/values/styles.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="android:Theme.Light">
-              </style>
-          </resources>
-          EOF
-
-          cat > app/build.gradle <<EOF
+          # Write build.gradle files (simplified)
+          cat > app/build.gradle <<EOFG
           apply plugin: 'com.android.application'
+          apply plugin: 'org.jetbrains.kotlin.android'
 
           android {
               namespace '$PACKAGE_NAME'
@@ -183,18 +155,23 @@ jobs:
           }
 
           dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.webkit:webkit:1.9.0'
           }
-          EOF
+          EOFG
 
-          cat > build.gradle <<EOF
+          cat > build.gradle <<EOFB
           buildscript {
+              ext.kotlin_version = '1.9.20'
               repositories {
                   google()
                   mavenCentral()
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
           allprojects {
@@ -203,41 +180,33 @@ jobs:
                   mavenCentral()
               }
           }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
+          EOFB
 
-          cat > settings.gradle <<EOF
+          cat > settings.gradle <<EOFS
           rootProject.name = "$APP_NAME"
           include ':app'
-          EOF
+          EOFS
 
           echo "Android project generated."
 
-      - name: Check Gradle configuration
-        run: gradle assembleDebug --dry-run --stacktrace
-
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK (artifact)
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # خودکار GitHub Release تخلیق کریں (صرف main برانچ پر push ہونے پر)
+      # Create a Release with a tag based on the run ID – this allows the web app to fetch the APK via the tag
       - name: Create Release
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/debug/app-debug.apk
-          name: Release ${{ github.run_number }}
-          tag_name: run-${{ github.run_id }}   # run_id پر مبنی ٹیگ تاکہ HTML میں ڈھونڈ سکیں
+          name: Build ${{ github.run_id }}
+          tag_name: run-${{ github.run_id }}
           body: |
-            خودکار APK بلڈ از commit ${{ github.sha }}
-            ایپ کا نام: ${{ env.APP_NAME }}
-            پیکج: ${{ env.PACKAGE_NAME }}
+            APK built from repository dispatch
+            App name: ${{ env.APP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
