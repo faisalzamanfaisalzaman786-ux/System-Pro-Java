@@ -26,7 +26,6 @@ jobs:
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
 
-      # Gradle کو سیٹ اپ کرنا اور ورژن 8.2 کو یقینی بنانا
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -73,10 +72,6 @@ jobs:
             convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          else
-            for size in 48 72 96 144 192; do
-              convert -size ${size}x${size} xc:gray -fill white -gravity center -pointsize 20 -annotate 0 "Pro" app/src/main/res/mipmap-mdpi/ic_launcher.png
-            done
           fi
 
       - name: Generate Android project
@@ -85,19 +80,13 @@ jobs:
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/values
 
-          # Strings.xml
+          # 1. Strings.xml
           cat > app/src/main/res/values/strings.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
+          <resources><string name="app_name">$APP_NAME</string></resources>
           EOF
 
-          # MainActivity.kt
+          # 2. MainActivity.kt
           HTML_ESCAPED=$(cat app_html.html | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          CSS_ESCAPED=$(cat app_css.css | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          JS_ESCAPED=$(cat app_js.js | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-
           cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
           package $PACKAGE_NAME
           import android.os.Bundle
@@ -107,55 +96,44 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState); val webView = WebView(this)
                   webView.settings.javaScriptEnabled = true
-                  val content = "<html><head><style>$CSS_ESCAPED</style></head><body>$HTML_ESCAPED<script>$JS_ESCAPED</script></body></html>"
-                  webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
+                  webView.loadData("$HTML_ESCAPED", "text/html", "UTF-8")
                   setContentView(webView)
               }
           }
           EOF
 
-          # AndroidManifest.xml
+          # 3. AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="$APP_NAME" android:icon="@mipmap/ic_launcher">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-          # build.gradle (App level)
-          cat > app/build.gradle <<EOF
-          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-              defaultConfig { applicationId "$PACKAGE_NAME"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0" }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.core:core-ktx:1.12.0'
-          }
+          # 4. gradle.properties (یہ فائل بہت ضروری ہے)
+          cat > gradle.properties <<EOF
+          android.useAndroidX=true
+          android.enableJetifier=true
           EOF
 
-          # build.gradle (Project level)
+          # 5. build.gradle (App level)
+          cat > app/build.gradle <<EOF
+          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+          android { namespace '$PACKAGE_NAME'; compileSdk 34; defaultConfig { applicationId "$PACKAGE_NAME"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0" } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'androidx.core:core-ktx:1.12.0' }
+          EOF
+
+          # 6. build.gradle (Project level)
           cat > build.gradle <<EOF
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20' }
-          }
+          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # settings.gradle
           echo "include ':app'" > settings.gradle
 
-      # Wrapper جنریٹ کرنے کا درست طریقہ
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.2
 
@@ -165,5 +143,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Debug-APK
+          name: ${{ env.APP_NAME }}-APK
           path: app/build/outputs/apk/debug/*.apk
