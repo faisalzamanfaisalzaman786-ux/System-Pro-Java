@@ -29,7 +29,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # Extract client payload into environment variables
+      # Install ImageMagick for icon resizing
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
+      # Extract client payload
       - name: Extract payload data
         run: |
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
@@ -40,11 +44,35 @@ jobs:
           echo "XML=${{ github.event.client_payload.app_xml }}" >> $GITHUB_ENV
           echo "KOTLIN=${{ github.event.client_payload.app_kotlin }}" >> $GITHUB_ENV
 
-      - name: Decode and save app icon
+      - name: Decode and save original icon
         run: |
-          echo "$ICON_BASE64" | base64 -d > app-icon.png
+          echo "$ICON_BASE64" | base64 -d > app-icon-original.png
 
-      - name: Generate Android project structure
+      # Resize icon to Android standard dimensions
+      - name: Resize icon for all densities
+        run: |
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+          # Mdpi (48x48)
+          convert app-icon-original.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+          # Hdpi (72x72)
+          convert app-icon-original.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+          # Xhdpi (96x96)
+          convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          # Xxhdpi (144x144)
+          convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          # Xxxhdpi (192x192)
+          convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Also copy to drawable for fallback
+          mkdir -p app/src/main/res/drawable
+          cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+
+      - name: Generate Android project
         run: |
           APP_NAME="$APP_NAME"
           # Create a simple package name based on app name (lowercase, no spaces)
@@ -53,22 +81,8 @@ jobs:
 
           # Create necessary directories
           mkdir -p app/src/main/java/$PACKAGE_PATH
-          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-
-          # Copy icon to all required locations
-          cp app-icon.png app/src/main/res/drawable/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
           # Write XML resource file (if provided, else default)
           if [ -n "$XML" ]; then
