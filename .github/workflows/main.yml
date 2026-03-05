@@ -1,13 +1,4 @@
-info --stacktrace
-
-      # Upload APK as artifact
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-
-    name: Build APK from Dispatch
+name: Build APK from Dispatch
 
 on:
   repository_dispatch:
@@ -260,20 +251,26 @@ jobs:
       - name: Debug - show MainActivity.kt (first 20 lines)
         run: head -20 app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.kt
 
-      # Verify Gradle project with full error capture
+      # Generate Gradle Wrapper (ensures ./gradlew works)
+      - name: Generate Gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      # Verify Gradle project using wrapper with full error output
       - name: Verify Gradle project
         run: |
-          if ! gradle projects --stacktrace; then
+          if ! ./gradlew projects --stacktrace; then
             echo "::error::Gradle projects failed. Last 50 lines of output:"
-            tail -50 /tmp/gradle-output.log || true
+            tail -50 gradle-output.log || true
             exit 1
           fi
         shell: bash
         continue-on-error: false
 
-      # Build APK with detailed logging
+      # Build APK using wrapper
       - name: Build debug APK
-        run: gradle assembleDebug --info --stacktrace
+        run: ./gradlew assembleDebug --info --stacktrace
 
       # Upload APK as artifact
       - name: Upload APK as artifact
@@ -283,19 +280,6 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       # Create GitHub Release with a tag based on run ID
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: app/build/outputs/apk/debug/app-debug.apk
-          name: Build ${{ github.run_id }}
-          tag_name: run-${{ github.run_id }}
-          body: |
-            APK built from repository dispatch event.
-            - App name: ${{ env.APP_NAME }}
-            - Package: ${{ env.PACKAGE_NAME }}
-            - Run ID: ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Create GitHub Release with a tag based on run ID
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
