@@ -7,12 +7,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -21,20 +20,15 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
+      - name: Install SDK components
         run: |
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      # Extract client payload
-      - name: Read client payload
+      - name: Extract payload
         id: payload
         run: |
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=com.${{ github.event.client_payload.app_name | lower | replace(' ', '') }}.app" >> $GITHUB_ENV   # generate a simple package name
           echo "ICON_BASE64=${{ github.event.client_payload.app_icon }}" >> $GITHUB_ENV
           echo "HTML=${{ github.event.client_payload.app_html }}" >> $GITHUB_ENV
           echo "CSS=${{ github.event.client_payload.app_css }}" >> $GITHUB_ENV
@@ -42,155 +36,17 @@ jobs:
           echo "XML=${{ github.event.client_payload.app_xml }}" >> $GITHUB_ENV
           echo "KOTLIN=${{ github.event.client_payload.app_kotlin }}" >> $GITHUB_ENV
 
-      - name: Decode and save icon
-        run: |
-          echo "$ICON_BASE64" | base64 -d > app-icon.png
+      - name: Decode icon
+        run: echo "$ICON_BASE64" | base64 -d > app-icon.png
 
       - name: Generate Android project
         run: |
-          APP_NAME="$APP_NAME"
-          PACKAGE_NAME="$PACKAGE_NAME"
-          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-
-          mkdir -p app/src/main/java/$PACKAGE_PATH
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-
-          # Copy icon to all required places
-          cp app-icon.png app/src/main/res/drawable/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp app-icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-          # Write the XML resource file (if provided)
-          if [ -n "$XML" ]; then
-            echo "$XML" > app/src/main/res/values/strings.xml
-          else
-            cat > app/src/main/res/values/strings.xml <<EOFX
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOFX
-          fi
-
-          # Write the Kotlin activity code (if provided)
-          if [ -n "$KOTLIN" ]; then
-            echo "$KOTLIN" > app/src/main/java/$PACKAGE_PATH/MainActivity.kt
-          else
-            # fallback simple activity
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOFK
-          package $PACKAGE_NAME
-
-          import android.os.Bundle
-          import androidx.appcompat.app.AppCompatActivity
-          import android.webkit.WebView
-
-          class MainActivity : AppCompatActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  val webView = WebView(this)
-                  webView.settings.javaScriptEnabled = true
-                  val html = "${HTML//\"/\\\"}"  // escape quotes
-                  val css = "${CSS//\"/\\\"}"
-                  val js = "${JS//\"/\\\"}"
-                  val content = "<!DOCTYPE html><html><head><style>\$css</style></head><body>\$html<script>\$js<\/script></body></html>"
-                  webView.loadDataWithBaseURL(null, content, "text/html", "UTF-8", null)
-                  setContentView(webView)
-              }
-          }
-          EOFK
-          fi
-
-          # Write AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml <<EOFM
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$PACKAGE_NAME">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="$APP_NAME"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOFM
-
-          # Write build.gradle files (simplified)
-          cat > app/build.gradle <<EOFG
-          apply plugin: 'com.android.application'
-          apply plugin: 'org.jetbrains.kotlin.android'
-
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PACKAGE_NAME"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.webkit:webkit:1.9.0'
-          }
-          EOFG
-
-          cat > build.gradle <<EOFB
-          buildscript {
-              ext.kotlin_version = '1.9.20'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOFB
-
-          cat > settings.gradle <<EOFS
-          rootProject.name = "$APP_NAME"
-          include ':app'
-          EOFS
-
-          echo "Android project generated."
+          # اپنا پروجیکٹ بنانے کے احکامات یہ لکھیں
+          # (اوپر دیے گئے مکمل YAML میں سے کاپی کر لیں)
+          # ...
 
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
@@ -198,15 +54,10 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # Create a Release with a tag based on the run ID – this allows the web app to fetch the APK via the tag
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/debug/app-debug.apk
-          name: Build ${{ github.run_id }}
           tag_name: run-${{ github.run_id }}
-          body: |
-            APK built from repository dispatch
-            App name: ${{ env.APP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
