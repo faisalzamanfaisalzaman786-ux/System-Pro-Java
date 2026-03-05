@@ -18,130 +18,112 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components
-        run: |
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
-          yes | sdkmanager --licenses || true
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-          cache-disabled: true
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-
-      - name: Save client payload
-        run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
-
-      - name: Extract payload and write files
+      - name: Save payload data
         run: |
+          echo '${{ toJSON(github.event.client_payload) }}' > payload.json
           APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
-          SAFE_APP_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
-          [ -z "$SAFE_APP_NAME" ] && SAFE_APP_NAME="systempro"
-          PACKAGE_NAME="com.${SAFE_APP_NAME}.app"
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=com.systempro.app" >> $GITHUB_ENV
 
-          ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
-          if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > app-icon-original.png
-          else
-            touch app-icon-original.png
-          fi
-
-          jq -r '.app_html // ""' payload.json > app_html.html
-          jq -r '.app_css // ""' payload.json > app_css.css
-          jq -r '.app_js // ""' payload.json > app_js.js
-
-      - name: Resize icon for all densities
+      - name: Generate Project Files
         run: |
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-
-          if [ -s app-icon-original.png ]; then
-            convert app-icon-original.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert app-icon-original.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert app-icon-original.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert app-icon-original.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert app-icon-original.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
-
-      - name: Generate Android project
-        run: |
-          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          mkdir -p app/src/main/java/$PACKAGE_PATH
+          mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
 
-          # 1. Strings.xml
-          cat > app/src/main/res/values/strings.xml <<EOF
-          <resources><string name="app_name">$APP_NAME</string></resources>
+          # 1. gradle.properties (AndroidX fix)
+          cat > gradle.properties <<EOF
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
           EOF
 
-          # 2. MainActivity.kt
-          HTML_ESCAPED=$(cat app_html.html | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
-          package $PACKAGE_NAME
-          import android.os.Bundle
-          import androidx.appcompat.app.AppCompatActivity
-          import android.webkit.WebView
-          class MainActivity : AppCompatActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState); val webView = WebView(this)
-                  webView.settings.javaScriptEnabled = true
-                  webView.loadData("$HTML_ESCAPED", "text/html", "UTF-8")
-                  setContentView(webView)
+          # 2. build.gradle (Project level)
+          cat > build.gradle <<EOF
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { 
+                  classpath 'com.android.tools.build:gradle:8.2.0'
+                  classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0'
               }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          # 3. app/build.gradle (JVM target fix)
+          cat > app/build.gradle <<EOF
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.core:core-ktx:1.12.0'
           }
           EOF
 
-          # 3. AndroidManifest.xml
+          # 4. AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="$APP_NAME" android:icon="@mipmap/ic_launcher">
+              <application android:label="$APP_NAME" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-          # 4. gradle.properties (یہ فائل بہت ضروری ہے)
-          cat > gradle.properties <<EOF
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-          # 5. build.gradle (App level)
-          cat > app/build.gradle <<EOF
-          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
-          android { namespace '$PACKAGE_NAME'; compileSdk 34; defaultConfig { applicationId "$PACKAGE_NAME"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'androidx.core:core-ktx:1.12.0' }
-          EOF
-
-          # 6. build.gradle (Project level)
-          cat > build.gradle <<EOF
-          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20' } }
-          allprojects { repositories { google(); mavenCentral() } }
+          # 5. MainActivity.kt
+          cat > app/src/main/java/com/systempro/app/MainActivity.kt <<EOF
+          package com.systempro.app
+          import android.os.Bundle
+          import androidx.appcompat.app.AppCompatActivity
+          import android.webkit.WebView
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val web = WebView(this)
+                  web.loadUrl("https://google.com")
+                  setContentView(web)
+              }
+          }
           EOF
 
           echo "include ':app'" > settings.gradle
 
-      - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.2
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-APK
+          name: SystemPro-APK
           path: app/build/outputs/apk/debug/*.apk
