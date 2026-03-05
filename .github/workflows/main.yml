@@ -213,14 +213,9 @@ jobs:
 
           echo "Android project generated successfully."
 
-      # نیا مرحلہ: Gradle Wrapper بنائیں
-      - name: Generate Gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-
+      # wrapper کا مرحلہ ہٹا دیا گیا – براہ راست system Gradle استعمال کریں
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
