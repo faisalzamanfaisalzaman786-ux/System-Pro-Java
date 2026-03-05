@@ -40,7 +40,7 @@ jobs:
       - name: Extract payload and write files
         run: |
           APP_NAME=$(jq -r '.app_name // "MyApp"' payload.json)
-          # پیکج نام کو محفوظ بنائیں: صرف حروف، اعداد، ڈاٹ
+          # پیکج نام کو محفوظ بنائیں: صرف چھوٹے حروف، اعداد، ڈاٹ
           SAFE_APP_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
           [ -z "$SAFE_APP_NAME" ] && SAFE_APP_NAME="myapp"
           PACKAGE_NAME="com.${SAFE_APP_NAME}.app"
@@ -95,14 +95,14 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # XML فائل (strings.xml)
+          # XML فائل (strings.xml) - متغیرات کو تبدیل کرنے کے لیے EOF بغیر quotes کے
           if [ -s app_xml.xml ]; then
             cp app_xml.xml app/src/main/res/values/strings.xml
           else
-            cat > app/src/main/res/values/strings.xml <<'EOF'
+            cat > app/src/main/res/values/strings.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">'"$APP_NAME"'</string>
+              <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
           fi
@@ -112,12 +112,14 @@ jobs:
             cp app_kotlin.kt app/src/main/java/$PACKAGE_PATH/MainActivity.kt
           else
             # HTML/CSS/JS کو Kotlin string میں محفوظ طریقے سے شامل کریں
-            # بیکٹِک، ڈالر کے نشان وغیرہ سے بچیں
+            # بیکٹِک، ڈالر کے نشان وغیرہ سے بچنے کے لیے sed کا استعمال
+            # نوٹ: ہر $ کو \$ سے بدلیں تاکہ shell انہیں متغیر نہ سمجھے
             HTML_ESCAPED=$(cat app_html.html | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             CSS_ESCAPED=$(cat app_css.css | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
             JS_ESCAPED=$(cat app_js.js | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\$/\\$/g' | sed ':a;N;$!ba;s/\n/\\n/g')
 
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<'EOF'
+            # Kotlin فائل لکھنے کے لیے heredoc جہاں متغیرات تبدیل ہوں (EOF بغیر quotes)
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.kt <<EOF
           package $PACKAGE_NAME
 
           import android.os.Bundle
@@ -141,7 +143,7 @@ jobs:
           fi
 
           # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          cat > app/src/main/AndroidManifest.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="$PACKAGE_NAME">
@@ -163,7 +165,7 @@ jobs:
           EOF
 
           # styles.xml
-          cat > app/src/main/res/values/styles.xml <<'EOF'
+          cat > app/src/main/res/values/styles.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
@@ -172,7 +174,7 @@ jobs:
           EOF
 
           # Gradle فائلیں
-          cat > app/build.gradle <<'EOF'
+          cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
 
@@ -201,7 +203,7 @@ jobs:
           }
           EOF
 
-          cat > build.gradle <<'EOF'
+          cat > build.gradle <<EOF
           buildscript {
               ext.kotlin_version = '1.9.20'
               repositories {
@@ -210,7 +212,7 @@ jobs:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
           allprojects {
@@ -221,25 +223,24 @@ jobs:
           }
           EOF
 
-          cat > settings.gradle <<'EOF'
+          cat > settings.gradle <<EOF
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
 
-          cat > gradle.properties <<'EOF'
+          cat > gradle.properties <<EOF
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
           echo "Android project generated successfully."
 
-      # ڈیبگنگ کے لیے پروجیکٹ کی ساخت دیکھیں
-      - name: List project files
-        run: find . -type f | head -50
+      # ڈیبگنگ کے لیے اہم فائلوں کا مواد دکھائیں
+      - name: Debug - show settings.gradle
+        run: cat settings.gradle
 
-      # Gradle پروجیکٹ کو تسلیم کرتا ہے یا نہیں چیک کریں
-      - name: Check Gradle projects
-        run: gradle projects --stacktrace || true
+      - name: Debug - show app/build.gradle
+        run: cat app/build.gradle
 
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
