@@ -26,8 +26,11 @@ jobs:
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
           yes | sdkmanager --licenses || true
 
+      # Gradle setup without caching (to avoid cache service errors)
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-disabled: true
 
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
@@ -248,9 +251,16 @@ jobs:
       - name: Debug - show MainActivity.kt (first 20 lines)
         run: head -20 app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.kt
 
-      # Verify Gradle project (this helps catch configuration errors early)
+      # Verify Gradle project with full error capture
       - name: Verify Gradle project
-        run: gradle projects --stacktrace
+        run: |
+          if ! gradle projects --stacktrace; then
+            echo "::error::Gradle projects failed. Last 50 lines of output:"
+            tail -50 /tmp/gradle-output.log || true
+            exit 1
+          fi
+        shell: bash
+        continue-on-error: false
 
       # Build APK with detailed logging
       - name: Build debug APK
