@@ -57,7 +57,7 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # Project build.gradle (صرف buildscript)
+          # Project build.gradle
           cat > build.gradle <<EOF
           buildscript {
               ext.kotlin_version = '1.9.22'
@@ -116,6 +116,9 @@ jobs:
                       minifyEnabled false
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
+                  debug {
+                      // debug build خودکار سائن ہوتا ہے
+                  }
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -157,7 +160,7 @@ jobs:
           if [ -n "$APP_ICON_BASE64" ]; then
             echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
           else
-            # ڈیفالٹ آئیکون (ایک چھوٹی تصویر)
+            # ڈیفالٹ آئیکون
             echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
           fi
 
@@ -207,16 +210,17 @@ jobs:
           EOF
 
       - name: Create gradle wrapper
-        # Gradle version 8.4 (minimum required by AGP 8.3.0)
         run: gradle wrapper --gradle-version 8.4
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          # Debug build بنائیں (یہ خودکار سائن ہے اور انسٹال ہو جائے گا)
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-APK
-          path: app/build/outputs/apk/release/*.apk
+          # Debug APK کا راستہ
+          path: app/build/outputs/apk/debug/*.apk
