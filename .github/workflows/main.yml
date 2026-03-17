@@ -1,3 +1,4 @@
+
 name: Build System Pro APK
 
 on:
@@ -30,7 +31,7 @@ jobs:
           APP_HTML=$(jq -r '.app_html // "<h1>Hello</h1>"' payload.json)
           APP_CSS=$(jq -r '.app_css // "body { background: #fff; }"' payload.json)
           APP_JS=$(jq -r '.app_js // "console.log(\"ready\");"' payload.json)
-          APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
+          # آئیکون اب استعمال نہیں ہو گا، بلکہ خودکار ویکٹر ڈرایبل بنے گا
           
           UNIQUE_ID=${{ github.run_id }}
           echo "UNIQUE_ID=$UNIQUE_ID" >> $GITHUB_ENV
@@ -44,7 +45,6 @@ jobs:
           echo "APP_JS<<EOF" >> $GITHUB_ENV
           echo "$APP_JS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
 
       - name: Generate Project Files
         run: |
@@ -52,6 +52,11 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/raw
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
           # gradle.properties
           cat > gradle.properties <<EOF
@@ -99,7 +104,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle (منفرد applicationId اور aaptOptions کے ساتھ)
+          # App build.gradle (منفرد applicationId)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -142,13 +147,33 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
+          # ویکٹر ڈرایبل آئیکون (کوئی PNG نہیں)
+          cat > app/src/main/res/drawable/ic_launcher.xml <<EOF
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+            <path
+                android:fillColor="#A52A2A"
+                android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM18,15.2c0,2.37 -3.67,3.8 -6,3.8 -2.33,0 -6,-1.43 -6,-3.8 0,-0.22 0.16,-0.44 0.44,-0.63 1.42,-0.94 3.51,-1.57 5.56,-1.57 2.05,0 4.14,0.63 5.56,1.57 0.28,0.19 0.44,0.41 0.44,0.63z"/>
+          </vector>
+          EOF
+
+          # mipmap میں بھی یہی ڈرایبل کاپی کریں
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/mipmap-hdpi/ic_launcher.xml
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/mipmap-xhdpi/ic_launcher.xml
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/mipmap-xxhdpi/ic_launcher.xml
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/mipmap-xxxhdpi/ic_launcher.xml
+
+          # AndroidManifest.xml (آئیکون mipmap سے)
           cat > app/src/main/AndroidManifest.xml <<EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application
                   android:label="$APP_NAME"
-                  android:icon="@drawable/ic_launcher"
+                  android:icon="@mipmap/ic_launcher"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity
                       android:name=".MainActivity"
@@ -162,19 +187,7 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون کو محفوظ طریقے سے ڈی کوڈ کریں
-          if [ -n "$APP_ICON_BASE64" ]; then
-            if echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png 2>/dev/null; then
-              echo "آئیکون کامیابی سے ڈی کوڈ ہو گیا"
-            else
-              echo "آئیکون ڈی کوڈ نہ ہو سکا، ڈیفالٹ استعمال کر رہے ہیں"
-              echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
-            fi
-          else
-            echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
-          fi
-
-          # HTML, CSS, JS کو raw میں محفوظ کریں
+          # HTML, CSS, JS
           echo "$APP_HTML" > app/src/main/res/raw/index.html
           echo "$APP_CSS" > app/src/main/res/raw/styles.css
           echo "$APP_JS" > app/src/main/res/raw/script.js
