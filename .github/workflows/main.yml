@@ -28,8 +28,8 @@ jobs:
           echo '${{ toJSON(github.event.client_payload) }}' > payload.json
           APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
           APP_HTML=$(jq -r '.app_html // "<h1>Hello</h1>"' payload.json)
-          APP_CSS=$(jq -r '.app_css // "body { background: #fff; }"' payload.json)
-          APP_JS=$(jq -r '.app_js // "console.log(\"ready\");"' payload.json)
+          APP_CSS=$(jq -r '.app_css // ""' payload.json)
+          APP_JS=$(jq -r '.app_js // ""' payload.json)
           APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           
           UNIQUE_ID=${{ github.run_id }}
@@ -38,6 +38,7 @@ jobs:
           echo "APP_HTML<<EOF" >> $GITHUB_ENV
           echo "$APP_HTML" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
+          # ہم CSS اور JS کو اب بھی محفوظ کر رہے ہیں لیکن استعمال نہیں کریں گے
           echo "APP_CSS<<EOF" >> $GITHUB_ENV
           echo "$APP_CSS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -195,14 +196,18 @@ jobs:
           EOF_VEC
           fi
 
-          # HTML, CSS, JS
+          # HTML فائل محفوظ کریں (اس میں CSS اور JS شامل ہیں)
           echo "$APP_HTML" > app/src/main/res/raw/index.html
-          echo "$APP_CSS" > app/src/main/res/raw/styles.css
-          echo "$APP_JS" > app/src/main/res/raw/script.js
 
-          # MainActivity.kt
-          cat > app/src/main/java/com/systempro/app/MainActivity.kt <<EOF
+          # ہم CSS اور JS فائلیں نہیں بنا رہے کیونکہ وہ HTML میں ہیں
+          # اگر آپ انہیں الگ رکھنا چاہیں تو نیچے والی لائنیں استعمال کریں:
+          # echo "$APP_CSS" > app/src/main/res/raw/styles.css
+          # echo "$APP_JS" > app/src/main/res/raw/script.js
+
+          # MainActivity.kt - اب صرف HTML لوڈ کرتا ہے
+          cat > app/src/main/java/com/systempro/app/MainActivity.kt <<'EOF'
           package com.systempro.app
+
           import android.os.Bundle
           import androidx.appcompat.app.AppCompatActivity
           import android.webkit.WebView
@@ -211,30 +216,18 @@ jobs:
           class MainActivity : AppCompatActivity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
+                  
                   val webView = WebView(this)
                   webView.settings.javaScriptEnabled = true
                   webView.settings.domStorageEnabled = true
                   webView.webViewClient = WebViewClient()
                   
+                  // HTML کو raw وسائل سے پڑھیں
                   val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
-                  val css = resources.openRawResource(R.raw.styles).bufferedReader().readText()
-                  val js = resources.openRawResource(R.raw.script).bufferedReader().readText()
                   
-                  val content = """
-                      <!DOCTYPE html>
-                      <html>
-                      <head>
-                          <meta charset="UTF-8">
-                          <style>\$css</style>
-                      </head>
-                      <body>
-                          \$html
-                          <script>\$js</script>
-                      </body>
-                      </html>
-                  """.trimIndent()
+                  // HTML لوڈ کریں (بیس یوآرایل کی ضرورت نہیں کیونکہ تمام وسائل inline ہیں)
+                  webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                   
-                  webView.loadDataWithBaseURL("file:///android_res/raw/", content, "text/html", "UTF-8", null)
                   setContentView(webView)
               }
           }
@@ -242,7 +235,8 @@ jobs:
 
       - name: Build APK
         run: |
-          gradle assembleDebug --stacktrace
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
