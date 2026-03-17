@@ -30,6 +30,9 @@ jobs:
           APP_JS=$(jq -r '.app_js // "console.log(\"ready\");"' payload.json)
           APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           
+          # منفرد شناخت کے لیے رن آئی ڈی
+          UNIQUE_ID=${{ github.run_id }}
+          echo "UNIQUE_ID=$UNIQUE_ID" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "APP_HTML<<EOF" >> $GITHUB_ENV
           echo "$APP_HTML" >> $GITHUB_ENV
@@ -95,7 +98,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle
+          # App build.gradle (منفرد applicationId کے ساتھ)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -105,7 +108,7 @@ jobs:
               namespace 'com.systempro.app'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.systempro.app"
+                  applicationId "com.systempro.app.$UNIQUE_ID"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -117,7 +120,6 @@ jobs:
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
                   debug {
-                      // debug build خودکار سائن ہوتا ہے
                   }
               }
               compileOptions {
@@ -160,7 +162,6 @@ jobs:
           if [ -n "$APP_ICON_BASE64" ]; then
             echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
           else
-            # ڈیفالٹ آئیکون
             echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
           fi
 
@@ -215,12 +216,10 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
-          # Debug build بنائیں (یہ خودکار سائن ہے اور انسٹال ہو جائے گا)
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-APK
-          # Debug APK کا راستہ
+          name: SystemPro-APK-${{ github.run_id }}
           path: app/build/outputs/apk/debug/*.apk
