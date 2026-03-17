@@ -25,23 +25,22 @@ jobs:
 
       - name: Save and parse payload
         run: |
-          # محفوظ طریقے سے payload کو فائل میں لکھیں (کسی بھی طرح کی interpretation سے بچنے کے لیے)
-          echo '${{ toJSON(github.event.client_payload) }}' > payload.json
+          # پورے payload کو محفوظ طریقے سے فائل میں لکھیں (کوئی interpretation نہیں ہوگا)
+          cat <<'EOF' > payload.json
+          ${{ toJSON(github.event.client_payload) }}
+          EOF
           
-          # jq سے ڈیٹا نکالیں اور environment variables میں محفوظ کریں
+          # اب jq سے ڈیٹا نکالیں
           APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           
-          # HTML کوڈ کو فائل میں لکھیں تاکہ وہ محفوظ رہے
           jq -r '.app_html // ""' payload.json > app_html.txt
-          # HTML کو environment variable میں ڈالنے کے لیے محفوظ طریقہ
           {
             echo "APP_HTML<<EOF"
             cat app_html.txt
             echo "EOF"
           } >> $GITHUB_ENV
           
-          # CSS کوڈ (اگر آپ الگ استعمال کرنا چاہیں)
           jq -r '.app_css // ""' payload.json > app_css.txt
           {
             echo "APP_CSS<<EOF"
@@ -49,7 +48,6 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
           
-          # JS کوڈ
           jq -r '.app_js // ""' payload.json > app_js.txt
           {
             echo "APP_JS<<EOF"
@@ -57,11 +55,9 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
           
-          # آئیکون
           APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
           
-          # یونیک آئی ڈی
           echo "UNIQUE_ID=${{ github.run_id }}" >> $GITHUB_ENV
 
       - name: Generate Project Files
