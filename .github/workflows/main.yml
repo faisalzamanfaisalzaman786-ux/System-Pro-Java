@@ -18,43 +18,87 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
 
-      - name: Save payload data
+      - name: Save and parse payload
         run: |
           echo '${{ toJSON(github.event.client_payload) }}' > payload.json
           APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
+          APP_HTML=$(jq -r '.app_html // "<h1>Hello</h1>"' payload.json)
+          APP_CSS=$(jq -r '.app_css // "body { background: #fff; }"' payload.json)
+          APP_JS=$(jq -r '.app_js // "console.log(\"ready\");"' payload.json)
+          APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
+          
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=com.systempro.app" >> $GITHUB_ENV
+          echo "APP_HTML<<EOF" >> $GITHUB_ENV
+          echo "$APP_HTML" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "APP_CSS<<EOF" >> $GITHUB_ENV
+          echo "$APP_CSS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "APP_JS<<EOF" >> $GITHUB_ENV
+          echo "$APP_JS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
 
       - name: Generate Project Files
         run: |
           mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/raw
 
-          # 1. gradle.properties (AndroidX fix)
+          # gradle.properties
           cat > gradle.properties <<EOF
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # 2. build.gradle (Project level)
+          # Project build.gradle
           cat > build.gradle <<EOF
           buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { 
-                  classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0'
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           EOF
 
-          # 3. app/build.gradle (JVM target fix)
+          # settings.gradle
+          cat > settings.gradle <<EOF
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
+          # App build.gradle (نئے نحو کے ساتھ)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -70,6 +114,12 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -79,16 +129,24 @@ jobs:
               }
           }
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.webkit:webkit:1.10.0'
           }
           EOF
 
-          # 4. AndroidManifest.xml
+          # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="$APP_NAME" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="$APP_NAME"
+                  android:icon="@drawable/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -98,32 +156,69 @@ jobs:
           </manifest>
           EOF
 
-          # 5. MainActivity.kt
+          # آئیکون کو ڈی کوڈ کریں (اگر موجود ہو)
+          if [ -n "$APP_ICON_BASE64" ]; then
+            echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
+          else
+            # ڈیفالٹ آئیکون (ایک چھوٹی ڈاٹ والی تصویر)
+            echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # HTML, CSS, JS کو raw فائل میں محفوظ کریں
+          echo "$APP_HTML" > app/src/main/res/raw/index.html
+          echo "$APP_CSS" > app/src/main/res/raw/styles.css
+          echo "$APP_JS" > app/src/main/res/raw/script.js
+
+          # MainActivity.kt جو raw سے لوڈ کرے
           cat > app/src/main/java/com/systempro/app/MainActivity.kt <<EOF
           package com.systempro.app
           import android.os.Bundle
           import androidx.appcompat.app.AppCompatActivity
           import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import java.io.InputStream
+          import java.nio.charset.Charset
+
           class MainActivity : AppCompatActivity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
-                  val web = WebView(this)
-                  web.loadUrl("https://google.com")
-                  setContentView(web)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  webView.settings.domStorageEnabled = true
+                  webView.webViewClient = WebViewClient()
+                  
+                  // HTML, CSS, JS کو ر‌اء سے پڑھ کر انجکٹ کریں
+                  val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
+                  val css = resources.openRawResource(R.raw.styles).bufferedReader().readText()
+                  val js = resources.openRawResource(R.raw.script).bufferedReader().readText()
+                  
+                  val content = """
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                          <meta charset="UTF-8">
+                          <style>$css</style>
+                      </head>
+                      <body>
+                          $html
+                          <script>$js</script>
+                      </body>
+                      </html>
+                  """.trimIndent()
+                  
+                  webView.loadDataWithBaseURL("file:///android_res/raw/", content, "text/html", "UTF-8", null)
+                  setContentView(webView)
               }
           }
           EOF
 
-          echo "include ':app'" > settings.gradle
-
       - name: Build APK
         run: |
-          gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
-      - name: Upload Result
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/*.apk
