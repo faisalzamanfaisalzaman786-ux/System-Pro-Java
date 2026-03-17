@@ -25,18 +25,44 @@ jobs:
 
       - name: Save and parse payload
         run: |
+          # محفوظ طریقے سے payload کو فائل میں لکھیں (کسی بھی طرح کی interpretation سے بچنے کے لیے)
           echo '${{ toJSON(github.event.client_payload) }}' > payload.json
-          APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
-          APP_HTML=$(jq -r '.app_html // "<h1>Hello</h1>"' payload.json)
-          APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           
-          UNIQUE_ID=${{ github.run_id }}
-          echo "UNIQUE_ID=$UNIQUE_ID" >> $GITHUB_ENV
+          # jq سے ڈیٹا نکالیں اور environment variables میں محفوظ کریں
+          APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "APP_HTML<<EOF" >> $GITHUB_ENV
-          echo "$APP_HTML" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          
+          # HTML کوڈ کو فائل میں لکھیں تاکہ وہ محفوظ رہے
+          jq -r '.app_html // ""' payload.json > app_html.txt
+          # HTML کو environment variable میں ڈالنے کے لیے محفوظ طریقہ
+          {
+            echo "APP_HTML<<EOF"
+            cat app_html.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          # CSS کوڈ (اگر آپ الگ استعمال کرنا چاہیں)
+          jq -r '.app_css // ""' payload.json > app_css.txt
+          {
+            echo "APP_CSS<<EOF"
+            cat app_css.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          # JS کوڈ
+          jq -r '.app_js // ""' payload.json > app_js.txt
+          {
+            echo "APP_JS<<EOF"
+            cat app_js.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          # آئیکون
+          APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
+          
+          # یونیک آئی ڈی
+          echo "UNIQUE_ID=${{ github.run_id }}" >> $GITHUB_ENV
 
       - name: Generate Project Files
         run: |
@@ -46,7 +72,7 @@ jobs:
           mkdir -p app/src/main/res/raw
 
           # gradle.properties
-          cat > gradle.properties <<EOF
+          cat > gradle.properties <<'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
@@ -54,7 +80,7 @@ jobs:
           EOF
 
           # Project build.gradle
-          cat > build.gradle <<EOF
+          cat > build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.22'
               repositories {
@@ -63,13 +89,13 @@ jobs:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
           EOF
 
           # settings.gradle
-          cat > settings.gradle <<EOF
+          cat > settings.gradle <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -188,6 +214,10 @@ jobs:
 
           # HTML file
           echo "$APP_HTML" > app/src/main/res/raw/index.html
+
+          # CSS and JS files (اگر آپ نے انہیں الگ بھیجا ہے)
+          # echo "$APP_CSS" > app/src/main/res/raw/style.css
+          # echo "$APP_JS" > app/src/main/res/raw/script.js
 
           # MainActivity.kt
           cat > app/src/main/java/com/systempro/app/MainActivity.kt <<'EOF'
