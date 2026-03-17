@@ -98,7 +98,7 @@ jobs:
           include ':app'
           EOF
 
-          # App build.gradle (نئے نحو کے ساتھ)
+          # App build.gradle
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -156,28 +156,26 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون کو ڈی کوڈ کریں (اگر موجود ہو)
+          # آئیکون
           if [ -n "$APP_ICON_BASE64" ]; then
             echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
           else
-            # ڈیفالٹ آئیکون (ایک چھوٹی ڈاٹ والی تصویر)
+            # ڈیفالٹ آئیکون (ایک چھوٹی تصویر)
             echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # HTML, CSS, JS کو raw فائل میں محفوظ کریں
+          # HTML, CSS, JS
           echo "$APP_HTML" > app/src/main/res/raw/index.html
           echo "$APP_CSS" > app/src/main/res/raw/styles.css
           echo "$APP_JS" > app/src/main/res/raw/script.js
 
-          # MainActivity.kt جو raw سے لوڈ کرے
+          # MainActivity.kt
           cat > app/src/main/java/com/systempro/app/MainActivity.kt <<EOF
           package com.systempro.app
           import android.os.Bundle
           import androidx.appcompat.app.AppCompatActivity
           import android.webkit.WebView
           import android.webkit.WebViewClient
-          import java.io.InputStream
-          import java.nio.charset.Charset
 
           class MainActivity : AppCompatActivity() {
               override fun onCreate(savedInstanceState: Bundle?) {
@@ -187,7 +185,6 @@ jobs:
                   webView.settings.domStorageEnabled = true
                   webView.webViewClient = WebViewClient()
                   
-                  // HTML, CSS, JS کو ر‌اء سے پڑھ کر انجکٹ کریں
                   val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
                   val css = resources.openRawResource(R.raw.styles).bufferedReader().readText()
                   val js = resources.openRawResource(R.raw.script).bufferedReader().readText()
@@ -197,11 +194,11 @@ jobs:
                       <html>
                       <head>
                           <meta charset="UTF-8">
-                          <style>$css</style>
+                          <style>\$css</style>
                       </head>
                       <body>
-                          $html
-                          <script>$js</script>
+                          \$html
+                          <script>\$js</script>
                       </body>
                       </html>
                   """.trimIndent()
@@ -211,6 +208,9 @@ jobs:
               }
           }
           EOF
+
+      - name: Create gradle wrapper
+        run: gradle wrapper --gradle-version 8.2
 
       - name: Build APK
         run: |
