@@ -92,7 +92,7 @@ jobs:
           include ':app'
           EOF
 
-          # Empty proguard file (required for release build)
+          # Empty proguard file
           touch app/proguard-rules.pro
 
           # App build.gradle
@@ -207,19 +207,16 @@ jobs:
           EOF
 
       - name: Create gradle wrapper
-        run: gradle wrapper --gradle-version 8.2
+        # Gradle version 8.4 (minimum required by AGP 8.3.0)
+        run: gradle wrapper --gradle-version 8.4
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          # اگر release build میں مسئلہ ہو تو assembleDebug استعمال کریں
           ./gradlew assembleRelease --stacktrace
-          # ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-APK
           path: app/build/outputs/apk/release/*.apk
-          # اگر debug بنا رہے ہیں تو path بدل دیں:
-          # path: app/build/outputs/apk/debug/*.apk
