@@ -1,38 +1,236 @@
-- name: Generate Project Files
-  run: |
-    # ... (پچھلا کوڈ)
-    
-    # HTML file
-    echo "$APP_HTML" > app/src/main/res/raw/index.html
-    
-    # CSS اور JS فائلیں ضرور بنائیں
-    echo "$APP_CSS" > app/src/main/res/raw/style.css
-    echo "$APP_JS" > app/src/main/res/raw/script.js
+name: Build System Pro APK
 
-    # MainActivity.kt (درست baseURL کے ساتھ)
-    cat > app/src/main/java/com/systempro/app/MainActivity.kt <<'EOF'
-    package com.systempro.app
+on:
+  repository_dispatch:
+    types: [build-apk]
 
-    import android.os.Bundle
-    import androidx.appcompat.app.AppCompatActivity
-    import android.webkit.WebView
-    import android.webkit.WebViewClient
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    class MainActivity : AppCompatActivity() {
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            
-            val webView = WebView(this)
-            webView.settings.javaScriptEnabled = true
-            webView.settings.domStorageEnabled = true
-            webView.webViewClient = WebViewClient()
-            
-            val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
-            
-            // اہم: baseURL درست کریں
-            webView.loadDataWithBaseURL("file:///android_res/raw/", html, "text/html", "UTF-8", null)
-            
-            setContentView(webView)
-        }
-    }
-    EOF
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.4
+
+      - name: Save and parse payload
+        run: |
+          # محفوظ طریقے سے payload کو فائل میں لکھیں
+          cat <<'EOF' > payload.json
+          ${{ toJSON(github.event.client_payload) }}
+          EOF
+          
+          APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          
+          jq -r '.app_html // ""' payload.json > app_html.txt
+          {
+            echo "APP_HTML<<EOF"
+            cat app_html.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          jq -r '.app_css // ""' payload.json > app_css.txt
+          {
+            echo "APP_CSS<<EOF"
+            cat app_css.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          jq -r '.app_js // ""' payload.json > app_js.txt
+          {
+            echo "APP_JS<<EOF"
+            cat app_js.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
+          echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
+          echo "UNIQUE_ID=${{ github.run_id }}" >> $GITHUB_ENV
+
+      - name: Generate Project Files
+        run: |
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/raw
+
+          # gradle.properties
+          cat > gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+          # Project build.gradle
+          cat > build.gradle <<'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          EOF
+
+          # settings.gradle
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
+          touch app/proguard-rules.pro
+
+          # App build.gradle
+          cat > app/build.gradle <<EOF
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.app.run${UNIQUE_ID}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  debug { }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              aaptOptions { cruncherEnabled = false }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.webkit:webkit:1.10.0'
+          }
+          EOF
+
+          # AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml <<EOF
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="$APP_NAME"
+                  android:icon="@drawable/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Icon
+          if [ -n "$APP_ICON_BASE64" ]; then
+            if echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png 2>/dev/null; then
+              echo "✅ Icon saved"
+            else
+              cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF_VEC'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="#A52A2A"
+                android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM18,15.2c0,2.37 -3.67,3.8 -6,3.8 -2.33,0 -6,-1.43 -6,-3.8 0,-0.22 0.16,-0.44 0.44,-0.63 1.42,-0.94 3.51,-1.57 5.56,-1.57 2.05,0 4.14,0.63 5.56,1.57 0.28,0.19 0.44,0.41 0.44,0.63z"/>
+          </vector>
+          EOF_VEC
+            fi
+          else
+            cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF_VEC'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="#A52A2A"
+                android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM18,15.2c0,2.37 -3.67,3.8 -6,3.8 -2.33,0 -6,-1.43 -6,-3.8 0,-0.22 0.16,-0.44 0.44,-0.63 1.42,-0.94 3.51,-1.57 5.56,-1.57 2.05,0 4.14,0.63 5.56,1.57 0.28,0.19 0.44,0.41 0.44,0.63z"/>
+          </vector>
+          EOF_VEC
+          fi
+
+          # HTML, CSS, JS files
+          echo "$APP_HTML" > app/src/main/res/raw/index.html
+          echo "$APP_CSS" > app/src/main/res/raw/style.css
+          echo "$APP_JS" > app/src/main/res/raw/script.js
+
+          # MainActivity.kt
+          cat > app/src/main/java/com/systempro/app/MainActivity.kt <<'EOF'
+          package com.systempro.app
+
+          import android.os.Bundle
+          import androidx.appcompat.app.AppCompatActivity
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  webView.settings.domStorageEnabled = true
+                  webView.webViewClient = WebViewClient()
+                  
+                  val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
+                  webView.loadDataWithBaseURL("file:///android_res/raw/", html, "text/html", "UTF-8", null)
+                  
+                  setContentView(webView)
+              }
+          }
+          EOF
+
+      - name: Build APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-APK-${{ github.run_id }}
+          path: app/build/outputs/apk/debug/*.apk
