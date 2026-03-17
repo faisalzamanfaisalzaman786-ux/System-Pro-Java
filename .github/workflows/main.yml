@@ -99,7 +99,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle (منفرد applicationId بہتر فارمیٹ میں)
+          # App build.gradle (منفرد applicationId)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -142,7 +142,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml (آئیکون @drawable/ic_launcher)
+          # AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml <<EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -162,12 +162,12 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون: اگر base64 موجود ہو تو PNG بناو، ورنہ ویکٹر ڈرایبل
+          # آئیکون: اگر base64 موجود ہو تو PNG بناو، ورنہ ڈیفالٹ ویکٹر
           if [ -n "$APP_ICON_BASE64" ]; then
             if echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png 2>/dev/null; then
-              echo "✅ صارف کا آئیکون PNG کے طور پر محفوظ ہو گیا"
+              echo "✅ صارف کا آئیکون محفوظ ہو گیا"
             else
-              echo "⚠️ آئیکون ڈی کوڈ نہ ہو سکا، ڈیفالٹ ویکٹر استعمال کر رہے ہیں"
+              echo "⚠️ آئیکون ڈی کوڈ نہ ہو سکا، ڈیفالٹ ویکٹر استعمال"
               cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF_VEC'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="24dp"
