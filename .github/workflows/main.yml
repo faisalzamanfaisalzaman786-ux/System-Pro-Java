@@ -99,7 +99,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle (منفرد applicationId)
+          # App build.gradle (منفرد applicationId اور aaptOptions کے ساتھ)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -130,6 +130,9 @@ jobs:
               kotlinOptions {
                   jvmTarget = '17'
               }
+              aaptOptions {
+                  cruncherEnabled = false
+              }
           }
           dependencies {
               implementation 'androidx.core:core-ktx:1.12.0'
@@ -159,11 +162,15 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون (base64 سے ڈی کوڈ)
+          # آئیکون کو محفوظ طریقے سے ڈی کوڈ کریں
           if [ -n "$APP_ICON_BASE64" ]; then
-            echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
+            if echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png 2>/dev/null; then
+              echo "آئیکون کامیابی سے ڈی کوڈ ہو گیا"
+            else
+              echo "آئیکون ڈی کوڈ نہ ہو سکا، ڈیفالٹ استعمال کر رہے ہیں"
+              echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
+            fi
           else
-            # ڈیفالٹ آئیکون (چھوٹی ڈاٹ والی تصویر)
             echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
           fi
 
