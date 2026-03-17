@@ -28,8 +28,6 @@ jobs:
           echo '${{ toJSON(github.event.client_payload) }}' > payload.json
           APP_NAME=$(jq -r '.app_name // "SystemPro"' payload.json)
           APP_HTML=$(jq -r '.app_html // "<h1>Hello</h1>"' payload.json)
-          APP_CSS=$(jq -r '.app_css // ""' payload.json)
-          APP_JS=$(jq -r '.app_js // ""' payload.json)
           APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           
           UNIQUE_ID=${{ github.run_id }}
@@ -37,13 +35,6 @@ jobs:
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "APP_HTML<<EOF" >> $GITHUB_ENV
           echo "$APP_HTML" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          # ہم CSS اور JS کو اب بھی محفوظ کر رہے ہیں لیکن استعمال نہیں کریں گے
-          echo "APP_CSS<<EOF" >> $GITHUB_ENV
-          echo "$APP_CSS" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          echo "APP_JS<<EOF" >> $GITHUB_ENV
-          echo "$APP_JS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
           echo "APP_ICON_BASE64=$APP_ICON_BASE64" >> $GITHUB_ENV
 
@@ -100,7 +91,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle (منفرد applicationId)
+          # App build.gradle
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -163,12 +154,12 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون: اگر base64 موجود ہو تو PNG بناو، ورنہ ڈیفالٹ ویکٹر
+          # Icon
           if [ -n "$APP_ICON_BASE64" ]; then
             if echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png 2>/dev/null; then
-              echo "✅ صارف کا آئیکون محفوظ ہو گیا"
+              echo "✅ Icon saved"
             else
-              echo "⚠️ آئیکون ڈی کوڈ نہ ہو سکا، ڈیفالٹ ویکٹر استعمال"
+              echo "⚠️ Icon decode failed, using default vector"
               cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF_VEC'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="24dp"
@@ -182,7 +173,6 @@ jobs:
           EOF_VEC
             fi
           else
-            # ڈیفالٹ ویکٹر
             cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF_VEC'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="24dp"
@@ -196,15 +186,10 @@ jobs:
           EOF_VEC
           fi
 
-          # HTML فائل محفوظ کریں (اس میں CSS اور JS شامل ہیں)
+          # HTML file
           echo "$APP_HTML" > app/src/main/res/raw/index.html
 
-          # ہم CSS اور JS فائلیں نہیں بنا رہے کیونکہ وہ HTML میں ہیں
-          # اگر آپ انہیں الگ رکھنا چاہیں تو نیچے والی لائنیں استعمال کریں:
-          # echo "$APP_CSS" > app/src/main/res/raw/styles.css
-          # echo "$APP_JS" > app/src/main/res/raw/script.js
-
-          # MainActivity.kt - اب صرف HTML لوڈ کرتا ہے
+          # MainActivity.kt
           cat > app/src/main/java/com/systempro/app/MainActivity.kt <<'EOF'
           package com.systempro.app
 
@@ -222,10 +207,7 @@ jobs:
                   webView.settings.domStorageEnabled = true
                   webView.webViewClient = WebViewClient()
                   
-                  // HTML کو raw وسائل سے پڑھیں
                   val html = resources.openRawResource(R.raw.index).bufferedReader().readText()
-                  
-                  // HTML لوڈ کریں (بیس یوآرایل کی ضرورت نہیں کیونکہ تمام وسائل inline ہیں)
                   webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                   
                   setContentView(webView)
@@ -234,9 +216,7 @@ jobs:
           EOF
 
       - name: Build APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
