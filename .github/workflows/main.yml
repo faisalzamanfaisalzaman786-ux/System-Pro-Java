@@ -20,6 +20,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.4
 
       - name: Save and parse payload
         run: |
@@ -30,7 +32,6 @@ jobs:
           APP_JS=$(jq -r '.app_js // "console.log(\"ready\");"' payload.json)
           APP_ICON_BASE64=$(jq -r '.app_icon // ""' payload.json)
           
-          # منفرد شناخت کے لیے رن آئی ڈی
           UNIQUE_ID=${{ github.run_id }}
           echo "UNIQUE_ID=$UNIQUE_ID" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
@@ -98,7 +99,7 @@ jobs:
           # Empty proguard file
           touch app/proguard-rules.pro
 
-          # App build.gradle (منفرد applicationId کے ساتھ)
+          # App build.gradle (منفرد applicationId)
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
@@ -158,14 +159,15 @@ jobs:
           </manifest>
           EOF
 
-          # آئیکون
+          # آئیکون (base64 سے ڈی کوڈ)
           if [ -n "$APP_ICON_BASE64" ]; then
             echo "$APP_ICON_BASE64" | base64 -d > app/src/main/res/drawable/ic_launcher.png
           else
+            # ڈیفالٹ آئیکون (چھوٹی ڈاٹ والی تصویر)
             echo 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAgklEQVRYhe3VMQ6AIAwF0E7G4B4ewIN4FEdjYmIMMS5GCIg0tBT5X9KQ9KVt+kspBAAAAAAA4B8koWQO96iqaO89ExEB5pxR1zWstQAAYwwAwFrLvXfmnMMYg5hjjDHmvHvvPcaY955xHBFjzDzGGHvvnXMOY4yIiDHm/f0hIiLGGAAAAPzLA8oZETGkDwAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # HTML, CSS, JS
+          # HTML, CSS, JS کو raw میں محفوظ کریں
           echo "$APP_HTML" > app/src/main/res/raw/index.html
           echo "$APP_CSS" > app/src/main/res/raw/styles.css
           echo "$APP_JS" > app/src/main/res/raw/script.js
@@ -210,13 +212,9 @@ jobs:
           }
           EOF
 
-      - name: Create gradle wrapper
-        run: gradle wrapper --gradle-version 8.4
-
       - name: Build APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
