@@ -57,7 +57,7 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # Project build.gradle (صرف buildscript کے ساتھ، allprojects ہٹا دیا)
+          # Project build.gradle (صرف buildscript)
           cat > build.gradle <<EOF
           buildscript {
               ext.kotlin_version = '1.9.22'
@@ -91,6 +91,9 @@ jobs:
           rootProject.name = "SystemPro"
           include ':app'
           EOF
+
+          # Empty proguard file (required for release build)
+          touch app/proguard-rules.pro
 
           # App build.gradle
           cat > app/build.gradle <<EOF
@@ -209,10 +212,14 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
+          # اگر release build میں مسئلہ ہو تو assembleDebug استعمال کریں
           ./gradlew assembleRelease --stacktrace
+          # ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-APK
           path: app/build/outputs/apk/release/*.apk
+          # اگر debug بنا رہے ہیں تو path بدل دیں:
+          # path: app/build/outputs/apk/debug/*.apk
