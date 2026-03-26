@@ -1,25 +1,25 @@
-name: Build HTML to Native APK
+name: Build System Pro APK
 
 on:
   repository_dispatch:
     types: [build-apk]
-  workflow_dispatch: # تاکہ آپ خود بھی بٹن دبا کر رن کر سکیں
+  workflow_dispatch: # یہ آپ کو GitHub پر "Run Workflow" کا بٹن دے گا
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/view-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      - name: Create Capacitor Config Files
+      - name: Initialize Capacitor Project
         run: |
-          # خودکار طور پر package.json بنانا
+          # ضروری کنفیگریشن فائلز بنانا
           echo '{
             "name": "system-pro-app",
             "version": "1.0.0",
@@ -32,9 +32,8 @@ jobs:
             }
           }' > package.json
 
-          # خودکار طور پر capacitor.config.json بنانا
           echo '{
-            "appId": "com.systempro.app",
+            "appId": "com.systempro.faisal",
             "appName": "System Pro",
             "webDir": "www",
             "bundledWebRuntime": false
@@ -46,11 +45,11 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android
 
-      - name: Copy Web Assets
-        run: npx cap copy android
+      - name: Sync Web Assets
+        run: npx cap sync android
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -61,8 +60,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v3
+      - name: Upload Finished APK
+        uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: System-Pro-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
