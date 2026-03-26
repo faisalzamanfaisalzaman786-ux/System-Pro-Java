@@ -30,12 +30,9 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Install React Native globally (specific version)
-        run: npm install -g react-native@0.72.0
-
-      - name: Create React Native project
+      - name: Create React Native project (using version 0.75.0)
         run: |
-          react-native init MyWebViewApp
+          npx react-native@0.75.0 init MyWebViewApp
           cd MyWebViewApp
           npm install react-native-webview
 
