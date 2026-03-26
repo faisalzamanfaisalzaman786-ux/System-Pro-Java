@@ -1,7 +1,7 @@
-name: System Pro Auto Build
+name: System Pro Master Build
 
 on:
-  workflow_dispatch: # یہ لائن API کال کے ذریعے ورک فلو چلانے کے لیے لازمی ہے
+  workflow_dispatch: # API کال کے لیے یہ لازمی ہے
 
 jobs:
   build:
@@ -9,6 +9,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # پوری ہسٹری نکالنے کے لیے تاکہ فائلز مس نہ ہوں
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -21,22 +23,23 @@ jobs:
 
       - name: Auto Rename Package & Prepare Data
         run: |
-          # موجودہ وقت (Timestamp) کے حساب سے نیا پیکج نیم بنانا
-          NEW_PKG="com.systempro.app_$(date +'%Y%m%d%H%M%S')"
-          echo "Building with New Package: $NEW_PKG"
+          # ٹائم سٹیمپ کے ساتھ یونیک پیکج نیم
+          NEW_PKG="com.systempro.app_$(date +'%s')"
+          echo "Target Package: $NEW_PKG"
           
-          # ریپوزٹری میں جہاں بھی applicationId یا package name ہے اسے تبدیل کرنا
-          # یہ کمانڈ خود فائلز ڈھونڈ لے گی تاکہ 'no input files' کا ایرر نہ آئے
-          find . -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} +
-          find . -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {} +
+          # فائلز کو ڈھونڈ کر تبدیل کرنا (بغیر کسی ایرر کے)
+          # ہم صرف ان فائلز کو ٹارگٹ کر رہے ہیں جو اینڈرائیڈ پروجیکٹ کا حصہ ہیں
+          find . -type f \( -name "build.gradle" -o -name "AndroidManifest.xml" \) -exec sed -i "s/com.systempro.app[a-zA-Z0-9._]*/$NEW_PKG/g" {} +
+          
+          echo "Package name updated successfully."
 
       - name: Build Release APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-${{ github.run_id }}
-          path: app/build/outputs/apk/release/*.apk
+          name: SystemPro-Build
+          path: "**/build/outputs/apk/release/*.apk"
