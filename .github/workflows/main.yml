@@ -1,4 +1,4 @@
-name: System Pro Ultimate Auto-Handler
+name: System Pro Master Build
 
 on:
   workflow_dispatch:
@@ -7,81 +7,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js & JDK
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Intelligent File Router
+      - name: Setup Environment
         run: |
-          # 1. ویب فائلوں کو درست جگہ پر منتقل کرنا
+          # 1. فائلز کو اپنی جگہ پر سیٹ کرنا
           mkdir -p www
-          # یہ کمانڈ پوری ریپوزٹری میں HTML/JS/CSS ڈھونڈ کر www میں ڈال دے گی
-          find . -maxdepth 2 -name "*.html" -exec mv {} www/ \; || true
-          find . -maxdepth 2 -name "*.js" -exec mv {} www/ \; || true
-          find . -maxdepth 2 -name "*.css" -exec mv {} www/ \; || true
+          cp *.html www/index.html 2>/dev/null || true
+          cp *.png icon.png 2>/dev/null || true
           
-          # 2. کسی بھی اپلوڈ شدہ امیج کو آئیکن بنانا
-          IMAGE_FILE=$(find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | head -n 1)
-          if [ ! -z "$IMAGE_FILE" ]; then
-            echo "Found Image: $IMAGE_FILE, using as Icon."
-            cp "$IMAGE_FILE" icon.png
-          fi
-
-      - name: Install Capacitor & Fix Package
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets --save-dev
+          # 2. انوکھا پیکج نیم بنانا
+          NEW_PKG="com.systempro.app$(date +%s)"
           
-          # نیا پیکج نیم (Unique)
-          NEW_PKG="com.systempro.app_$(date +'%s')"
-          
-          # کنفگریشن اپڈیٹ کرنا
-          if [ -f "capacitor.config.json" ]; then
-            sed -i "s/\"appId\": \".*\"/\"appId\": \"$NEW_PKG\"/g" capacitor.config.json
-          fi
+          # 3. Capacitor سیٹ اپ (صرف وہی جو ضروری ہے)
+          npm install @capacitor/cli @capacitor/android
+          npx cap init "System Pro" "$NEW_PKG" --web-dir www
+          npx cap add android
+          npx cap sync android
 
-          # Capacitor Sync
-          npx cap sync android || echo "Sync failed, but continuing..."
-
-          # آئیکن بنانا (اگر امیج موجود ہو)
-          if [ -f "icon.png" ]; then
-            npx capacitor-assets generate --android || true
-          fi
-
-      - name: Force Fix Android Package
+      - name: Build APK
         run: |
-          NEW_PKG="com.systempro.app_$(date +'%s')"
-          # یہ کمانڈ اینڈرائیڈ فولڈر کے اندر گھس کر ہر جگہ نیا پیکج نیم ڈال دے گی
-          if [ -d "android" ]; then
-            find android -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} + || true
-            find android -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {} + || true
-          fi
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      - name: Build and Upload APK
-        run: |
-          if [ -d "android" ]; then
-            cd android
-            chmod +x gradlew
-            ./gradlew assembleRelease
-          else
-            echo "Android folder not found! Check your capacitor init."
-            exit 1
-          fi
-
-      - name: Upload Finished APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Auto-Build
+          name: SystemPro-APK
           path: "android/app/build/outputs/apk/release/*.apk"
