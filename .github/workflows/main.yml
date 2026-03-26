@@ -1,4 +1,4 @@
-name: Build WebView APK (Cordova Template)
+name: Build WebView APK (Cordova)
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (includes template)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -29,11 +29,11 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Copy template to build folder
-        run: cp -r template MyApp
+      - name: Create Cordova project from scratch
+        run: |
+          npx cordova create MyApp com.example.myapp "MyApp"
+          cd MyApp
+          npx cordova platform add android
 
       - name: Place HTML content
         run: |
@@ -47,7 +47,7 @@ jobs:
           cd MyApp
           # Update config.xml name
           sed -i "s/<name>.*<\/name>/<name>$APP_NAME<\/name>/" config.xml
-          # Generate package name from app name
+          # Generate package name from app name (clean)
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
           PACKAGE_NAME="com.${CLEAN_NAME}"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
@@ -57,9 +57,9 @@ jobs:
       - name: Set Android package name in build files
         run: |
           cd MyApp
-          # Update AndroidManifest.xml package
+          # AndroidManifest.xml
           sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" platforms/android/app/src/main/AndroidManifest.xml
-          # Update build.gradle applicationId
+          # build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" platforms/android/app/build.gradle
 
       - name: Decode and set app icon if provided
@@ -68,13 +68,13 @@ jobs:
           if [ -n "$ICON_BASE64" ]; then
             echo "$ICON_BASE64" | base64 -d > icon.png
             cd MyApp
-            # Remove default icons
+            # Remove existing default icons
             rm -f platforms/android/app/src/main/res/mipmap-*/*
-            # Create icon directories if missing
+            # Create directories if missing
             for dir in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
               mkdir -p platforms/android/app/src/main/res/$dir
             done
-            # Copy icon to all densities (scaling would be better but we just copy same image)
+            # Copy same icon to all densities (you can improve scaling later)
             cp ../icon.png platforms/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp ../icon.png platforms/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
             cp ../icon.png platforms/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -82,12 +82,10 @@ jobs:
             cp ../icon.png platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      - name: Add permissions to AndroidManifest.xml
+      - name: Add permissions to AndroidManifest
         run: |
-          # The permissions array is sent as JSON; we need to parse it correctly.
-          # Use fromJSON to convert the string to object.
+          # Convert permissions array to proper JSON string
           PERMISSIONS_JSON='${{ toJSON(github.event.client_payload.permissions) }}'
-          # Now permissions are in proper JSON format, parse with jq
           echo "$PERMISSIONS_JSON" | jq -r '.[]' | while read perm; do
             if [ -n "$perm" ]; then
               sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/platforms/android/app/src/main/AndroidManifest.xml
@@ -97,9 +95,9 @@ jobs:
       - name: Build APK
         run: |
           cd MyApp
-          cordova build android --release -- --packageType=apk
+          npx cordova build android --release -- --packageType=apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release
