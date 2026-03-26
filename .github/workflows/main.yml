@@ -1,4 +1,4 @@
-name: Build System Pro APK
+name: Auto Package Multi-App Builder
 
 on:
   repository_dispatch:
@@ -20,15 +20,28 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Update App Data
+      - name: Auto Rename Package & Prepare Data
         run: |
-          # ایپ کا نام سیٹ کرنا
+          # 1. خودکار نیا پیکیج نیم بنانا (وقت کے حساب سے)
+          # مثال: com.systempro.app_202603261930
+          UNIQUE_ID=$(date +'%Y%m%d%H%M%S')
+          NEW_PKG="com.systempro.app_$UNIQUE_ID"
+          
+          # یہاں وہ پیکیج نیم لکھیں جو آپ کی ایپ میں ابھی موجود ہے
+          OLD_PKG="com.example.systempro" 
+          
+          echo "Building with New Package: $NEW_PKG"
+
+          # 2. تمام فائلوں میں پرانے پیکیج نیم کو نئے سے بدلنا
+          find . -type f \( -name "*.xml" -o -name "*.gradle" -o -name "*.java" \) -print0 | xargs -0 sed -i "s/$OLD_PKG/$NEW_PKG/g"
+
+          # 3. ایپ کا نام سیٹ کرنا
           sed -i "s/app_name\">.*</app_name\">${{ github.event.client_payload.app_name }}</" app/src/main/res/values/strings.xml
           
-          # HTML فائل کو 'www' فولڈر میں ڈالنا (جیسا کہ آپ کی ریپو میں ہے)
+          # 4. HTML فائل کو 'www' فولڈر میں ڈالنا
           echo '${{ github.event.client_payload.app_html }}' > www/index.html
           
-          # آئیکون کو نئے بنائے گئے فولڈر میں محفوظ کرنا
+          # 5. آئیکون کو صحیح فولڈر میں محفوظ کرنا
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
@@ -46,7 +59,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}-APK
