@@ -1,7 +1,7 @@
-name: Build and Auto-Rename APK
+name: System Pro Auto Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # یہ لائن API کال کے ذریعے ورک فلو چلانے کے لیے لازمی ہے
 
 jobs:
   build:
@@ -21,20 +21,22 @@ jobs:
 
       - name: Auto Rename Package & Prepare Data
         run: |
-          # موجودہ وقت کے حساب سے نیا پیکج نیم بنانا
+          # موجودہ وقت (Timestamp) کے حساب سے نیا پیکج نیم بنانا
           NEW_PKG="com.systempro.app_$(date +'%Y%m%d%H%M%S')"
           echo "Building with New Package: $NEW_PKG"
           
-          # فائلز کے پاتھ کو آپ کی ریپوزٹری کے مطابق سیٹ کرنا
-          # یہاں ہم build.gradle اور Manifest دونوں میں تبدیلی کر رہے ہیں
+          # ریپوزٹری میں جہاں بھی applicationId یا package name ہے اسے تبدیل کرنا
+          # یہ کمانڈ خود فائلز ڈھونڈ لے گی تاکہ 'no input files' کا ایرر نہ آئے
           find . -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} +
-          find . -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {}+
+          find . -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {} +
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Release
+          name: SystemPro-Build-${{ github.run_id }}
           path: app/build/outputs/apk/release/*.apk
