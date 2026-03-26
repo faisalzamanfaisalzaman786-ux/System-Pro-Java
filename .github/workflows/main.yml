@@ -1,4 +1,4 @@
-name: Build WebView APK (Cordova)
+name: Build Minimal WebView APK (Direct Android)
 
 on:
   repository_dispatch:
@@ -8,15 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (just for workspace)
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -29,86 +22,183 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create Cordova project from scratch
+      - name: Create Android project from scratch
         run: |
-          npx cordova create MyApp com.example.myapp "MyApp"
-          cd MyApp
-          npx cordova platform add android
-
-      - name: Place HTML content
-        run: |
-          cat << 'EOF' > MyApp/www/index.html
-          ${{ github.event.client_payload.app_html }}
+          # Create minimal project structure
+          mkdir -p MyApp/app/src/main/java/com/myapp
+          mkdir -p MyApp/app/src/main/res/layout
+          mkdir -p MyApp/app/src/main/res/values
+          mkdir -p MyApp/app/src/main/assets
+          mkdir -p MyApp/app/src/main/res/mipmap-hdpi
+          
+          # Create AndroidManifest.xml
+          cat > MyApp/app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.myapp">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
           EOF
 
-      - name: Update app name and package name
+      - name: Create MainActivity.java with WebView
+        run: |
+          cat > MyApp/app/src/main/java/com/myapp/MainActivity.java << 'EOF'
+          package com.myapp;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.webkit.WebSettings;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  WebSettings webSettings = webView.getSettings();
+                  webSettings.setJavaScriptEnabled(true);
+                  webSettings.setDomStorageEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  setContentView(webView);
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+      - name: Create strings.xml
+        run: |
+          cat > MyApp/app/src/main/res/values/strings.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">MyApp</string>
+          </resources>
+          EOF
+
+      - name: Create styles.xml
+        run: |
+          cat > MyApp/app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="android:windowNoTitle">true</item>
+                  <item name="android:windowFullscreen">false</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Create build.gradle
+        run: |
+          cat > MyApp/build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+          
+          cat > MyApp/app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+          android {
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.myapp"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android.txt')
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+      - name: Place HTML file
+        run: |
+          cat << 'HTML' > MyApp/app/src/main/assets/index.html
+          ${{ github.event.client_payload.app_html }}
+          HTML
+
+      - name: Set app name and package
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
-          cd MyApp
-          # Update config.xml name
-          sed -i "s/<name>.*<\/name>/<name>$APP_NAME<\/name>/" config.xml
-          # Generate package name from app name (clean)
+          # Generate clean package name
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
           PACKAGE_NAME="com.${CLEAN_NAME}"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          # Update config.xml id
-          sed -i "s/id=\".*\"/id=\"$PACKAGE_NAME\"/" config.xml
+          # Update strings.xml
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" MyApp/app/src/main/res/values/strings.xml
+          # Update build.gradle
+          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" MyApp/app/build.gradle
+          # Update AndroidManifest.xml
+          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" MyApp/app/src/main/AndroidManifest.xml
+          # Update Java package folder (rename directory)
+          mv MyApp/app/src/main/java/com/myapp MyApp/app/src/main/java/com/temp 2>/dev/null || true
+          mkdir -p MyApp/app/src/main/java/com/${CLEAN_NAME}
+          mv MyApp/app/src/main/java/com/temp/* MyApp/app/src/main/java/com/${CLEAN_NAME}/ 2>/dev/null || true
+          # Update MainActivity.java package
+          sed -i "s/package com\.myapp;/package $PACKAGE_NAME;/" MyApp/app/src/main/java/com/${CLEAN_NAME}/MainActivity.java
 
-      - name: Set Android package name in build files
-        run: |
-          cd MyApp
-          # AndroidManifest.xml
-          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" platforms/android/app/src/main/AndroidManifest.xml
-          # build.gradle
-          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" platforms/android/app/build.gradle
-
-      - name: Decode and set app icon if provided
+      - name: Add icon if provided
         run: |
           ICON_BASE64='${{ github.event.client_payload.app_icon }}'
           if [ -n "$ICON_BASE64" ]; then
             echo "$ICON_BASE64" | base64 -d > icon.png
-            cd MyApp
-            # Remove existing default icons
-            rm -f platforms/android/app/src/main/res/mipmap-*/*
-            # Create directories if missing
-            for dir in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-              mkdir -p platforms/android/app/src/main/res/$dir
-            done
-            # Copy same icon to all densities (you can improve scaling later)
-            cp ../icon.png platforms/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp ../icon.png platforms/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp ../icon.png platforms/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp ../icon.png platforms/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp ../icon.png platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            cp icon.png MyApp/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp icon.png MyApp/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      - name: Add permissions to AndroidManifest
+      - name: Add permissions
         run: |
-          # Convert permissions array to proper JSON string
           PERMISSIONS_JSON='${{ toJSON(github.event.client_payload.permissions) }}'
           echo "$PERMISSIONS_JSON" | jq -r '.[]' | while read perm; do
             if [ -n "$perm" ]; then
-              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/platforms/android/app/src/main/AndroidManifest.xml
+              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/app/src/main/AndroidManifest.xml
             fi
           done
 
       - name: Build APK
         run: |
           cd MyApp
-          npx cordova build android --release -- --packageType=apk
+          chmod +x gradlew 2>/dev/null || true
+          # Generate gradle wrapper if missing
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 7.5
+          fi
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: MyApp/platforms/android/app/build/outputs/apk/release/*.apk
-
-      - name: Create GitHub Release (optional)
-        if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: run-${{ github.run_id }}
-          name: Build ${{ github.run_id }}
-          files: MyApp/platforms/android/app/build/outputs/apk/release/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: MyApp/app/build/outputs/apk/release/*.apk
