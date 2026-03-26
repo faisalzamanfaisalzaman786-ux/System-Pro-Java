@@ -1,7 +1,7 @@
 name: System Pro Ultimate Auto-Handler
 
 on:
-  workflow_dispatch: # ویب ویو ایپ سے ٹریگر کرنے کے لیے
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,35 +24,27 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Automatic Data Router (File Handling)
+      - name: Intelligent File Router
         run: |
-          # 1. ویب فائلوں کو سنبھالنا (HTML/JS/CSS)
-          # اگر آپ کی فائلیں روٹ میں اپلوڈ ہوئی ہیں، تو یہ انہیں Capacitor کے 'www' فولڈر میں ڈال دے گا
+          # 1. ویب فائلوں کو درست جگہ پر منتقل کرنا
           mkdir -p www
-          find . -maxdepth 1 -name "*.html" -exec mv {} www/ \;
-          find . -maxdepth 1 -name "*.js" -exec mv {} www/ \;
-          find . -maxdepth 1 -name "*.css" -exec mv {} www/ \;
+          # یہ کمانڈ پوری ریپوزٹری میں HTML/JS/CSS ڈھونڈ کر www میں ڈال دے گی
+          find . -maxdepth 2 -name "*.html" -exec mv {} www/ \; || true
+          find . -maxdepth 2 -name "*.js" -exec mv {} www/ \; || true
+          find . -maxdepth 2 -name "*.css" -exec mv {} www/ \; || true
           
-          # 2. امیج/آئیکن کو سنبھالنا
-          # جو بھی امیج اپلوڈ ہو (چاہے وہ کسی بھی نام سے ہو)، اسے 'icon.png' بنا کر ریسورسز میں ڈال دے گا
-          mkdir -p resources
+          # 2. کسی بھی اپلوڈ شدہ امیج کو آئیکن بنانا
           IMAGE_FILE=$(find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | head -n 1)
           if [ ! -z "$IMAGE_FILE" ]; then
-            cp "$IMAGE_FILE" resources/icon.png
+            echo "Found Image: $IMAGE_FILE, using as Icon."
             cp "$IMAGE_FILE" icon.png
           fi
 
-      - name: Install & Generate Assets
+      - name: Install Capacitor & Fix Package
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets --save-dev
-          # آئیکنز کو خودکار طریقے سے اینڈرائیڈ سائز کے مطابق ڈھالنا
-          if [ -f "icon.png" ]; then
-            npx capacitor-assets generate --android
-          fi
-
-      - name: Capacitor Sync & Auto-Rename
-        run: |
-          # نیا پیکج نیم خود بخود بنانا
+          
+          # نیا پیکج نیم (Unique)
           NEW_PKG="com.systempro.app_$(date +'%s')"
           
           # کنفگریشن اپڈیٹ کرنا
@@ -60,17 +52,33 @@ jobs:
             sed -i "s/\"appId\": \".*\"/\"appId\": \"$NEW_PKG\"/g" capacitor.config.json
           fi
 
-          npx cap sync android
+          # Capacitor Sync
+          npx cap sync android || echo "Sync failed, but continuing..."
 
-          # اینڈرائیڈ نیٹو فائلز میں پیکج نیم فٹ کرنا
-          find android -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} + || true
-          find android -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {} + || true
+          # آئیکن بنانا (اگر امیج موجود ہو)
+          if [ -f "icon.png" ]; then
+            npx capacitor-assets generate --android || true
+          fi
 
-      - name: Final Build Execution
+      - name: Force Fix Android Package
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          NEW_PKG="com.systempro.app_$(date +'%s')"
+          # یہ کمانڈ اینڈرائیڈ فولڈر کے اندر گھس کر ہر جگہ نیا پیکج نیم ڈال دے گی
+          if [ -d "android" ]; then
+            find android -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} + || true
+            find android -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {} + || true
+          fi
+
+      - name: Build and Upload APK
+        run: |
+          if [ -d "android" ]; then
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleRelease
+          else
+            echo "Android folder not found! Check your capacitor init."
+            exit 1
+          fi
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
