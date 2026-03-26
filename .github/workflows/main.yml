@@ -1,4 +1,4 @@
-name: Build Capacitor WebView APK
+name: Build Cordova WebView APK
 
 on:
   repository_dispatch:
@@ -24,11 +24,14 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create Capacitor app
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova project
         run: |
-          npm init @capacitor/app@latest MyApp -- --package-id=com.myapp --app-name=MyApp
+          cordova create MyApp com.example.myapp "MyApp"
           cd MyApp
-          npm install @capacitor/android
+          cordova platform add android
 
       - name: Copy HTML to www
         run: |
@@ -36,59 +39,57 @@ jobs:
           ${{ github.event.client_payload.app_html }}
           EOF
 
-      - name: Set app name and package
+      - name: Set app name and generate package name
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
           cd MyApp
-          # Update capacitor.config.json
-          sed -i "s/\"appName\": \".*\"/\"appName\": \"$APP_NAME\"/" capacitor.config.json
+          # Update config.xml with app name
+          sed -i "s/<name>.*<\/name>/<name>$APP_NAME<\/name>/" config.xml
           
           # Generate package name from app name
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
           PACKAGE_NAME="com.${CLEAN_NAME}"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           
-          # Update capacitor config with package id
-          sed -i "s/\"appId\": \".*\"/\"appId\": \"$PACKAGE_NAME\"/" capacitor.config.json
+          # Update package name in config.xml
+          sed -i "s/id=\".*\"/id=\"$PACKAGE_NAME\"/" config.xml
 
       - name: Add icon if provided
         run: |
           ICON_BASE64='${{ github.event.client_payload.app_icon }}'
           if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > app_icon.png
+            echo "$ICON_BASE64" | base64 -d > icon.png
             cd MyApp
-            npx capacitor-assets generate --iconBackgroundColor "#A52A2A" --iconBackgroundColorDark "#A52A2A"
+            # Create icons for all Android densities
+            mkdir -p platforms/android/app/src/main/res/mipmap-hdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-mdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xhdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xxhdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xxxhdpi
+            cp ../icon.png platforms/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp ../icon.png platforms/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp ../icon.png platforms/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp ../icon.png platforms/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp ../icon.png platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      - name: Add Android platform
-        run: |
-          cd MyApp
-          npx cap add android
-          npx cap sync android
-
-      - name: Set package name in Android files
-        run: |
-          cd MyApp/android
-          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
-          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
-
-      - name: Add permissions
+      - name: Add permissions to AndroidManifest
         run: |
           PERMISSIONS_STR='${{ github.event.client_payload.permissions }}'
           echo "$PERMISSIONS_STR" | jq -r '.[]' | while read perm; do
             if [ -n "$perm" ]; then
-              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/android/app/src/main/AndroidManifest.xml
+              # Insert permission before closing manifest tag
+              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/platforms/android/app/src/main/AndroidManifest.xml
             fi
           done
 
       - name: Build APK
         run: |
-          cd MyApp/android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          cd MyApp
+          cordova build android --release -- --packageType=apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: MyApp/android/app/build/outputs/apk/release/*.apk
+          path: MyApp/platforms/android/app/build/outputs/apk/release/*.apk
