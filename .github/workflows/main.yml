@@ -2,7 +2,8 @@ name: System Pro Smart Studio Build
 
 on:
   repository_dispatch:
-    types: [build-apk] # آپ کی ایپ یہی ایونٹ ٹریگر کر رہی ہے
+    types: [build-apk]
+  workflow_dispatch: # مینوئل ٹیسٹنگ کے لیے
 
 jobs:
   build:
@@ -17,46 +18,50 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Folder Structure & Inject Data
+      - name: Generate Structure & Inject Data
         run: |
-          # 1. پروفیشنل اینڈرائیڈ اسٹرکچر بنانا
+          # فولڈرز بنانا (صرف اگر موجود نہ ہوں)
           mkdir -p app/src/main/assets/www
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           
-          # 2. ایپ سے آنے والا HTML محفوظ کرنا
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/www/index.html
+          # HTML ڈیٹا انجیکٹ کرنا
+          if [ ! -z "${{ github.event.client_payload.app_html }}" ]; then
+            echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/www/index.html
+          fi
           
-          # 3. اگر امیج (Icon) آیا ہے تو اسے سیٹ کرنا
+          # آئیکون انجیکٹ کرنا (Base64 چیک کے ساتھ)
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+            echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
           fi
 
-      - name: Handle Permissions (Dynamic)
+      - name: Dynamic Permissions
         run: |
-          # ایپ سے آنے والی پرمیشنز کو AndroidManifest میں شامل کرنا
           MANIFEST="app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
+            # پرمیشنز کی لسٹ کو محفوظ طریقے سے لوپ کرنا
             for perm in ${{ join(github.event.client_payload.permissions, ' ') }}; do
-              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" $MANIFEST
+              if ! grep -q "$perm" "$MANIFEST"; then
+                sed -i "/<application/i \    <uses-permission android:name=\"$perm\" />" $MANIFEST
+              fi
             done
           fi
 
-      - name: Auto Rename Package
+      - name: Prepare Gradlew & Build
         run: |
-          # ہر بلڈ کے لیے نیا پیکج نیم
-          NEW_PKG="com.systempro.app_$(date +'%s')"
-          find . -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} + || true
+          # gradlew فائل کو ڈھونڈنا اور اسے چلانے کی اجازت دینا
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew file not found anywhere in the repo!"
+            exit 1
+          fi
+          chmod +x "$GRADLEW_PATH"
+          
+          # بلڈ کمانڈ چلانا
+          $GRADLEW_PATH assembleRelease
 
-      - name: Build Release APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
-
-      - name: Create Release & Upload APK
-        uses: softprops/action-gh-release@v1
+      - name: Upload Final APK
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: run-${{ github.run_id }}
-          files: app/build/outputs/apk/release/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: SystemPro-Final-APK
+          path: "**/build/outputs/apk/release/*.apk"
