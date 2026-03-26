@@ -1,74 +1,173 @@
-name: Build React Native WebView App
+name: Build React Native WebView App from HTML
 
 on:
-  workflow_dispatch:
-    inputs:
-      html_content:
-        description: 'HTML content (base64 encoded)'
-        required: true
-      app_name:
-        description: 'App display name'
-        required: true
-        default: 'My WebView App'
-      package_name:
-        description: 'Android package name (e.g., com.example.myapp)'
-        required: true
-        default: 'com.myapp.webview'
-      permissions:
-        description: 'Android permissions (comma separated)'
-        required: false
-        default: 'INTERNET'
+  repository_dispatch:
+    types: [build-apk]
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout template
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          repository: 'your-username/react-native-webview-template'
-          token: ${{ secrets.GH_PAT }}
-          path: 'app'
+          # یہاں کوئی خاص ریپوزٹری چیک آؤٹ نہیں کر رہے، بلکہ نیا پروجیکٹ بنا رہے ہیں۔
+          # اس لیے checkout کا استعمال صرف خالی ڈائریکٹری کے لیے کیا گیا ہے۔
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Install dependencies
+      - name: Install React Native CLI
+        run: npm install -g react-native-cli
+
+      - name: Create React Native project
+        run: npx react-native init MyWebViewApp --version 0.72.0
+        env:
+          # ورژن مستحکم ہونا چاہیے
+          npm_config_yes: true
+
+      - name: Install WebView and dependencies
         run: |
-          cd app
+          cd MyWebViewApp
+          npm install react-native-webview
           npm install
 
-      - name: Decode HTML and copy to assets
+      - name: Decode and place HTML
         run: |
-          echo "${{ github.event.inputs.html_content }}" | base64 -d > index.html
-          mkdir -p app/android/app/src/main/assets/
-          cp index.html app/android/app/src/main/assets/
+          # HTML ڈیٹا سیدھا string ہے (base64 نہیں)
+          echo '${{ github.event.client_payload.app_html }}' > index.html
+          mkdir -p MyWebViewApp/android/app/src/main/assets/
+          cp index.html MyWebViewApp/android/app/src/main/assets/
 
-      - name: Update app name and package
+      - name: Decode and set app icon (if provided)
         run: |
-          cd app
-          # Update app.json
-          sed -i "s/\"name\": \".*\"/\"name\": \"${{ github.event.inputs.app_name }}\"/" app.json
-          # Update Android package name in AndroidManifest.xml and build.gradle
-          # یہاں آپ کو مزید تفصیل سے تبدیل کرنا ہوگا۔ مثال کے لیے:
-          # sed -i "s/package=\"com\.old\.name\"/package=\"${{ github.event.inputs.package_name }}\"/" android/app/src/main/AndroidManifest.xml
-          # اور build.gradle میں applicationId بدلنا ہوگا۔
-          # اس کے لیے آپ custom script بنا سکتے ہیں۔
+          ICON_BASE64='${{ github.event.client_payload.app_icon }}'
+          if [ -n "$ICON_BASE64" ]; then
+            echo "$ICON_BASE64" | base64 -d > ic_launcher.png
+            # Android کے لیے آئیکون کاپی کریں
+            cp ic_launcher.png MyWebViewApp/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp ic_launcher.png MyWebViewApp/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp ic_launcher.png MyWebViewApp/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp ic_launcher.png MyWebViewApp/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp ic_launcher.png MyWebViewApp/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            echo "No icon provided, using default."
+          fi
 
-      - name: Add permissions
+      - name: Set app name and generate package name
         run: |
-          # AndroidManifest.xml میں پرمیشنز شامل کریں
-          # اس کے لیے بھی script چلائیں
+          APP_NAME='${{ github.event.client_payload.app_name }}'
+          # package name بنائیں: com.example.نام (صرف حروف اور ڈاٹ)
+          PACKAGE_NAME=$(echo "com.$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')" | cut -c1-50)
+          echo "Package name: $PACKAGE_NAME"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+
+          # app.json میں نام سیٹ کریں
+          cd MyWebViewApp
+          sed -i "s/\"name\": \".*\"/\"name\": \"$APP_NAME\"/" app.json
+          sed -i "s/\"displayName\": \".*\"/\"displayName\": \"$APP_NAME\"/" app.json
+
+          # Android کے لیے strings.xml میں app name
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" android/app/src/main/res/values/strings.xml
+
+      - name: Set Android package name
+        run: |
+          cd MyWebViewApp/android
+          # build.gradle میں applicationId بدلیں
+          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
+          # AndroidManifest.xml میں package بدلیں
+          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
+          # MainActivity اور MainApplication میں پیکیج نیم بھی تبدیل کرنا ہو گا۔
+          # ان فائلوں میں پیکیج نیم کی تبدیلی تھوڑی پیچیدہ ہے، لیکن React Native کے نئے ورژن میں صرف build.gradle اور manifest کافی ہے۔
+          # اگر ضرورت ہو تو یہاں پر اضافی اسکرپٹ لگایا جا سکتا ہے۔
+
+      - name: Add permissions to AndroidManifest.xml
+        run: |
+          PERMISSIONS_STR='${{ github.event.client_payload.permissions }}'
+          # permissions ایک array ہے، ہم اسے parse کریں گے۔
+          # چونکہ GitHub Actions میں array کو string کے طور پر بھیجا جاتا ہے، ہم اسے comma یا space سے جدا کر سکتے ہیں۔
+          # فرنٹ اینڈ سے array بھیجی جا رہی ہے، لیکن یہاں string بن جاتی ہے۔ ہم اسے JSON array کے طور پر پارس کریں گے۔
+          echo "$PERMISSIONS_STR" | jq -r '.[]' | while read perm; do
+            if [ -n "$perm" ]; then
+              echo "Adding permission: $perm"
+              # AndroidManifest.xml میں uses-permission شامل کریں
+              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyWebViewApp/android/app/src/main/AndroidManifest.xml
+            fi
+          done
+
+      - name: Modify MainActivity to load local HTML
+        run: |
+          # MainActivity.java میں WebView کو لوکل HTML لوڈ کرنے کے لیے ترمیم کریں۔
+          # چونکہ ہم نے HTML کو assets میں رکھا ہے، WebView کو file:///android_asset/index.html سے لوڈ کرنا ہو گا۔
+          cat > MyWebViewApp/android/app/src/main/java/com/MyWebViewApp/MainActivity.java << 'EOF'
+          package com.mywebviewapp;
+
+          import android.os.Bundle;
+          import com.facebook.react.ReactActivity;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.webkit.WebSettings;
+
+          public class MainActivity extends ReactActivity {
+              @Override
+              protected String getMainComponentName() {
+                  return "MyWebViewApp";
+              }
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  // WebView کو React Native کے بجائے براہ راست استعمال کرنے کے لیے ہم MainActivity کو تبدیل کریں گے۔
+                  // لیکن React Native میں پہلے سے WebView component ہے۔ ہم App.js کو ترمیم کریں گے۔
+              }
+          }
+          EOF
+
+      - name: Modify App.js to use WebView
+        run: |
+          cat > MyWebViewApp/App.js << 'EOF'
+          import React from 'react';
+          import { SafeAreaView, StatusBar } from 'react-native';
+          import { WebView } from 'react-native-webview';
+
+          const App = () => {
+            return (
+              <SafeAreaView style={{ flex: 1 }}>
+                <StatusBar barStyle="dark-content" />
+                <WebView
+                  source={{ uri: 'file:///android_asset/index.html' }}
+                  style={{ flex: 1 }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                />
+              </SafeAreaView>
+            );
+          };
+
+          export default App;
+          EOF
 
       - name: Build Android APK
         run: |
-          cd app/android
+          cd MyWebViewApp/android
+          chmod +x gradlew
           ./gradlew assembleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: app/android/app/build/outputs/apk/release/*.apk
+          path: MyWebViewApp/android/app/build/outputs/apk/release/*.apk
+
+      - name: Create GitHub Release (optional)
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: run-${{ github.run_id }}
+          name: Build ${{ github.run_id }}
+          files: MyWebViewApp/android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
