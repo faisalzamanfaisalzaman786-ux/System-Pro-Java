@@ -1,19 +1,13 @@
-name: Build React Native WebView App from HTML
+name: Build Capacitor WebView APK
 
 on:
   repository_dispatch:
     types: [build-apk]
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code (just for workspace)
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -30,37 +24,44 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create React Native project using community CLI
+      - name: Create Capacitor project
         run: |
-          npx @react-native-community/cli@latest init MyWebViewApp
-          cd MyWebViewApp
-          npm install react-native-webview
+          npx @capacitor/cli create MyApp com.myapp MyApp
+          cd MyApp
+          npm install @capacitor/android
 
-      - name: Place HTML file in assets
+      - name: Copy HTML to www folder
         run: |
-          mkdir -p MyWebViewApp/android/app/src/main/assets
-          cat << 'EOF' > MyWebViewApp/android/app/src/main/assets/index.html
+          cat << 'EOF' > MyApp/www/index.html
           ${{ github.event.client_payload.app_html }}
           EOF
 
-      - name: Decode and set app icon (if provided)
+      - name: Decode and set app icon
         run: |
           ICON_BASE64='${{ github.event.client_payload.app_icon }}'
           if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > ic_launcher.png
-            for dir in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-              mkdir -p MyWebViewApp/android/app/src/main/res/$dir
-              cp ic_launcher.png MyWebViewApp/android/app/src/main/res/$dir/ic_launcher.png
-            done
+            echo "$ICON_BASE64" | base64 -d > app_icon.png
+            # Capacitor کے لیے آئیکون کاپی کرنا
+            mkdir -p MyApp/android/app/src/main/res/mipmap-hdpi
+            mkdir -p MyApp/android/app/src/main/res/mipmap-mdpi
+            mkdir -p MyApp/android/app/src/main/res/mipmap-xhdpi
+            mkdir -p MyApp/android/app/src/main/res/mipmap-xxhdpi
+            mkdir -p MyApp/android/app/src/main/res/mipmap-xxxhdpi
+            cp app_icon.png MyApp/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app_icon.png MyApp/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      - name: Set app name in app.json and strings.xml
+      - name: Set app name and package
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
-          cd MyWebViewApp
-          sed -i "s/\"name\": \".*\"/\"name\": \"$APP_NAME\"/" app.json
-          sed -i "s/\"displayName\": \".*\"/\"displayName\": \"$APP_NAME\"/" app.json
-          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" android/app/src/main/res/values/strings.xml
+          cd MyApp
+          # capacitor.config.json میں نام تبدیل کریں
+          sed -i "s/\"appName\": \".*\"/\"appName\": \"$APP_NAME\"/" capacitor.config.json
+          # Android manifest میں نام تبدیل
+          sed -i "s/<string name=\"title_activity_main\">.*<\/string>/<string name=\"title_activity_main\">$APP_NAME<\/string>/" android/app/src/main/res/values/strings.xml
 
       - name: Generate package name from app name
         run: |
@@ -71,77 +72,34 @@ jobs:
 
       - name: Set Android package name
         run: |
-          cd MyWebViewApp/android
-          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
-          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
+          cd MyApp
+          # build.gradle میں applicationId بدلیں
+          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" android/app/build.gradle
+          # AndroidManifest.xml میں package بدلیں
+          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" android/app/src/main/AndroidManifest.xml
+          # MainActivity.java میں پیکیج بدلیں
+          sed -i "s/package com\.myapp;/package $PACKAGE_NAME;/" android/app/src/main/java/com/myapp/MainActivity.java
 
-      - name: Add permissions to AndroidManifest
+      - name: Add permissions
         run: |
           PERMISSIONS_STR='${{ github.event.client_payload.permissions }}'
           echo "$PERMISSIONS_STR" | jq -r '.[]' | while read perm; do
             if [ -n "$perm" ]; then
-              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyWebViewApp/android/app/src/main/AndroidManifest.xml
+              sed -i "/<\/manifest>/i <uses-permission android:name=\"$perm\" />" MyApp/android/app/src/main/AndroidManifest.xml
             fi
           done
 
-      - name: Create App.js with WebView
+      - name: Sync Capacitor and build APK
         run: |
-          cat > MyWebViewApp/App.js << 'EOF'
-          import React from 'react';
-          import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
-          import { WebView } from 'react-native-webview';
-
-          const App = () => {
-            return (
-              <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <WebView
-                  source={{ uri: 'file:///android_asset/index.html' }}
-                  style={styles.webview}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  startInLoadingState={true}
-                />
-              </SafeAreaView>
-            );
-          };
-
-          const styles = StyleSheet.create({
-            container: { flex: 1 },
-            webview: { flex: 1 },
-          });
-
-          export default App;
-          EOF
-
-      - name: Create index.js with proper registration
-        run: |
-          cat > MyWebViewApp/index.js << 'EOF'
-          import { AppRegistry } from 'react-native';
-          import App from './App';
-          import { name as appName } from './app.json';
-
-          AppRegistry.registerComponent(appName, () => App);
-          EOF
-
-      - name: Build Android APK
-        run: |
-          cd MyWebViewApp/android
+          cd MyApp
+          npx cap add android
+          npx cap sync android
+          cd android
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: MyWebViewApp/android/app/build/outputs/apk/release/*.apk
-
-      - name: Create GitHub Release (optional)
-        if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: run-${{ github.run_id }}
-          name: Build ${{ github.run_id }}
-          files: MyWebViewApp/android/app/build/outputs/apk/release/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: MyApp/android/app/build/outputs/apk/release/*.apk
