@@ -1,4 +1,4 @@
-name: Build Minimal WebView APK (Direct Android)
+name: Build Simple WebView APK
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (just for workspace)
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -22,16 +22,63 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create Android project from scratch
+      - name: Create minimal Android project
         run: |
-          # Create minimal project structure
+          # Create folder structure
           mkdir -p MyApp/app/src/main/java/com/myapp
-          mkdir -p MyApp/app/src/main/res/layout
           mkdir -p MyApp/app/src/main/res/values
-          mkdir -p MyApp/app/src/main/assets
           mkdir -p MyApp/app/src/main/res/mipmap-hdpi
-          
-          # Create AndroidManifest.xml
+          mkdir -p MyApp/app/src/main/assets
+
+          # 1. settings.gradle
+          cat > MyApp/settings.gradle << 'EOF'
+          rootProject.name = "MyApp"
+          include ':app'
+          EOF
+
+          # 2. build.gradle (top level)
+          cat > MyApp/build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          # 3. app/build.gradle
+          cat > MyApp/app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+          android {
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.myapp"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+          # 4. AndroidManifest.xml
           cat > MyApp/app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -54,8 +101,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with WebView
-        run: |
+          # 5. MainActivity.java (WebView)
           cat > MyApp/app/src/main/java/com/myapp/MainActivity.java << 'EOF'
           package com.myapp;
           import android.os.Bundle;
@@ -78,8 +124,7 @@ jobs:
           }
           EOF
 
-      - name: Create strings.xml
-        run: |
+          # 6. strings.xml
           cat > MyApp/app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -87,86 +132,43 @@ jobs:
           </resources>
           EOF
 
-      - name: Create styles.xml
-        run: |
+          # 7. styles.xml (minimal)
           cat > MyApp/app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:windowNoTitle">true</item>
-                  <item name="android:windowFullscreen">false</item>
-              </style>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
           </resources>
           EOF
 
-      - name: Create build.gradle
-        run: |
-          cat > MyApp/build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.4.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
-          
-          cat > MyApp/app/build.gradle << 'EOF'
-          apply plugin: 'com.android.application'
-          android {
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.myapp"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android.txt')
-                  }
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-
-      - name: Place HTML file
+      - name: Place HTML content
         run: |
           cat << 'HTML' > MyApp/app/src/main/assets/index.html
           ${{ github.event.client_payload.app_html }}
           HTML
 
-      - name: Set app name and package
+      - name: Update app name and package
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
-          # Generate clean package name
+          # Clean package name from app name
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
           PACKAGE_NAME="com.${CLEAN_NAME}"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          # Update strings.xml
+
+          # Update strings.xml (app name)
           sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" MyApp/app/src/main/res/values/strings.xml
-          # Update build.gradle
+
+          # Update app/build.gradle applicationId
           sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" MyApp/app/build.gradle
-          # Update AndroidManifest.xml
+
+          # Update AndroidManifest.xml package
           sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" MyApp/app/src/main/AndroidManifest.xml
-          # Update Java package folder (rename directory)
-          mv MyApp/app/src/main/java/com/myapp MyApp/app/src/main/java/com/temp 2>/dev/null || true
-          mkdir -p MyApp/app/src/main/java/com/${CLEAN_NAME}
-          mv MyApp/app/src/main/java/com/temp/* MyApp/app/src/main/java/com/${CLEAN_NAME}/ 2>/dev/null || true
-          # Update MainActivity.java package
-          sed -i "s/package com\.myapp;/package $PACKAGE_NAME;/" MyApp/app/src/main/java/com/${CLEAN_NAME}/MainActivity.java
+
+          # Move Java source to new package folder
+          mkdir -p MyApp/app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')
+          cp -r MyApp/app/src/main/java/com/myapp/* MyApp/app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/ 2>/dev/null || true
+          rm -rf MyApp/app/src/main/java/com/myapp
+          # Update package name in MainActivity
+          find MyApp/app/src/main/java -name "MainActivity.java" -exec sed -i "s/package com\.myapp;/package $PACKAGE_NAME;/" {} \;
 
       - name: Add icon if provided
         run: |
@@ -189,7 +191,6 @@ jobs:
       - name: Build APK
         run: |
           cd MyApp
-          chmod +x gradlew 2>/dev/null || true
           # Generate gradle wrapper if missing
           if [ ! -f gradlew ]; then
             gradle wrapper --gradle-version 7.5
