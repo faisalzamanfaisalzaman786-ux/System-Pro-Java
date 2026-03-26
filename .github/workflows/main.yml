@@ -1,38 +1,74 @@
-name: Build APK from Merged Config
+name: Build React Native WebView App
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      html_content:
+        description: 'HTML content (base64 encoded)'
+        required: true
+      app_name:
+        description: 'App display name'
+        required: true
+        default: 'My WebView App'
+      package_name:
+        description: 'Android package name (e.g., com.example.myapp)'
+        required: true
+        default: 'com.myapp.webview'
+      permissions:
+        description: 'Android permissions (comma separated)'
+        required: false
+        default: 'INTERNET'
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout template
         uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          repository: 'your-username/react-native-webview-template'
+          token: ${{ secrets.GH_PAT }}
+          path: 'app'
 
-      - name: Install Trapeze
-        run: npm install -g @trapeze/core
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-      - name: Apply all configurations
-        run: trapeze run trapeze.yaml
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Install dependencies
+        run: |
+          cd app
+          npm install
 
-      - name: Build APK
-        run: ./gradlew assembleRelease
+      - name: Decode HTML and copy to assets
+        run: |
+          echo "${{ github.event.inputs.html_content }}" | base64 -d > index.html
+          mkdir -p app/android/app/src/main/assets/
+          cp index.html app/android/app/src/main/assets/
 
-      - name: Upload APK
+      - name: Update app name and package
+        run: |
+          cd app
+          # Update app.json
+          sed -i "s/\"name\": \".*\"/\"name\": \"${{ github.event.inputs.app_name }}\"/" app.json
+          # Update Android package name in AndroidManifest.xml and build.gradle
+          # یہاں آپ کو مزید تفصیل سے تبدیل کرنا ہوگا۔ مثال کے لیے:
+          # sed -i "s/package=\"com\.old\.name\"/package=\"${{ github.event.inputs.package_name }}\"/" android/app/src/main/AndroidManifest.xml
+          # اور build.gradle میں applicationId بدلنا ہوگا۔
+          # اس کے لیے آپ custom script بنا سکتے ہیں۔
+
+      - name: Add permissions
+        run: |
+          # AndroidManifest.xml میں پرمیشنز شامل کریں
+          # اس کے لیے بھی script چلائیں
+
+      - name: Build Android APK
+        run: |
+          cd app/android
+          ./gradlew assembleRelease
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: my-app
-          path: app/build/outputs/apk/release/*.apk
+          name: app-release
+          path: app/android/app/build/outputs/apk/release/*.apk
