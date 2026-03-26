@@ -24,61 +24,53 @@ jobs:
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create Capacitor project
+      - name: Create Capacitor app
         run: |
-          npx @capacitor/cli create MyApp com.myapp MyApp
+          npm init @capacitor/app@latest MyApp -- --package-id=com.myapp --app-name=MyApp
           cd MyApp
           npm install @capacitor/android
 
-      - name: Copy HTML to www folder
+      - name: Copy HTML to www
         run: |
           cat << 'EOF' > MyApp/www/index.html
           ${{ github.event.client_payload.app_html }}
           EOF
 
-      - name: Decode and set app icon
-        run: |
-          ICON_BASE64='${{ github.event.client_payload.app_icon }}'
-          if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > app_icon.png
-            # Capacitor کے لیے آئیکون کاپی کرنا
-            mkdir -p MyApp/android/app/src/main/res/mipmap-hdpi
-            mkdir -p MyApp/android/app/src/main/res/mipmap-mdpi
-            mkdir -p MyApp/android/app/src/main/res/mipmap-xhdpi
-            mkdir -p MyApp/android/app/src/main/res/mipmap-xxhdpi
-            mkdir -p MyApp/android/app/src/main/res/mipmap-xxxhdpi
-            cp app_icon.png MyApp/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp app_icon.png MyApp/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp app_icon.png MyApp/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
-
       - name: Set app name and package
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
           cd MyApp
-          # capacitor.config.json میں نام تبدیل کریں
+          # Update capacitor.config.json
           sed -i "s/\"appName\": \".*\"/\"appName\": \"$APP_NAME\"/" capacitor.config.json
-          # Android manifest میں نام تبدیل
-          sed -i "s/<string name=\"title_activity_main\">.*<\/string>/<string name=\"title_activity_main\">$APP_NAME<\/string>/" android/app/src/main/res/values/strings.xml
-
-      - name: Generate package name from app name
-        run: |
-          APP_NAME='${{ github.event.client_payload.app_name }}'
+          
+          # Generate package name from app name
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
           PACKAGE_NAME="com.${CLEAN_NAME}"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          
+          # Update capacitor config with package id
+          sed -i "s/\"appId\": \".*\"/\"appId\": \"$PACKAGE_NAME\"/" capacitor.config.json
 
-      - name: Set Android package name
+      - name: Add icon if provided
+        run: |
+          ICON_BASE64='${{ github.event.client_payload.app_icon }}'
+          if [ -n "$ICON_BASE64" ]; then
+            echo "$ICON_BASE64" | base64 -d > app_icon.png
+            cd MyApp
+            npx capacitor-assets generate --iconBackgroundColor "#A52A2A" --iconBackgroundColorDark "#A52A2A"
+          fi
+
+      - name: Add Android platform
         run: |
           cd MyApp
-          # build.gradle میں applicationId بدلیں
-          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" android/app/build.gradle
-          # AndroidManifest.xml میں package بدلیں
-          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" android/app/src/main/AndroidManifest.xml
-          # MainActivity.java میں پیکیج بدلیں
-          sed -i "s/package com\.myapp;/package $PACKAGE_NAME;/" android/app/src/main/java/com/myapp/MainActivity.java
+          npx cap add android
+          npx cap sync android
+
+      - name: Set package name in Android files
+        run: |
+          cd MyApp/android
+          sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
+          sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
 
       - name: Add permissions
         run: |
@@ -89,12 +81,9 @@ jobs:
             fi
           done
 
-      - name: Sync Capacitor and build APK
+      - name: Build APK
         run: |
-          cd MyApp
-          npx cap add android
-          npx cap sync android
-          cd android
+          cd MyApp/android
           chmod +x gradlew
           ./gradlew assembleRelease
 
