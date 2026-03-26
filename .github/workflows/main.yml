@@ -8,7 +8,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code (just to have a workspace)
+      - name: Checkout code (just for workspace)
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20   # اب Node 20 استعمال کریں
+          node-version: 20
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -25,21 +25,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Android SDK already pre-installed on runner, but we set ANDROID_HOME
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         run: |
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Create React Native project (without skip-install)
+      - name: Install React Native globally (specific version)
+        run: npm install -g react-native@0.72.0
+
+      - name: Create React Native project
         run: |
-          npx react-native@0.72.0 init MyWebViewApp
+          react-native init MyWebViewApp
           cd MyWebViewApp
           npm install react-native-webview
 
-      - name: Decode and place HTML
+      - name: Place HTML file in assets
         run: |
-          mkdir -p MyWebViewApp/android/app/src/main/assets/
+          mkdir -p MyWebViewApp/android/app/src/main/assets
           cat << 'EOF' > MyWebViewApp/android/app/src/main/assets/index.html
           ${{ github.event.client_payload.app_html }}
           EOF
@@ -63,7 +65,7 @@ jobs:
           sed -i "s/\"displayName\": \".*\"/\"displayName\": \"$APP_NAME\"/" app.json
           sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/" android/app/src/main/res/values/strings.xml
 
-      - name: Generate package name
+      - name: Generate package name from app name
         run: |
           APP_NAME='${{ github.event.client_payload.app_name }}'
           CLEAN_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-30)
@@ -76,7 +78,7 @@ jobs:
           sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" app/build.gradle
           sed -i "s/package=\".*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
 
-      - name: Add permissions
+      - name: Add permissions to AndroidManifest
         run: |
           PERMISSIONS_STR='${{ github.event.client_payload.permissions }}'
           echo "$PERMISSIONS_STR" | jq -r '.[]' | while read perm; do
@@ -85,7 +87,7 @@ jobs:
             fi
           done
 
-      - name: Create custom App.js with WebView
+      - name: Create App.js with WebView
         run: |
           cat > MyWebViewApp/App.js << 'EOF'
           import React from 'react';
@@ -121,7 +123,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Upload APK as artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release
