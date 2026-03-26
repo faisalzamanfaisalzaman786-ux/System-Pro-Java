@@ -1,15 +1,13 @@
-name: Android APK Build
+name: Build APK from Merged Config
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,49 +18,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Install Trapeze
+        run: npm install -g @trapeze/core
 
-      # Generate a unique version code (e.g., based on run number or timestamp)
-      - name: Generate version code
-        id: version
-        run: |
-          # Use GitHub run number as version code (always increments)
-          VERSION_CODE=${{ github.run_number }}
-          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-          echo "Version code set to $VERSION_CODE"
+      - name: Apply all configurations
+        run: trapeze run trapeze.yaml
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # Optional: If you use product flavors, set the flavor here
-      # - name: Set build flavor
-      #   run: echo "FLAVOR=prod" >> $GITHUB_ENV
+      - name: Build APK
+        run: ./gradlew assembleRelease
 
-      # Build the APK
-      - name: Build release APK
-        run: |
-          # If you have flavors, use assemble${FLAVOR}Release
-          ./gradlew assembleRelease \
-            -PversionCode=${{ env.VERSION_CODE }} \
-            -PversionName="1.0.${{ github.run_number }}"
-
-      # Rename the APK to include version and run details
-      - name: Rename APK
-        run: |
-          ORIGINAL_APK="app/build/outputs/apk/release/app-release.apk"
-          # If you use flavors, adjust path accordingly, e.g.:
-          # app/build/outputs/apk/prod/release/app-prod-release.apk
-          if [ -f "$ORIGINAL_APK" ]; then
-            NEW_NAME="app-${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
-            mv "$ORIGINAL_APK" "app/build/outputs/apk/release/$NEW_NAME"
-            echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
-          else
-            echo "APK not found at expected path!"
-            exit 1
-          fi
-
-      # Upload the APK as an artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk-${{ github.run_number }}
+          name: my-app
           path: app/build/outputs/apk/release/*.apk
-          retention-days: 30
