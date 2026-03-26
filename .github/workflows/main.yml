@@ -1,66 +1,41 @@
-name: Auto Package Multi-App Builder
+name: System Pro Auto Build
 
 on:
-  repository_dispatch:
-    types: [build-apk]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+    - name: Generate Unique Package Name
+      run: |
+        # وقت اور تاریخ کی بنیاد پر ایک یونیک آئی ڈی بنانا
+        UNIQUE_ID=$(date +%s)
+        NEW_PACKAGE="com.systempro.app.v${UNIQUE_ID}"
+        echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
+        
+        # تمام ضروری فائلوں میں پیکیج نیم کو ری پلیس کرنا
+        find . -type f \( -name "AndroidManifest.xml" -o -name "build.gradle" -o -name "*.java" -o -name "*.kt" \) -exec sed -i "s/com.example.placeholder/$NEW_PACKAGE/g" {} +
+        echo "Package name updated to: $NEW_PACKAGE"
 
-      - name: Auto Rename Package & Prepare Data
-        run: |
-          # 1. خودکار نیا پیکیج نیم بنانا (وقت کے حساب سے)
-          # مثال: com.systempro.app_202603261930
-          UNIQUE_ID=$(date +'%Y%m%d%H%M%S')
-          NEW_PKG="com.systempro.app_$UNIQUE_ID"
-          
-          # یہاں وہ پیکیج نیم لکھیں جو آپ کی ایپ میں ابھی موجود ہے
-          OLD_PKG="com.example.systempro" 
-          
-          echo "Building with New Package: $NEW_PKG"
+    - name: Grant Execute Permission for Gradlew
+      run: chmod +x gradlew
 
-          # 2. تمام فائلوں میں پرانے پیکیج نیم کو نئے سے بدلنا
-          find . -type f \( -name "*.xml" -o -name "*.gradle" -o -name "*.java" \) -print0 | xargs -0 sed -i "s/$OLD_PKG/$NEW_PKG/g"
+    - name: Build APK
+      run: ./gradlew assembleDebug
 
-          # 3. ایپ کا نام سیٹ کرنا
-          sed -i "s/app_name\">.*</app_name\">${{ github.event.client_payload.app_name }}</" app/src/main/res/values/strings.xml
-          
-          # 4. HTML فائل کو 'www' فولڈر میں ڈالنا
-          echo '${{ github.event.client_payload.app_html }}' > www/index.html
-          
-          # 5. آئیکون کو صحیح فولڈر میں محفوظ کرنا
-          if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
-
-      - name: Inject Permissions
-        run: |
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          PERMISSIONS='${{ toJson(github.event.client_payload.permissions) }}'
-          for row in $(echo "${PERMISSIONS}" | jq -r '.[]'); do
-            sed -i "/<\/manifest>/i \    <uses-permission android:name=\"$row\" />" $MANIFEST
-          done
-
-      - name: Build Release APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}-APK
-          path: app/build/outputs/apk/release/*.apk
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: SystemPro-Auto-Build-${{ env.NEW_PACKAGE }}
+        path: app/build/outputs/apk/debug/*.apk
