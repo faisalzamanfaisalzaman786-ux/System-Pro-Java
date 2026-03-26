@@ -1,4 +1,4 @@
-name: System Pro Auto Build
+name: Build and Auto-Rename APK
 
 on:
   workflow_dispatch:
@@ -6,36 +6,35 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Generate Unique Package Name
-      run: |
-        # وقت اور تاریخ کی بنیاد پر ایک یونیک آئی ڈی بنانا
-        UNIQUE_ID=$(date +%s)
-        NEW_PACKAGE="com.systempro.app.v${UNIQUE_ID}"
-        echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
-        
-        # تمام ضروری فائلوں میں پیکیج نیم کو ری پلیس کرنا
-        find . -type f \( -name "AndroidManifest.xml" -o -name "build.gradle" -o -name "*.java" -o -name "*.kt" \) -exec sed -i "s/com.example.placeholder/$NEW_PACKAGE/g" {} +
-        echo "Package name updated to: $NEW_PACKAGE"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Grant Execute Permission for Gradlew
-      run: chmod +x gradlew
+      - name: Auto Rename Package & Prepare Data
+        run: |
+          # موجودہ وقت کے حساب سے نیا پیکج نیم بنانا
+          NEW_PKG="com.systempro.app_$(date +'%Y%m%d%H%M%S')"
+          echo "Building with New Package: $NEW_PKG"
+          
+          # فائلز کے پاتھ کو آپ کی ریپوزٹری کے مطابق سیٹ کرنا
+          # یہاں ہم build.gradle اور Manifest دونوں میں تبدیلی کر رہے ہیں
+          find . -name "build.gradle" -exec sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" {} +
+          find . -name "AndroidManifest.xml" -exec sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/g" {}+
 
-    - name: Build APK
-      run: ./gradlew assembleDebug
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: SystemPro-Auto-Build-${{ env.NEW_PACKAGE }}
-        path: app/build/outputs/apk/debug/*.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Release
+          path: app/build/outputs/apk/release/*.apk
