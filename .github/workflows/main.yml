@@ -1,4 +1,4 @@
-name: System Pro Final Fix
+name: System Pro Auto-Build (No-Wrapper Fix)
 
 on:
   workflow_dispatch:
@@ -9,31 +9,37 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Find and Build
-        run: |
-          # خودکار طریقے سے gradlew فائل تلاش کریں
-          GRADLEW_PATH=$(find . -name gradlew)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew file not found anywhere in the repository!"
-            exit 1
-          fi
-          
-          # فائل والے فولڈر میں جائیں اور بلڈ شروع کریں
-          cd $(dirname "$GRADLEW_PATH")
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+      # یہ سٹیپ خودکار طریقے سے گریڈل سیٹ اپ کرے گا چاہے gradlew فائل نہ بھی ہو
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Upload APK
+      - name: Build APK with Auto-Gradle
+        run: |
+          # اگر gradlew نہیں ہے تو براہ راست انسٹال شدہ 'gradle' کمانڈ استعمال کریں
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --stacktrace
+          else
+            echo "gradlew not found, using system gradle..."
+            gradle assembleDebug --stacktrace
+          fi
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-APK
+          name: System-Pro-V2-APK
           path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf ~/.gradle/caches/
