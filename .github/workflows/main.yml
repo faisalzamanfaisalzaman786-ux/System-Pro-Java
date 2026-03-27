@@ -14,30 +14,33 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Professional Structure
+      - name: Clean and Setup Structure
         run: |
-          # 1. تمام پرانے فولڈرز کی صفائی اور نئے فولڈرز بنانا
-          rm -rf app www build.gradle settings.gradle
+          # 1. پرانی تمام فائلوں کا صفایا
+          rm -rf app build.gradle settings.gradle gradlew gradle .gradle
+          
+          # 2. نئے فولڈرز کی تیاری
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/assets
 
-          # 2. ڈیٹا ہینڈلنگ (HTML اور Icon)
+          # 3. ڈیٹا ہینڈلنگ (HTML اور Icon)
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
           fi
 
-          # 3. آٹو یونیک پیکج نیم (Timestamp کی بنیاد پر تاکہ ہر ایپ الگ ہو)
+          # 4. یونیک پیکج نیم
           BUILD_ID=$(date +%s)
           NEW_PACKAGE="com.systempro.v${BUILD_ID}"
 
-          # 4. روٹ سیٹنگز
+          # 5. روٹ سیٹنگز
           echo "rootProject.name = 'System Pro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # 5. پروجیکٹ لیول گریڈل
+          # 6. پروجیکٹ لیول گریڈل
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -46,7 +49,7 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 6. ایپ لیول گریڈل (لائبریری فکس کے ساتھ)
+          # 7. ایپ لیول گریڈل (Strict Configuration)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -59,24 +62,48 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 7. متحرک مینی فیسٹ (Permissions کے ساتھ)
-          PERMS_XML=""
-          for perm in ${{ join(github.event.client_payload.permissions, ' ') }}; do
-            PERMS_XML="\${PERMS_XML}<uses-permission android:name=\"\$perm\" />\n"
-          done
+          # 8. جاوا کوڈ (WebView Logic)
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
 
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          # 9. مینی فیسٹ (Permissions Fix)
+          # یہاں ہم ڈائریکٹ ان پٹ کو ہینڈل کریں گے
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              \${PERMS_XML}
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application 
                   android:label="${{ github.event.client_payload.app_name }}" 
                   android:icon="@drawable/app_icon"
@@ -91,27 +118,7 @@ jobs:
           </manifest>
           EOF
 
-          # 8. جاوا مین ایکٹیویٹی
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
-          package com.systempro.app;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  setContentView(webView);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-          }
-          EOF
-
-          # 9. گریڈل ریپر انسٹال کرنا
+          # 10. گریڈل ریپر انسٹال کریں
           gradle wrapper --gradle-version 8.2
 
       - name: Set up JDK 17
@@ -120,17 +127,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Final APK
+      - name: Final Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Push Structure Changes
+      - name: Save Changes to Repo
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@systempro.com"
           git add .
-          git commit -m "Build: ${{ github.event.client_payload.app_name }} [$NEW_PACKAGE]" || echo "No changes"
+          git commit -m "Build Success: $NEW_PACKAGE" || echo "No changes"
           git push
 
       - name: Upload APK
