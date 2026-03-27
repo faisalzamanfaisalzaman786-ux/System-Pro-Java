@@ -1,4 +1,4 @@
-name: System Pro - Total Wipeout & Build
+name: System Pro - Atomic Build Fix
 
 on:
   push:
@@ -6,66 +6,54 @@ on:
   workflow_dispatch:
 
 jobs:
-  wipe-and-build:
+  atomic-build:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 1. Checkout Repository
+      - name: 1. Checkout (Fresh Start)
         uses: actions/checkout@v4
+        with:
+          clean: true # یہ گٹ کی تمام عارضی فائلوں کو صاف کر دے گا
 
-      - name: 2. Total Wipeout (مکمل صفائی)
+      - name: 2. Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          # ہم یہاں کوئی کیشے استعمال نہیں کریں گے
+
+      - name: 3. Nuclear Cleanup & Re-structure
         run: |
-          # اینڈرائیڈ کے تمام کوڈ فولڈرز کو مکمل ڈیلیٹ کریں
-          rm -rf app/src/main/java
-          rm -rf app/src/main/res
-          rm -rf app/src/main/AndroidManifest.xml
+          # سب کچھ صاف کریں، کچھ بھی نہ چھوڑیں
+          rm -rf .gradle build app/build
+          find . -name "*.iml" -type f -delete
+          find . -name ".idea" -type d -exec rm -rf {} +
           
-          # نئے سرے سے فولڈر بنائیں
+          # صرف ضروری فائلیں دوبارہ بنائیں
           mkdir -p app/src/main/java/com/systempro/ultimate
-          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-
-      - name: 3. Create Guaranteed Working Files
-        run: |
-          # 1. New Manifest
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 2. Basic Styles
-          echo '<resources><style name="Theme.AppCompat" parent="Theme.AppCompat.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-
-          # 3. Simple Java File
-          cat <<EOF > app/src/main/java/com/systempro/ultimate/MainActivity.java
-          package com.systempro.ultimate;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-              }
+          echo "include ':app'" > settings.gradle
+          
+          # پروجیکٹ لیول build.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }
           EOF
 
-      - name: 4. Build with Gradle 8.5
+      - name: 4. Build with NO Cache (اصل جادو یہاں ہے)
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          # --no-build-cache اور --no-daemon گریڈل کو مجبور کریں گے کہ وہ پرانا کچھ بھی استعمال نہ کرے
+          ./gradlew assembleDebug --no-build-cache --no-daemon --stacktrace
 
       - name: 5. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V8-Final
+          name: System-Pro-V8-Atomic
           path: app/build/outputs/apk/debug/*.apk
