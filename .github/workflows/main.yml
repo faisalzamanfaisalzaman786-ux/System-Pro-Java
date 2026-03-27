@@ -130,7 +130,7 @@ jobs:
           }
 
           android {
-              namespace '$PACKAGE_NAME'
+              namespace "$PACKAGE_NAME"
               compileSdk 34
 
               defaultConfig {
