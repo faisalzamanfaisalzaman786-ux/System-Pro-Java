@@ -25,7 +25,7 @@ jobs:
       - name: Process client payload
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کوڈ کو ڈی کوڈ کریں (بیس 64 نہیں، سیدھا متن ہے)
+          # HTML کوڈ کو ڈی کوڈ کریں (سیدھا متن ہے)
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
           # اگر آئیکون بیس 64 میں بھیجا گیا ہو تو اسے ڈی کوڈ کریں
@@ -36,7 +36,7 @@ jobs:
           # پرمیشنز کو ایک فائل میں محفوظ کریں
           echo "${{ github.event.client_payload.permissions }}" > permissions.txt
 
-          # ایپ کا نام بھی محفوظ کریں (بعد میں پیکج نام بنانے کے لیے)
+          # ایپ کا نام بھی محفوظ کریں (پیکیج نام بنانے کے لیے)
           echo "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Clean previous builds
@@ -93,9 +93,9 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic package name and permissions
+      - name: Create app build.gradle with dynamic package name and namespace
         run: |
-          # ایپ کا نام پڑھیں، پیکج نام بنائیں
+          # ایپ کا نام پڑھیں، پیکیج نام بنائیں
           if [ -f app_name.txt ]; then
             APP_NAME=$(cat app_name.txt)
             PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
@@ -111,6 +111,7 @@ jobs:
           }
 
           android {
+              namespace '$PACKAGE_NAME'
               compileSdk 34
 
               defaultConfig {
@@ -138,18 +139,17 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml with permissions
+      - name: Create AndroidManifest.xml (without package attribute)
         run: |
           # پرمیشنز پڑھیں
           if [ -f permissions.txt ]; then
             PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
           fi
 
-          # بیس مینی فیسٹ بنائیں
+          # بیس مینی فیسٹ بنائیں (package attribute ہٹا دیا)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.ultimate">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -184,11 +184,21 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java
+      - name: Create MainActivity.java with dynamic package
         run: |
-          mkdir -p app/src/main/java/com/systempro/ultimate
-          cat <<EOF > app/src/main/java/com/systempro/ultimate/MainActivity.java
-          package com.systempro.ultimate;
+          # پیکیج نام پڑھیں یا ڈیفالٹ
+          if [ -f app_name.txt ]; then
+            APP_NAME=$(cat app_name.txt)
+            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          else
+            PACKAGE_NAME="com.systempro.ultimate"
+          fi
+          # پیکیج ڈاٹ کو سلیش میں بدلیں
+          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PACKAGE_PATH"
+          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          package $PACKAGE_NAME;
 
           import android.os.Bundle;
           import android.webkit.WebView;
