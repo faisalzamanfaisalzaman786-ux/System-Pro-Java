@@ -2,7 +2,7 @@ name: System-Pro-App-Build
 
 on:
   repository_dispatch:
-    types: [build-apk] # یہ وہی ایونٹ ہے جو آپ کی ایپ (JS) بھیج رہی ہے
+    types: [build-apk]
 
 permissions:
   contents: write
@@ -14,29 +14,30 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Auto-Process Input Data
+      - name: Setup Android Structure & Wrapper
         run: |
           # 1. فولڈرز کی تیاری
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/java/com/systempro/app
 
-          # 2. ایپ کا نام اور ایچ ٹی ایم ایل سیٹ کرنا
+          # 2. ان پٹ ڈیٹا پروسیسنگ
           APP_NAME="${{ github.event.client_payload.app_name }}"
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
-          # 3. آئیکون ہینڈلنگ (اگر ایپ سے آ رہا ہے)
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
           fi
 
-          # 4. آٹو پیکج نیم (ہر بار نیا)
+          # 3. گریڈل ریپر (Gradle Wrapper) خود بخود انسٹال کرنا
+          gradle wrapper --gradle-version 8.2
+
+          # 4. آٹو پیکج نیم
           BUILD_ID=$(date +%s)
           NEW_PACKAGE="com.systempro.v${BUILD_ID}"
           sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/" app/build.gradle
 
-          # 5. مینی فیسٹ میں پرمیشنز اور نام ایڈ کرنا
-          # یہاں ہم آپ کی ایپ سے آنے والی تمام پرمیشنز کو لوپ میں شامل کریں گے
+          # 5. مینی فیسٹ اور پرمیشنز
           PERMS_XML=""
           for perm in ${{ join(github.event.client_payload.permissions, ' ') }}; do
             PERMS_XML="${PERMS_XML}<uses-permission android:name=\"$perm\" />\n"
@@ -67,13 +68,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK with Gradle
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
+      - name: Commit Fixed Structure
+        run: |
+          git config --global user.name "Faisal Zaman"
+          git config --global user.email "faisal@systempro.com"
+          git add .
+          git commit -m "Fix: Added Gradle Wrapper and Build APK" || echo "No changes"
+          git push
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Build
+          name: ${{ github.event.client_payload.app_name }}-APK
           path: app/build/outputs/apk/debug/*.apk
