@@ -1,40 +1,72 @@
-name: System-Pro-Structure-Fix
+name: System-Pro-Fresh-Setup
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  clean-and-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # یہ لائن بہت ضروری ہے تاکہ گتھب کو لکھنے کی اجازت ملے
+      contents: write
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create System-Pro Folders
+      - name: Clean and Create Fresh Structure
         run: |
-          # پروفیشنل اسٹرکچر بنانا
+          # پرانے تمام فولڈرز کی صفائی (احتیاط: یہ 'app' فولڈر کو دوبارہ بنائے گا)
+          rm -rf app
+          
+          # نیا اور صحیح اسٹرکچر بنانا
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
           
-          # خالی فولڈر گتھب پر نظر نہیں آتے، اس لیے ایک عارضی فائل ڈالنا ضروری ہے
-          touch app/src/main/assets/.gitkeep
-          touch app/src/main/res/drawable/.gitkeep
-          
-          echo "Folders created successfully."
+          # 1. اینڈرائیڈ مینی فیسٹ (Manifest)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHer" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: Auto-Move Files
-        run: |
-          # اگر باہر کوئی HTML یا Image پڑی ہے تو اسے اندر منتقل کرو
-          find . -maxdepth 1 -name "*.html" -exec mv {} app/src/main/assets/ \;
-          find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | xargs -I {} mv {} app/src/main/res/drawable/ || true
+          # 2. مین ایکٹیویٹی (Java)
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          # 3. انڈیکس فائل (Assets)
+          echo "<h1>System Pro Master - Faisal Zaman</h1>" > app/src/main/assets/index.html
+
+          echo "Clean structure created successfully."
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "Faisal Zaman"
-          git config --global user.email "faisal@example.com"
+          git config --global user.email "faisal@systempro.com"
           git add .
-          git commit -m "System Pro: Professional Folder Structure Created" || echo "No changes to commit"
+          git commit -m "System Pro: Fresh Professional Structure" || echo "No changes"
           git push
