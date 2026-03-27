@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>اسمارٹ اسٹوڈیو · موبائل موزوں</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --primary: #A52A2A;
+            --secondary: #DC143C;
+            --primary-light: #f5d6d6;
+            --secondary-light: #ffe0e5;
+            --bg-gradient-from: #fce4e4;
+            --bg-gradient-to: #ffd9d9;
+            --text-dark: #2d1e1e;
+            --text-light: #8b1a1a;
+            --card-bg: rgba(255, 248, 248, 0.95);
+            --border-light: #e6b3b3;
+            --border-focus: #A52A2A;
+            --status-green: #10b981;
+            --status-red: #ef4444;
+            --status-yellow: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(145deg, var(--bg-gradient-from), var(--bg-gradient-to));
+            min-height: 100vh;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-dark);
+        }
+        .app {
+            max-width: 500px;
+            margin: 0 auto;
+            width: 100%;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-light);
+            border-radius: 28px;
+            padding: 16px 12px;
+            box-shadow: 0 20px 40px -12px rgba(165,42,42,0.3);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+        }
+        .header-right {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .icon-btn {
+            background: white;
+            border: 1px solid var(--border-light);
+            color: var(--primary);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .icon-btn:active {
+            transform: scale(0.96);
+            background: var(--primary-light);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: white;
+            padding: 5px 12px;
+            border-radius: 40px;
+            border: 1px solid var(--border-light);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--status-yellow);
+            transition: background 0.3s;
+        }
+        .status-dot.green { background: var(--status-green); }
+        .status-dot.red { background: var(--status-red); }
+        .status-dot.yellow { background: var(--status-yellow); }
+
+        .token-area {
+            display: flex;
+            background: #ffffff;
+            border-radius: 40px;
+            border: 1px solid var(--border-light);
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        .token-area input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 10px 14px;
+            color: var(--text-dark);
+            font-size: 0.8rem;
+            outline: none;
+        }
+        .token-area button {
+            background: linear-gradient(145deg, var(--primary), var(--secondary));
+            border: none;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 4px 8px rgba(165,42,42,0.3);
+        }
+        .token-area button:active {
+            transform: scale(0.97);
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 12px 0 6px;
+            color: var(--primary);
+            border-right: 3px solid var(--primary);
+            padding-right: 8px;
+        }
+
+        .code-box {
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .code-header {
+            background: #1a1e24;
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #ffb3b3;
+            border-bottom: 1px solid #3a2a2a;
+        }
+        .code-header i { margin-right: 8px; color: #ff8080; }
+        .code-header small { color: #a67a7a; background: #0f1419; padding: 3px 8px; border-radius: 30px; }
+        .code-box textarea {
+            width: 100%;
+            background: #0a0e12 !important;
+            border: none;
+            color: #ffb3b3 !important;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 14px;
+            min-height: 180px;
+            resize: vertical;
+            outline: none;
+            caret-color: #ff8080;
+        }
+
+        .app-info {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 14px;
+            margin: 12px 0;
+            border: 1px solid var(--border-light);
+        }
+        .field {
+            margin-bottom: 12px;
+        }
+        .field label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--primary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .field input, .field .file-input {
+            width: 100%;
+            background: var(--primary-light);
+            border: 1px solid var(--border-light);
+            border-radius: 30px;
+            padding: 10px 14px;
+            color: var(--text-dark);
+            font-size: 0.85rem;
+        }
+        .field input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(165,42,42,0.2);
+        }
+
+        .permissions-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .permissions-grid label {
+            background: var(--primary-light);
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .build-btn {
+            background: linear-gradient(145deg, var(--primary), var(--secondary));
+            border: none;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+            padding: 14px;
+            border-radius: 40px;
+            width: 100%;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+        .build-btn:active {
+            transform: scale(0.98);
+        }
+        .build-btn:disabled {
+            opacity: 0.6;
+            transform: none;
+        }
+
+        #status {
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 14px;
+            margin-top: 12px;
+            display: none;
+        }
+        .progress-bar {
+            height: 6px;
+            background: var(--primary-light);
+            border-radius: 20px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+        .log {
+            font-size: 0.7rem;
+            background: var(--primary-light);
+            padding: 10px;
+            border-radius: 14px;
+            max-height: 90px;
+            overflow-y: auto;
+            color: var(--text-light);
+            border: 1px solid var(--border-light);
+        }
+
+        .download-btn {
+            display: block;
+            background: linear-gradient(145deg, var(--primary), var(--secondary));
+            color: white;
+            text-decoration: none;
+            padding: 12px;
+            border-radius: 40px;
+            text-align: center;
+            margin: 12px 0;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+        }
+        .download-btn:active {
+            transform: scale(0.98);
+        }
+
+        .history-list { margin-top: 10px; }
+        .history-item {
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-radius: 18px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+        .history-item a { color: var(--primary); text-decoration: none; font-weight: 500; }
+        .clear-btn {
+            background: #dc2626;
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 40px;
+            width: 100%;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+        .clear-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* موڈل اسٹائلز */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white;
+            border-radius: 28px;
+            max-width: 90%;
+            width: 400px;
+            max-height: 80%;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .modal-header h3 {
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--primary);
+        }
+        .settings-panel {
+            background: transparent;
+            padding: 0;
+            margin-top: 0;
+            border: none;
+        }
+        .settings-field {
+            margin-bottom: 16px;
+        }
+        .settings-field label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--text-dark);
+            font-size: 0.8rem;
+        }
+        .settings-field input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-light);
+            border-radius: 30px;
+            background: var(--primary-light);
+            color: var(--text-dark);
+            outline: none;
+            font-size: 0.85rem;
+        }
+        .color-row {
+            margin-bottom: 16px;
+        }
+        .color-row label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            color: var(--text-dark);
+        }
+        .color-row input[type="color"] {
+            width: 100%;
+            height: 45px;
+            border: 2px solid var(--border-light);
+            border-radius: 16px;
+            cursor: pointer;
+            background: white;
+        }
+        .preview-box {
+            width: 100%;
+            height: 50px;
+            border-radius: 16px;
+            background: linear-gradient(145deg, var(--primary), var(--secondary));
+            margin: 15px 0;
+            border: 2px solid white;
+        }
+        .settings-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .settings-actions button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .save-settings {
+            background: linear-gradient(145deg, var(--primary), var(--secondary));
+            color: white;
+        }
+        .reset-settings {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        @media (max-width: 360px) {
+            .header h1 { font-size: 1.2rem; }
+            .status-indicator { padding: 4px 8px; font-size: 0.7rem; }
+            .token-area button { padding: 8px 12px; font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1><i class="fas fa-crown"></i> اسمارٹ اسٹوڈیو</h1>
+        <div class="header-right">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">منتظر...</span>
+            </div>
+            <button class="icon-btn" id="refreshBtn" title="ریفریش کریں"><i class="fas fa-sync-alt"></i></button>
+            <button class="icon-btn" id="settingsIcon" title="ترتیبات"><i class="fas fa-cog"></i></button>
+        </div>
+    </div>
+
+    <div class="token-area">
+        <input type="password" id="token" placeholder="گٹ ہب ٹوکن" value="">
+        <button id="saveTokenBtn">محفوظ</button>
+    </div>
+
+    <div class="section-title"><i class="fab fa-html5"></i> HTML کوڈ پیسٹ کریں</div>
+    <div class="code-box">
+        <div class="code-header">
+            <span><i class="fab fa-html5"></i> index.html</span>
+            <small>براہ راست ایڈٹ کریں</small>
+        </div>
+        <textarea id="htmlCode" placeholder="&lt;!DOCTYPE html&gt;&#10;&lt;html&gt;&#10;&lt;head&gt;&lt;meta charset=&quot;UTF-8&quot;&gt;&lt;title&gt;میری ایپ&lt;/title&gt;&lt;/head&gt;&#10;&lt;body&gt;&#10;    &lt;h1&gt;ہیلو دنیا&lt;/h1&gt;&#10;&lt;/body&gt;&#10;&lt;/html&gt;"></textarea>
+    </div>
+
+    <div class="app-info">
+        <div class="field">
+            <label><i class="fas fa-tag"></i> ایپ کا نام</label>
+            <input type="text" id="appName" placeholder="مثلاً میری ایپ" value="MyApp">
+        </div>
+        <div class="field">
+            <label><i class="fas fa-image"></i> آئیکون (اختیاری، PNG)</label>
+            <input type="file" id="appIcon" accept="image/png,image/jpeg,image/jpg" class="file-input">
+        </div>
+    </div>
+
+    <div class="section-title"><i class="fas fa-lock"></i> پرمیشنز منتخب کریں</div>
+    <div class="app-info" style="margin-top: 0;">
+        <div class="permissions-grid" id="permissionsGrid">
+            <label><input type="checkbox" value="android.permission.CAMERA"> کیمرہ</label>
+            <label><input type="checkbox" value="android.permission.ACCESS_FINE_LOCATION"> لوکیشن</label>
+            <label><input type="checkbox" value="android.permission.RECORD_AUDIO"> مائیکروفون</label>
+            <label><input type="checkbox" value="android.permission.READ_EXTERNAL_STORAGE"> اسٹوریج پڑھنا</label>
+            <label><input type="checkbox" value="android.permission.WRITE_EXTERNAL_STORAGE"> اسٹوریج لکھنا</label>
+            <label><input type="checkbox" value="android.permission.CALL_PHONE"> کالز</label>
+            <label><input type="checkbox" value="android.permission.READ_CONTACTS"> کنٹیکٹس</label>
+        </div>
+        <p style="font-size:0.7rem; margin-top:8px;">نوٹ: ان پرمیشنز کا استعمال آپ کی ویب ایپ میں کیمرہ، مائیک وغیرہ کے لیے ہو گا۔</p>
+    </div>
+
+    <button class="build-btn" id="buildBtn"><i class="fas fa-cogs"></i> APK بنائیں</button>
+
+    <div id="status">
+        <div style="display: flex; justify-content: space-between;">
+            <span id="statusMsg"><i class="fas fa-spinner fa-pulse"></i> منتظر...</span>
+            <span id="statusPercent">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="log" id="log">⏳ تیار</div>
+    </div>
+
+    <div id="result"></div>
+
+    <div class="section-title"><i class="fas fa-history"></i> تاریخ</div>
+    <div id="historyList" class="history-list"></div>
+    <button class="clear-btn" id="clearHistoryBtn"><i class="fas fa-trash-alt"></i> ہسٹری صاف کریں</button>
+</div>
+
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-sliders-h"></i> ترتیبات</h3>
+            <button class="close-modal" id="closeModalBtn">&times;</button>
+        </div>
+        <div class="settings-panel">
+            <div class="settings-field">
+                <label><i class="fab fa-github"></i> گٹ ہب ٹوکن</label>
+                <input type="password" id="settingsToken" placeholder="ghp_xxxx...">
+            </div>
+            <div class="settings-field">
+                <label><i class="fas fa-user"></i> مالک (یوزرنیم)</label>
+                <input type="text" id="settingsOwner" placeholder="faisalzamanfaisalzaman786-ux">
+            </div>
+            <div class="settings-field">
+                <label><i class="fas fa-book"></i> ریپوزٹری</label>
+                <input type="text" id="settingsRepo" placeholder="System-Pro-v2">
+            </div>
+
+            <div class="color-row">
+                <label>بنیادی رنگ (مہرون)</label>
+                <input type="color" id="primaryColor" value="#A52A2A">
+            </div>
+            <div class="color-row">
+                <label>ثانوی رنگ (ریڈ)</label>
+                <input type="color" id="secondaryColor" value="#DC143C">
+            </div>
+            <div class="preview-box" id="colorPreview"></div>
+            
+            <div class="settings-actions">
+                <button class="save-settings" id="applySettings">محفوظ کریں</button>
+                <button class="reset-settings" id="resetColors">ڈیفالٹ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // =================== عالمی متغیرات ===================
+        let GITHUB_OWNER = 'faisalzamanfaisalzaman786-ux';
+        let GITHUB_REPO  = 'System-Pro-v2';
+        let pollInterval = null;
+        let currentRunId = null;
+        let currentBuildToken = null;
+        let buildCompleted = false;
+
+        const root = document.documentElement;
+        const defaultPrimary = '#A52A2A';
+        const defaultSecondary = '#DC143C';
+
+        // DOM elements
+        const tokenInput = document.getElementById('token');
+        const settingsToken = document.getElementById('settingsToken');
+        const settingsOwner = document.getElementById('settingsOwner');
+        const settingsRepo = document.getElementById('settingsRepo');
+        const htmlCode = document.getElementById('htmlCode');
+        const appNameInput = document.getElementById('appName');
+        const appIconInput = document.getElementById('appIcon');
+        const buildBtn = document.getElementById('buildBtn');
+        const statusDiv = document.getElementById('status');
+        const statusMsgSpan = document.getElementById('statusMsg');
+        const statusPercentSpan = document.getElementById('statusPercent');
+        const progressFill = document.getElementById('progressFill');
+        const logDiv = document.getElementById('log');
+        const resultDiv = document.getElementById('result');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        // =================== ہیلپر فنکشنز ===================
+        function appendLog(msg, isError = false) {
+            const line = isError ? `❌ ${msg}` : `✅ ${msg}`;
+            logDiv.innerHTML += `<br>› ${line}`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        }
+
+        function updateStatus(msg, percent) {
+            statusMsgSpan.innerHTML = `<i class="fas fa-spinner fa-pulse"></i> ${msg}`;
+            statusPercentSpan.innerText = percent + '%';
+            progressFill.style.width = percent + '%';
+        }
+
+        // تصویر کو 10KB سے کم میں کمپریس کرنا (موبائل ویب ویو کے لیے موزوں)
+        async function compressImageToTarget(file, targetKB = 10) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async () => {
+                        let width = img.width;
+                        let height = img.height;
+                        let quality = 0.9;
+                        let currentBase64 = '';
+                        let success = false;
+
+                        const sizes = [192, 160, 128, 96, 80, 64, 48];
+                        const qualities = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3];
+
+                        // PNG آزمائش
+                        for (let dim of sizes) {
+                            let newWidth = width, newHeight = height;
+                            if (newWidth > dim) {
+                                const ratio = dim / Math.max(newWidth, newHeight);
+                                newWidth = Math.floor(newWidth * ratio);
+                                newHeight = Math.floor(newHeight * ratio);
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = newWidth;
+                            canvas.height = newHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                            currentBase64 = canvas.toDataURL('image/png');
+                            const approxBytes = currentBase64.length * 0.75;
+                            if (approxBytes <= targetKB * 1024) {
+                                appendLog(`🖼️ PNG کمپریس: ${newWidth}x${newHeight} -> ${(approxBytes/1024).toFixed(1)}KB`);
+                                resolve(currentBase64.split(',')[1]);
+                                return;
+                            }
+                        }
+
+                        // JPEG آزمائش
+                        for (let dim of sizes) {
+                            let newWidth = width, newHeight = height;
+                            if (newWidth > dim) {
+                                const ratio = dim / Math.max(newWidth, newHeight);
+                                newWidth = Math.floor(newWidth * ratio);
+                                newHeight = Math.floor(newHeight * ratio);
+                            }
+                            for (let q of qualities) {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = newWidth;
+                                canvas.height = newHeight;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                                currentBase64 = canvas.toDataURL('image/jpeg', q);
+                                const approxBytes = currentBase64.length * 0.75;
+                                if (approxBytes <= targetKB * 1024) {
+                                    appendLog(`🖼️ JPEG کمپریس: ${newWidth}x${newHeight} | معیار ${q} -> ${(approxBytes/1024).toFixed(1)}KB`);
+                                    resolve(currentBase64.split(',')[1]);
+                                    return;
+                                }
+                            }
+                        }
+
+                        // حتمی حربہ
+                        const fallbackCanvas = document.createElement('canvas');
+                        fallbackCanvas.width = 48;
+                        fallbackCanvas.height = 48;
+                        const ctx = fallbackCanvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, 48, 48);
+                        const fallbackBase64 = fallbackCanvas.toDataURL('image/jpeg', 0.3);
+                        const fallbackBytes = fallbackBase64.length * 0.75;
+                        appendLog(`⚠️ انتہائی کمپریس: ${(fallbackBytes/1024).toFixed(1)}KB (حتمی)`, true);
+                        resolve(fallbackBase64.split(',')[1]);
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        // گٹ ہب ریپو کی حیثیت چیک کریں
+        async function checkServerStatus() {
+            const token = tokenInput.value.trim();
+            if (!token) {
+                statusDot.className = 'status-dot red';
+                statusText.innerText = 'ٹوکن درج کریں';
+                return;
+            }
+            try {
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (res.ok) {
+                    statusDot.className = 'status-dot green';
+                    statusText.innerText = 'منسلک';
+                } else {
+                    statusDot.className = 'status-dot red';
+                    statusText.innerText = 'غلط ٹوکن/ریپو';
+                }
+            } catch (err) {
+                statusDot.className = 'status-dot red';
+                statusText.innerText = 'نیٹ ورک مسئلہ';
+            }
+        }
+
+        // ورک فلو رن پولنگ
+        async function pollRunStatus(token, runId) {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                try {
+                    const runRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}`, {
+                        headers: { 'Authorization': `token ${token}` }
+                    });
+                    if (!runRes.ok) throw new Error('رن کی معلومات حاصل نہیں ہو سکی');
+                    const run = await runRes.json();
+                    appendLog(`⏳ حالت: ${run.status || 'نامعلوم'}`);
+                    if (run.status === 'completed') {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        buildCompleted = true;
+                        if (run.conclusion === 'success') {
+                            updateStatus('✅ کامیاب!', 100);
+                            await fetchArtifactDownload(token, runId);
+                        } else {
+                            updateStatus('❌ ناکام', 0);
+                            await fetchFailedJobLogs(token, runId);
+                        }
+                    } else {
+                        updateStatus('تعمیر جاری ہے...', 70);
+                    }
+                } catch (err) {
+                    appendLog(`⚠️ پولنگ خرابی: ${err.message}`, true);
+                }
+            }, 7000);
+        }
+
+        // تازہ ترین رن تلاش کریں (ورک فلو ڈسپیچ کے بعد)
+        async function pollWorkflowRun(token) {
+            appendLog('🔍 تازہ ترین رن ڈھونڈ رہے ہیں...');
+            try {
+                const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=1`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (!runsRes.ok) throw new Error('رنز حاصل نہیں ہو سکے');
+                const runsData = await runsRes.json();
+                const run = runsData.workflow_runs?.[0];
+                if (!run) throw new Error('کوئی رن نہیں');
+                appendLog(`📋 رن #${run.id}`);
+                currentRunId = run.id;
+                pollRunStatus(token, run.id);
+            } catch (err) {
+                appendLog(`⚠️ رن نہیں ملا، دوبارہ کوشش: ${err.message}`, true);
+                setTimeout(() => pollWorkflowRun(token), 8000);
+            }
+        }
+
+        // آرٹیفیکٹ ڈاؤن لوڈ (پہلے ریلیز چیک کریں)
+        async function fetchArtifactDownload(token, runId) {
+            try {
+                // پہلے ریلیز چیک کریں (اگر ورک فلو ریلیز اپ لوڈ کرتا ہے)
+                const releaseRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tags/run-${runId}`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (releaseRes.ok) {
+                    const release = await releaseRes.json();
+                    if (release.assets && release.assets.length > 0) {
+                        const asset = release.assets[0];
+                        resultDiv.innerHTML = `
+                            <a href="${asset.browser_download_url}" target="_blank" class="download-btn">
+                                <i class="fas fa-download"></i> APK ڈاؤن لوڈ (ریلیز)
+                            </a>`;
+                        appendLog('✅ ریلیز مل گئی');
+                        addToHistory(runId, appNameInput.value);
+                        return;
+                    }
+                }
+
+                // ورنہ آرٹیفیکٹ
+                const artifactsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/artifacts`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (artifactsRes.ok) {
+                    const artifacts = await artifactsRes.json();
+                    if (artifacts.artifacts && artifacts.artifacts.length > 0) {
+                        const artifact = artifacts.artifacts[0];
+                        resultDiv.innerHTML = `
+                            <button class="download-btn" id="downloadArtifactBtn">
+                                <i class="fas fa-file-archive"></i> آرٹیفیکٹ (ZIP) ڈاؤن لوڈ
+                            </button>
+                            <p style="font-size:0.7rem; margin-top:5px;">اگر بٹن کام نہ کرے تو <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">یہاں جا کر</a> خود ڈاؤن لوڈ کریں۔</p>`;
+                        const downloadBtn = document.getElementById('downloadArtifactBtn');
+                        if (downloadBtn) {
+                            downloadBtn.onclick = () => downloadArtifactZip(token, artifact.id);
+                        }
+                        appendLog('📦 آرٹیفیکٹ مل گیا');
+                    } else {
+                        resultDiv.innerHTML = `<p style="color:var(--primary);">کوئی آرٹیفیکٹ نہیں۔ <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">یہاں چیک کریں</a>۔</p>`;
+                    }
+                } else {
+                    throw new Error('آرٹیفیکٹ حاصل نہ ہو سکے');
+                }
+                addToHistory(runId, appNameInput.value);
+            } catch (err) {
+                appendLog(`❌ ڈاؤن لوڈ خرابی: ${err.message}`, true);
+                resultDiv.innerHTML = `<p style="color:var(--primary);">APK تیار ہے – <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">آرٹیفیکٹ سے ڈاؤن لوڈ کریں</a></p>`;
+                addToHistory(runId, appNameInput.value);
+            } finally {
+                buildBtn.disabled = false;
+            }
+        }
+
+        window.downloadArtifactZip = async (token, artifactId) => {
+            try {
+                appendLog('📥 ڈاؤن لوڈ شروع ہو رہا ہے...');
+                const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/artifacts/${artifactId}/zip`;
+                const res = await fetch(url, { 
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(`HTTP ${res.status}: ${errorText}`);
+                }
+                const blob = await res.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `app-${artifactId}.zip`;
+                a.click();
+                window.URL.revokeObjectURL(blobUrl);
+                appendLog('✅ ڈاؤن لوڈ کامیاب');
+            } catch (err) {
+                appendLog(`❌ ڈاؤن لوڈ ایرر: ${err.message}`, true);
+                if (confirm('ڈاؤن لوڈ ناکام۔ کیا آپ GitHub Actions پر جا کر خود ڈاؤن لوڈ کرنا چاہتے ہیں؟')) {
+                    window.open(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${currentRunId}`, '_blank');
+                }
+            }
+        };
+
+        async function fetchFailedJobLogs(token, runId) {
+            try {
+                const jobsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/jobs`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                const jobs = await jobsRes.json();
+                const failedJob = jobs.jobs?.find(j => j.conclusion === 'failure');
+                if (failedJob) {
+                    resultDiv.innerHTML = `<p>❌ ناکام مرحلہ: ${failedJob.name}<br><a href="${failedJob.html_url}" target="_blank">لاگز</a></p>`;
+                } else {
+                    resultDiv.innerHTML = `<p><a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">مکمل لاگز</a></p>`;
+                }
+            } catch {
+                resultDiv.innerHTML = `<p><a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">لاگز دیکھیں</a></p>`;
+            }
+            buildBtn.disabled = false;
+        }
+
+        // بلڈ شروع کرنے کا مرکزی فنکشن
+        async function startBuild() {
+            const token = tokenInput.value.trim();
+            const name = appNameInput.value.trim();
+            const html = htmlCode.value.trim();
+            const iconFile = appIconInput.files[0];
+
+            if (!token || !name || !html) {
+                alert('براہ کرم ٹوکن، نام، اور HTML لازمی ہیں');
+                return;
+            }
+
+            // پرمیشنز جمع کریں
+            const selectedPermissions = [];
+            document.querySelectorAll('#permissionsGrid input[type="checkbox"]:checked').forEach(cb => {
+                selectedPermissions.push(cb.value);
+            });
+
+            buildBtn.disabled = true;
+            statusDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            if (pollInterval) clearInterval(pollInterval);
+            currentRunId = null;
+            currentBuildToken = token;
+            buildCompleted = false;
+
+            try {
+                let iconBase64 = '';
+                if (iconFile) {
+                    updateStatus('آئیکون کمپریس ہو رہا ہے...', 10);
+                    appendLog('🖼️ تصویر کو 10KB سے کم کرنے کی کوشش');
+                    iconBase64 = await compressImageToTarget(iconFile, 10);
+                    const sizeKB = (iconBase64.length * 0.75) / 1024;
+                    appendLog(`✅ تصویر تیار: ${sizeKB.toFixed(1)}KB`);
+                } else {
+                    appendLog('⚠️ کوئی آئیکون منتخب نہیں، ڈیفالٹ استعمال ہو گا');
+                }
+
+                const payload = {
+                    event_type: 'build-apk',
+                    client_payload: {
+                        app_name: name,
+                        app_icon: iconBase64,
+                        app_html: html,
+                        app_css: '',
+                        app_js: '',
+                        permissions: selectedPermissions
+                    }
+                };
+
+                updateStatus('گٹ ہب کو بھیجا جا رہا ہے', 20);
+                const dispatchRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/dispatches`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!dispatchRes.ok) {
+                    const errText = await dispatchRes.text();
+                    throw new Error(`HTTP ${dispatchRes.status}: ${errText}`);
+                }
+                appendLog('✅ ڈسپیچ قبول ہوا');
+                updateStatus('ورک فلو شروع', 30);
+                setTimeout(() => pollWorkflowRun(token), 5000);
+            } catch (err) {
+                appendLog(`❌ خرابی: ${err.message}`, true);
+                updateStatus('ناکام', 0);
+                buildBtn.disabled = false;
+            }
+        }
+
+        // =================== ہسٹری مینجمنٹ ===================
+        function addToHistory(runId, appName) {
+            let history = JSON.parse(localStorage.getItem('buildHistory') || '[]');
+            history.unshift({ runId, appName, date: new Date().toLocaleString() });
+            if (history.length > 20) history.pop();
+            localStorage.setItem('buildHistory', JSON.stringify(history));
+            loadHistory();
+        }
+
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('buildHistory') || '[]');
+            const listDiv = document.getElementById('historyList');
+            listDiv.innerHTML = '';
+            if (history.length === 0) {
+                listDiv.innerHTML = '<p style="color:var(--primary);">کوئی بلڈ نہیں</p>';
+                return;
+            }
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <span><i class="fas fa-mobile-alt"></i> ${item.appName} <small>(${item.date})</small></span>
+                    <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${item.runId}" target="_blank"><i class="fas fa-external-link-alt"></i></a>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+
+        function clearHistory() {
+            if (confirm('تاریخ صاف کریں؟')) {
+                localStorage.removeItem('buildHistory');
+                loadHistory();
+            }
+        }
+
+        // =================== سیٹنگز لوڈ / سیو ===================
+        function loadGitHubSettings() {
+            const savedToken = localStorage.getItem('github_token');
+            if (savedToken) {
+                tokenInput.value = savedToken;
+                settingsToken.value = savedToken;
+            }
+            const savedOwner = localStorage.getItem('github_owner');
+            if (savedOwner) {
+                GITHUB_OWNER = savedOwner;
+                settingsOwner.value = savedOwner;
+            } else {
+                settingsOwner.value = GITHUB_OWNER;
+            }
+            const savedRepo = localStorage.getItem('github_repo');
+            if (savedRepo) {
+                GITHUB_REPO = savedRepo;
+                settingsRepo.value = savedRepo;
+            } else {
+                settingsRepo.value = GITHUB_REPO;
+            }
+        }
+
+        function saveGitHubSettings() {
+            const token = settingsToken.value.trim();
+            const owner = settingsOwner.value.trim();
+            const repo = settingsRepo.value.trim();
+
+            if (token) {
+                localStorage.setItem('github_token', token);
+                tokenInput.value = token;
+            }
+            if (owner) {
+                localStorage.setItem('github_owner', owner);
+                GITHUB_OWNER = owner;
+            }
+            if (repo) {
+                localStorage.setItem('github_repo', repo);
+                GITHUB_REPO = repo;
+            }
+            checkServerStatus();
+            appendLog('⚙️ گٹ ہب سیٹنگز محفوظ ہو گئیں');
+        }
+
+        // رنگ
+        function loadColors() {
+            const savedPrimary = localStorage.getItem('theme_primary');
+            const savedSecondary = localStorage.getItem('theme_secondary');
+            if (savedPrimary && savedSecondary) {
+                applyColors(savedPrimary, savedSecondary, false);
+            } else {
+                applyColors(defaultPrimary, defaultSecondary, false);
+            }
+            document.getElementById('primaryColor').value = savedPrimary || defaultPrimary;
+            document.getElementById('secondaryColor').value = savedSecondary || defaultSecondary;
+            updatePreviewBox();
+        }
+
+        function updatePreviewBox() {
+            const primary = document.getElementById('primaryColor').value;
+            const secondary = document.getElementById('secondaryColor').value;
+            document.getElementById('colorPreview').style.background = `linear-gradient(145deg, ${primary}, ${secondary})`;
+        }
+
+        function applyColors(primary, secondary, saveToStorage = true) {
+            root.style.setProperty('--primary', primary);
+            root.style.setProperty('--secondary', secondary);
+            root.style.setProperty('--primary-light', primary + '20');
+            root.style.setProperty('--secondary-light', secondary + '20');
+            root.style.setProperty('--border-light', primary + '40');
+            root.style.setProperty('--border-focus', primary);
+            root.style.setProperty('--text-light', primary);
+            root.style.setProperty('--bg-gradient-from', primary + '20');
+            root.style.setProperty('--bg-gradient-to', secondary + '20');
+            if (saveToStorage) {
+                localStorage.setItem('theme_primary', primary);
+                localStorage.setItem('theme_secondary', secondary);
+            }
+            updatePreviewBox();
+        }
+
+        function resetColors() {
+            document.getElementById('primaryColor').value = defaultPrimary;
+            document.getElementById('secondaryColor').value = defaultSecondary;
+            applyColors(defaultPrimary, defaultSecondary);
+            appendLog('🎨 رنگ ڈیفالٹ پر واپس');
+        }
+
+        // موڈل
+        function openSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveAllSettings() {
+            try {
+                const primary = document.getElementById('primaryColor').value;
+                const secondary = document.getElementById('secondaryColor').value;
+                applyColors(primary, secondary);
+                saveGitHubSettings();
+                appendLog('✔️ تمام ترتیبات محفوظ ہو گئیں');
+                closeSettingsModal();
+            } catch (error) {
+                console.error('سیٹنگز محفوظ کرتے وقت خرابی:', error);
+                appendLog('❌ خرابی: ' + error.message, true);
+                alert('سیٹنگز محفوظ نہیں ہو سکیں۔ دوبارہ کوشش کریں۔');
+            }
+        }
+
+        // ریفریش
+        function refreshApp() {
+            appendLog('🔄 ریفریش کیا جا رہا ہے...');
+            checkServerStatus();
+            const token = tokenInput.value.trim() || currentBuildToken;
+            if (currentRunId && token && !buildCompleted) {
+                appendLog('🔄 بلڈ کی حالت چیک کی جا رہی ہے');
+                if (pollInterval) clearInterval(pollInterval);
+                pollRunStatus(token, currentRunId);
+            } else if (currentRunId && token && buildCompleted) {
+                appendLog('🔄 ڈاؤن لوڈ دوبارہ کوشش');
+                fetchArtifactDownload(token, currentRunId);
+            }
+        }
+
+        // =================== ابتدائیہ ===================
+        window.addEventListener('load', () => {
+            loadGitHubSettings();
+            loadColors();
+            checkServerStatus();
+            setInterval(checkServerStatus, 30000);
+
+            // ایونٹ لسٹنرز
+            document.getElementById('saveTokenBtn').addEventListener('click', () => {
+                const token = tokenInput.value.trim();
+                if (token) {
+                    localStorage.setItem('github_token', token);
+                    settingsToken.value = token;
+                    checkServerStatus();
+                    appendLog('🔑 ٹوکن محفوظ');
+                } else alert('ٹوکن درج کریں');
+            });
+
+            buildBtn.addEventListener('click', startBuild);
+            document.getElementById('refreshBtn').addEventListener('click', refreshApp);
+            document.getElementById('settingsIcon').addEventListener('click', openSettingsModal);
+            document.getElementById('closeModalBtn').addEventListener('click', closeSettingsModal);
+            document.getElementById('applySettings').addEventListener('click', saveAllSettings);
+            document.getElementById('resetColors').addEventListener('click', resetColors);
+            document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
+
+            document.getElementById('primaryColor').addEventListener('input', updatePreviewBox);
+            document.getElementById('secondaryColor').addEventListener('input', updatePreviewBox);
+
+            // موڈل کے باہر کلک
+            window.onclick = function(event) {
+                const modal = document.getElementById('settingsModal');
+                if (event.target === modal) closeSettingsModal();
+            };
+
+            // ڈیفالٹ HTML ڈیمو
+            const defaultHtml = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>میری ایپ</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #f0f0f0; }
+        h1 { color: #A52A2A; }
+    </style>
+</head>
+<body>
+    <h1>ہیلو دنیا!</h1>
+    <p>یہ آپ کی ایپ ہے۔</p>
+</body>
+</html>`;
+            htmlCode.value = defaultHtml;
+        });
+    })();
+</script>
+</body>
+</html>
