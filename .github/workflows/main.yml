@@ -1,139 +1,44 @@
-name: System-Pro-Master-Final-Fix
+name: Build Android APK (System Pro)
 
 on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   repository_dispatch:
     types: [build-apk]
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Clean and Setup Structure
-        run: |
-          # 1. مکمل صفائی
-          rm -rf app build.gradle settings.gradle gradlew gradle .gradle
-          
-          # 2. فولڈرز کی تیاری
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/assets
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-          # 3. ڈیٹا ہینڈلنگ
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-          if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
-          fi
+    - name: Grant Execute Permission for Gradlew
+      run: chmod +x gradlew
 
-          # 4. یونیک پیکج نیم (Timestamp)
-          BUILD_ID=$(date +%s)
-          NEW_PACKAGE="com.systempro.v${BUILD_ID}"
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace --info
 
-          # 5. روٹ اور پروجیکٹ گریڈل
-          echo "rootProject.name = 'System Pro'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: System-Pro-Debug-APK
+        path: app/build/outputs/apk/debug/*.apk
+        retention-days: 5
 
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          # 6. ایپ لیول گریڈل
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.systempro.app'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$NEW_PACKAGE"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
-
-          # 7. مینی فیسٹ (Safe permissions logic)
-          # یہاں ہم نے ایرر سے بچنے کے لیے پرمیشنز کو براہ راست لکھا ہے
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application 
-                  android:label="${{ github.event.client_payload.app_name }}" 
-                  android:icon="@drawable/app_icon"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 8. جاوا مین ایکٹیویٹی
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
-          package com.systempro.app;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  setContentView(webView);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-          }
-          EOF
-
-          # 9. گریڈل ریپر
-          gradle wrapper --gradle-version 8.2
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Push Changes
-        run: |
-          git config --global user.name "Faisal Zaman"
-          git config --global user.email "faisal@systempro.com"
-          git add .
-          git commit -m "Build successful for $NEW_PACKAGE" || echo "No changes"
-          git push
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}-APK
-          path: app/build/outputs/apk/debug/*.apk
+    - name: Cleanup Environment
+      if: always()
+      run: |
+        rm -rf ~/.gradle/caches/
+        ./gradlew clean
