@@ -16,31 +16,29 @@ jobs:
 
       - name: Clean and Setup Structure
         run: |
-          # 1. پرانی تمام فائلوں کا صفایا
+          # 1. مکمل صفائی
           rm -rf app build.gradle settings.gradle gradlew gradle .gradle
           
-          # 2. نئے فولڈرز کی تیاری
+          # 2. فولڈرز کی تیاری
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/assets
 
-          # 3. ڈیٹا ہینڈلنگ (HTML اور Icon)
+          # 3. ڈیٹا ہینڈلنگ
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
           fi
 
-          # 4. یونیک پیکج نیم
+          # 4. یونیک پیکج نیم (Timestamp)
           BUILD_ID=$(date +%s)
           NEW_PACKAGE="com.systempro.v${BUILD_ID}"
 
-          # 5. روٹ سیٹنگز
+          # 5. روٹ اور پروجیکٹ گریڈل
           echo "rootProject.name = 'System Pro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # 6. پروجیکٹ لیول گریڈل
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -49,7 +47,7 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 7. ایپ لیول گریڈل (Strict Configuration)
+          # 6. ایپ لیول گریڈل
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -62,20 +60,35 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 8. جاوا کوڈ (WebView Logic)
+          # 7. مینی فیسٹ (Safe permissions logic)
+          # یہاں ہم نے ایرر سے بچنے کے لیے پرمیشنز کو براہ راست لکھا ہے
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application 
+                  android:label="${{ github.event.client_payload.app_name }}" 
+                  android:icon="@drawable/app_icon"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 8. جاوا مین ایکٹیویٹی
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.os.Bundle;
@@ -97,28 +110,7 @@ jobs:
           }
           EOF
 
-          # 9. مینی فیسٹ (Permissions Fix)
-          # یہاں ہم ڈائریکٹ ان پٹ کو ہینڈل کریں گے
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application 
-                  android:label="${{ github.event.client_payload.app_name }}" 
-                  android:icon="@drawable/app_icon"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 10. گریڈل ریپر انسٹال کریں
+          # 9. گریڈل ریپر
           gradle wrapper --gradle-version 8.2
 
       - name: Set up JDK 17
@@ -127,20 +119,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Final Build
+      - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Save Changes to Repo
+      - name: Push Changes
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@systempro.com"
           git add .
-          git commit -m "Build Success: $NEW_PACKAGE" || echo "No changes"
+          git commit -m "Build successful for $NEW_PACKAGE" || echo "No changes"
           git push
 
-      - name: Upload APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}-APK
