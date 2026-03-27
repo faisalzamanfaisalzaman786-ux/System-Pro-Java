@@ -1,4 +1,4 @@
-name: System-Pro-App-Build
+name: System-Pro-Master-Final-Fix
 
 on:
   repository_dispatch:
@@ -14,42 +14,71 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Android Structure & Wrapper
+      - name: Setup Professional Structure
         run: |
-          # 1. فولڈرز کی تیاری
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
+          # 1. تمام پرانے فولڈرز کی صفائی اور نئے فولڈرز بنانا
+          rm -rf app www build.gradle settings.gradle
           mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/assets
 
-          # 2. ان پٹ ڈیٹا پروسیسنگ
-          APP_NAME="${{ github.event.client_payload.app_name }}"
+          # 2. ڈیٹا ہینڈلنگ (HTML اور Icon)
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
           if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
           fi
 
-          # 3. گریڈل ریپر (Gradle Wrapper) خود بخود انسٹال کرنا
-          gradle wrapper --gradle-version 8.2
-
-          # 4. آٹو پیکج نیم
+          # 3. آٹو یونیک پیکج نیم (Timestamp کی بنیاد پر تاکہ ہر ایپ الگ ہو)
           BUILD_ID=$(date +%s)
           NEW_PACKAGE="com.systempro.v${BUILD_ID}"
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/" app/build.gradle
 
-          # 5. مینی فیسٹ اور پرمیشنز
+          # 4. روٹ سیٹنگز
+          echo "rootProject.name = 'System Pro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
+
+          # 5. پروجیکٹ لیول گریڈل
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          # 6. ایپ لیول گریڈل (لائبریری فکس کے ساتھ)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$NEW_PACKAGE"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
+          # 7. متحرک مینی فیسٹ (Permissions کے ساتھ)
           PERMS_XML=""
           for perm in ${{ join(github.event.client_payload.permissions, ' ') }}; do
-            PERMS_XML="${PERMS_XML}<uses-permission android:name=\"$perm\" />\n"
+            PERMS_XML="\${PERMS_XML}<uses-permission android:name=\"\$perm\" />\n"
           done
 
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              ${PERMS_XML}
+              \${PERMS_XML}
               <uses-permission android:name="android.permission.INTERNET" />
               <application 
-                  android:label="${APP_NAME}" 
+                  android:label="${{ github.event.client_payload.app_name }}" 
                   android:icon="@drawable/app_icon"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name="com.systempro.app.MainActivity" android:exported="true">
@@ -62,26 +91,49 @@ jobs:
           </manifest>
           EOF
 
+          # 8. جاوا مین ایکٹیویٹی
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          # 9. گریڈل ریپر انسٹال کرنا
+          gradle wrapper --gradle-version 8.2
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK
+      - name: Build Final APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Commit Fixed Structure
+      - name: Push Structure Changes
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@systempro.com"
           git add .
-          git commit -m "Fix: Added Gradle Wrapper and Build APK" || echo "No changes"
+          git commit -m "Build: ${{ github.event.client_payload.app_name }} [$NEW_PACKAGE]" || echo "No changes"
           git push
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}-APK
