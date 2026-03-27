@@ -32,23 +32,15 @@ jobs:
       - name: Process client payload (if any)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کوڈ کو assets میں ڈالیں (محفوظ طریقے سے)
           printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
-          # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
-
-          # پرمیشنز کو ایک فائل میں محفوظ کریں
           printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-
-          # ایپ کا نام محفوظ کریں
           printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Provide default files (if missing)
         run: |
-          # اگر assets/index.html موجود نہیں تو ڈیفالٹ بنا دیں
           if [ ! -f app/src/main/assets/index.html ]; then
             cat <<EOF > app/src/main/assets/index.html
           <!DOCTYPE html>
@@ -58,19 +50,12 @@ jobs:
           </html>
           EOF
           fi
-
-          # اگر آئیکون موجود نہیں تو 1x1 سفید PNG (base64) بنا دیں
           if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
-            # ایک چھوٹا سا 1x1 PNG (بیس 64)
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
-
-          # اگر پرمیشنز کی فائل نہیں تو خالی بنا دیں
           if [ ! -f permissions.txt ]; then
             touch permissions.txt
           fi
-
-          # اگر ایپ کا نام نہیں تو ڈیفالٹ
           if [ ! -f app_name.txt ]; then
             echo "System Pro" > app_name.txt
           fi
@@ -131,11 +116,13 @@ jobs:
 
       - name: Create app build.gradle with dynamic namespace
         run: |
-          # ایپ کا نام پڑھیں، پیکیج نام بنائیں
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${TIMESTAMP}"
+          VERSION_CODE=$(date +'%Y%m%d%H%M%S')
           echo "Using package name: $PACKAGE_NAME"
+          echo "Version code: $VERSION_CODE"
 
           cat <<EOF > app/build.gradle
           plugins {
@@ -150,7 +137,7 @@ jobs:
                   applicationId "$PACKAGE_NAME"
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
+                  versionCode $VERSION_CODE
                   versionName "1.0"
               }
 
@@ -184,14 +171,12 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
           EOF
 
-          # اضافی پرمیشنز شامل کریں
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
             fi
           done
 
-          # آئیکون شامل کریں (صرف اگر موجود ہو)
           if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
             ICON_ATTR='android:icon="@drawable/ic_launcher"'
           else
@@ -223,7 +208,8 @@ jobs:
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${TIMESTAMP}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
