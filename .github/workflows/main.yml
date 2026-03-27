@@ -18,12 +18,19 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: 3. Nuclear Cleanup & Repo Sync
         run: |
-          rm -rf .gradle build app/build
+          # پرانی گریڈل فائلز کو مکمل ختم کرنا
+          rm -rf .gradle build app/build gradlew gradlew.bat gradle/
           
-          # 1. پروجیکٹ لیول build.gradle (ریپوزٹریز کا صحیح آرڈر)
+          # ضروری پراپرٹیز سیٹ کرنا
+          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
+          # 1. Project level build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories {
@@ -44,7 +51,7 @@ jobs:
           }
           EOF
 
-          # 2. settings.gradle (نئے گریڈل کے لیے لازمی سیٹنگ)
+          # 2. settings.gradle
           cat <<EOF > settings.gradle
           pluginManagement {
               repositories {
@@ -58,17 +65,21 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
+                  maven { url "https://jitpack.io" }
               }
           }
+          rootProject.name = "System Pro"
           include ':app'
           EOF
 
-      - name: 4. Build with Full Logs
+      - name: 4. Generate Wrapper and Build
         run: |
-          gradle wrapper --gradle-version 8.5
+          # گریڈل ریپر دوبارہ بنانا
+          gradle wrapper --gradle-version 8.5 --distribution-type all
           chmod +x gradlew
-          # --stacktrace ہمیں اصل ایرر کی جڑ تک لے جائے گا
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          
+          # مکمل لاگز کے ساتھ بلڈ رن کرنا
+          ./gradlew assembleDebug --stacktrace --info --no-daemon
 
       - name: 5. Upload APK
         uses: actions/upload-artifact@v4
