@@ -1,65 +1,54 @@
-name: System-Pro-Standard-Setup
+name: System-Pro-Master-Manager
 
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'ایپ کا نام (مثلاً: System Pro My App)'
+        default: 'System Pro Master'
+        required: true
+      package_suffix:
+        description: 'پیکج نیم کے لیے کوئی خاص لفظ (مثلاً: shop, game)'
+        default: 'app'
+        required: true
 
 permissions:
   contents: write
 
 jobs:
-  rebuild-structure:
+  manage-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Full Clean and Standard Setup
+      - name: Auto-Manage Assets & Packaging
         run: |
-          # 1. پرانا تمام گند صاف کرنا (بشمول www اور غلط فائلیں)
-          rm -rf app www build.gradle settings.gradle
-          
-          # 2. سٹینڈرڈ اینڈرائیڈ فولڈرز بنانا
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          # 1. امیج اور ایچ ٹی ایم ایل کی منتقلی
           mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/drawable
           
-          # 3. مین گریڈل فائل (Root settings.gradle)
-          cat <<EOF > settings.gradle
-          rootProject.name = "System Pro"
-          include ':app'
-          EOF
+          find . -maxdepth 1 -name "*.html" -exec mv {} app/src/main/assets/index.html \;
+          find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | xargs -I {} mv {} app/src/main/res/drawable/app_icon.png || true
 
-          # 4. پروجیکٹ لیول گریڈل (build.gradle)
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          # 5. ایپ لیول گریڈل (app/build.gradle)
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.systempro.app'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.systempro.faisal"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-          # 6. مینی فیسٹ فائل (Manifest)
+          # 2. آٹو پیکج نیم اور ایپ نیم (Dynamic Update)
+          # وقت کی بنیاد پر ایک یونیک نمبر بنانا
+          BUILD_ID=$(date +%s)
+          NEW_PACKAGE="com.systempro.${{ github.event.inputs.package_suffix }}.v${BUILD_ID}"
+          
+          # build.gradle میں پیکج نیم اپ ڈیٹ کرنا
+          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/" app/build.gradle
+          
+          # AndroidManifest میں ایپ کا نام اور پرمیشنز سیٹ کرنا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application 
+                  android:label="${{ github.event.inputs.app_name }}" 
+                  android:icon="@drawable/app_icon"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name="com.systempro.app.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -70,32 +59,28 @@ jobs:
           </manifest>
           EOF
 
-          # 7. جاوا کوڈ (MainActivity.java)
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
-          package com.systempro.app;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import androidx.appcompat.app.AppCompatActivity;
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  setContentView(webView);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-          }
-          EOF
+      - name: Build APK (Capacitor Style Setup)
+        run: |
+          # یہاں گریڈل بلڈ چلے گا
+          chmod +x gradlew || echo "No gradlew"
+          ./gradlew assembleDebug || echo "Build failed - Check Gradle"
 
-          # 8. ڈیفالٹ ایچ ٹی ایم ایل فائل
-          echo "<h1>System Pro Master - Faisal Zaman</h1>" > app/src/main/assets/index.html
-
-      - name: Commit and Force Push
+      - name: Commit Changes to Repo
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@systempro.com"
           git add .
-          git commit -m "System Pro: Standard Clean Structure Applied" || echo "No changes"
-          git push --force
+          git commit -m "Build: ${{ github.event.inputs.app_name }} with Package: $NEW_PACKAGE" || echo "No changes"
+          git push
+
+      - name: Upload Finished APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.app_name }}-APK
+          path: app/build/outputs/apk/debug/*.apk
