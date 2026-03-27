@@ -1,74 +1,40 @@
-name: System Pro - HTML to Native Wrapper
+name: System-Pro-Structure-Fix
 
 on:
-  repository_dispatch:
-    types: [build-apk]
-  workflow_dispatch: # دستی ٹیسٹنگ کے لیے
+  workflow_dispatch:
 
 jobs:
-  create-and-build:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # یہ لائن بہت ضروری ہے تاکہ گتھب کو لکھنے کی اجازت ملے
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Initialize Project Structure
+      - name: Create System-Pro Folders
         run: |
-          # 1. بنیادی فائلیں بنانا
-          echo '{
-            "name": "system-pro-app",
-            "version": "1.0.0",
-            "dependencies": {
-              "@capacitor/android": "^5.0.0",
-              "@capacitor/cli": "^5.0.0",
-              "@capacitor/core": "^5.0.0"
-            }
-          }' > package.json
-
-          # 2. Capacitor کنفیگریشن بنانا
-          echo '{
-            "appId": "com.systempro.master",
-            "appName": "${{ github.event.client_payload.app_name || 'SystemPro' }}",
-            "webDir": "www",
-            "bundledWebRuntime": false
-          }' > capacitor.config.json
-
-          # 3. ویب فولڈر (www) بنانا اور ڈیٹا ڈالنا
-          mkdir -p www
-          echo "${{ github.event.client_payload.app_html }}" > www/index.html
+          # پروفیشنل اسٹرکچر بنانا
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/drawable
           
-          # اگر امیج (Icon) بھیجی گئی ہے تو اسے ڈیکوڈ کرنا
-          if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 -d > www/icon.png
-          fi
+          # خالی فولڈر گتھب پر نظر نہیں آتے، اس لیے ایک عارضی فائل ڈالنا ضروری ہے
+          touch app/src/main/assets/.gitkeep
+          touch app/src/main/res/drawable/.gitkeep
+          
+          echo "Folders created successfully."
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Build Android Platform
+      - name: Auto-Move Files
         run: |
-          npx cap add android
-          npx cap copy android
+          # اگر باہر کوئی HTML یا Image پڑی ہے تو اسے اندر منتقل کرو
+          find . -maxdepth 1 -name "*.html" -exec mv {} app/src/main/assets/ \;
+          find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | xargs -I {} mv {} app/src/main/res/drawable/ || true
 
-      - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build Final APK
+      - name: Commit and Push Changes
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload System Pro APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          git config --global user.name "Faisal Zaman"
+          git config --global user.email "faisal@example.com"
+          git add .
+          git commit -m "System Pro: Professional Folder Structure Created" || echo "No changes to commit"
+          git push
