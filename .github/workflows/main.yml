@@ -22,13 +22,20 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process client payload
+      - name: Prepare directories
+        run: |
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+      - name: Process client payload (if any)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کوڈ کو ڈی کوڈ کریں (سیدھا متن ہے)
+          # HTML کوڈ کو assets میں ڈالیں
           echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
-          # اگر آئیکون بیس 64 میں بھیجا گیا ہو تو اسے ڈی کوڈ کریں
+          # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
@@ -36,8 +43,37 @@ jobs:
           # پرمیشنز کو ایک فائل میں محفوظ کریں
           echo "${{ github.event.client_payload.permissions }}" > permissions.txt
 
-          # ایپ کا نام بھی محفوظ کریں (پیکیج نام بنانے کے لیے)
+          # ایپ کا نام محفوظ کریں
           echo "${{ github.event.client_payload.app_name }}" > app_name.txt
+
+      - name: Provide default files (if missing)
+        run: |
+          # اگر assets/index.html موجود نہیں تو ڈیفالٹ بنا دیں
+          if [ ! -f app/src/main/assets/index.html ]; then
+            cat <<EOF > app/src/main/assets/index.html
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="UTF-8"><title>System Pro</title></head>
+          <body><h1>System Pro</h1><p>یہ ڈیفالٹ HTML ہے۔</p></body>
+          </html>
+          EOF
+          fi
+
+          # اگر آئیکون موجود نہیں تو 1x1 سفید PNG (base64) بنا دیں
+          if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
+            # ایک چھوٹا سا 1x1 PNG (بیس 64)
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # اگر پرمیشنز کی فائل نہیں تو خالی بنا دیں
+          if [ ! -f permissions.txt ]; then
+            touch permissions.txt
+          fi
+
+          # اگر ایپ کا نام نہیں تو ڈیفالٹ
+          if [ ! -f app_name.txt ]; then
+            echo "System Pro" > app_name.txt
+          fi
 
       - name: Clean previous builds
         run: |
@@ -93,16 +129,12 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic package name and namespace
+      - name: Create app build.gradle with dynamic namespace
         run: |
           # ایپ کا نام پڑھیں، پیکیج نام بنائیں
-          if [ -f app_name.txt ]; then
-            APP_NAME=$(cat app_name.txt)
-            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          else
-            PACKAGE_NAME="com.systempro.ultimate"
-          fi
+          APP_NAME=$(cat app_name.txt)
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           echo "Using package name: $PACKAGE_NAME"
 
           cat <<EOF > app/build.gradle
@@ -139,14 +171,11 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml (without package attribute)
+      - name: Create AndroidManifest.xml with dynamic permissions
         run: |
-          # پرمیشنز پڑھیں
-          if [ -f permissions.txt ]; then
-            PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
-          fi
+          APP_NAME=$(cat app_name.txt)
+          PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
 
-          # بیس مینی فیسٹ بنائیں (package attribute ہٹا دیا)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -156,18 +185,24 @@ jobs:
           EOF
 
           # اضافی پرمیشنز شامل کریں
-          if [ -f permissions.txt ]; then
-            for perm in $(echo $PERMISSIONS); do
+          for perm in $PERMISSIONS; do
+            if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
-            done
+            fi
+          done
+
+          # آئیکون شامل کریں (صرف اگر موجود ہو)
+          if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
+            ICON_ATTR='android:icon="@drawable/ic_launcher"'
+          else
+            ICON_ATTR=""
           fi
 
-          # ایپلیکیشن ٹیگ بند کریں
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
+                  $ICON_ATTR
                   android:label="$APP_NAME"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
@@ -186,17 +221,12 @@ jobs:
 
       - name: Create MainActivity.java with dynamic package
         run: |
-          # پیکیج نام پڑھیں یا ڈیفالٹ
-          if [ -f app_name.txt ]; then
-            APP_NAME=$(cat app_name.txt)
-            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          else
-            PACKAGE_NAME="com.systempro.ultimate"
-          fi
-          # پیکیج ڈاٹ کو سلیش میں بدلیں
+          APP_NAME=$(cat app_name.txt)
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
+
           cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
@@ -259,7 +289,6 @@ jobs:
 
       - name: Create activity_main.xml
         run: |
-          mkdir -p app/src/main/res/layout
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -268,9 +297,8 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
-      - name: Create minimal styles.xml (to avoid errors)
+      - name: Create minimal styles.xml
         run: |
-          mkdir -p app/src/main/res/values
           cat <<EOF > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
