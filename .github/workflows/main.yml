@@ -1,52 +1,54 @@
-name: System-Pro-Master-Manager
+name: System-Pro-App-Build
 
 on:
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'ایپ کا نام (مثلاً: System Pro My App)'
-        default: 'System Pro Master'
-        required: true
-      package_suffix:
-        description: 'پیکج نیم کے لیے کوئی خاص لفظ (مثلاً: shop, game)'
-        default: 'app'
-        required: true
+  repository_dispatch:
+    types: [build-apk] # یہ وہی ایونٹ ہے جو آپ کی ایپ (JS) بھیج رہی ہے
 
 permissions:
   contents: write
 
 jobs:
-  manage-and-build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Auto-Manage Assets & Packaging
+      - name: Auto-Process Input Data
         run: |
-          # 1. امیج اور ایچ ٹی ایم ایل کی منتقلی
+          # 1. فولڈرز کی تیاری
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/drawable
-          
-          find . -maxdepth 1 -name "*.html" -exec mv {} app/src/main/assets/index.html \;
-          find . -maxdepth 1 -name "*.png" -o -name "*.jpg" | xargs -I {} mv {} app/src/main/res/drawable/app_icon.png || true
+          mkdir -p app/src/main/java/com/systempro/app
 
-          # 2. آٹو پیکج نیم اور ایپ نیم (Dynamic Update)
-          # وقت کی بنیاد پر ایک یونیک نمبر بنانا
+          # 2. ایپ کا نام اور ایچ ٹی ایم ایل سیٹ کرنا
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+
+          # 3. آئیکون ہینڈلنگ (اگر ایپ سے آ رہا ہے)
+          if [ ! -z "${{ github.event.client_payload.app_icon }}" ]; then
+            echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/app_icon.png
+          fi
+
+          # 4. آٹو پیکج نیم (ہر بار نیا)
           BUILD_ID=$(date +%s)
-          NEW_PACKAGE="com.systempro.${{ github.event.inputs.package_suffix }}.v${BUILD_ID}"
-          
-          # build.gradle میں پیکج نیم اپ ڈیٹ کرنا
+          NEW_PACKAGE="com.systempro.v${BUILD_ID}"
           sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/" app/build.gradle
-          
-          # AndroidManifest میں ایپ کا نام اور پرمیشنز سیٹ کرنا
+
+          # 5. مینی فیسٹ میں پرمیشنز اور نام ایڈ کرنا
+          # یہاں ہم آپ کی ایپ سے آنے والی تمام پرمیشنز کو لوپ میں شامل کریں گے
+          PERMS_XML=""
+          for perm in ${{ join(github.event.client_payload.permissions, ' ') }}; do
+            PERMS_XML="${PERMS_XML}<uses-permission android:name=\"$perm\" />\n"
+          done
+
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              ${PERMS_XML}
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application 
-                  android:label="${{ github.event.inputs.app_name }}" 
+                  android:label="${APP_NAME}" 
                   android:icon="@drawable/app_icon"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name="com.systempro.app.MainActivity" android:exported="true">
@@ -65,22 +67,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK (Capacitor Style Setup)
+      - name: Build APK with Gradle
         run: |
-          # یہاں گریڈل بلڈ چلے گا
-          chmod +x gradlew || echo "No gradlew"
-          ./gradlew assembleDebug || echo "Build failed - Check Gradle"
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Commit Changes to Repo
-        run: |
-          git config --global user.name "Faisal Zaman"
-          git config --global user.email "faisal@systempro.com"
-          git add .
-          git commit -m "Build: ${{ github.event.inputs.app_name }} with Package: $NEW_PACKAGE" || echo "No changes"
-          git push
-
-      - name: Upload Finished APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-APK
+          name: ${{ github.event.client_payload.app_name }}-Build
           path: app/build/outputs/apk/debug/*.apk
