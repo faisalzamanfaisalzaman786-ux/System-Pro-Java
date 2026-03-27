@@ -1,4 +1,4 @@
-name: System-Pro-Final-Build
+name: System-Pro-Standard-Setup
 
 on:
   workflow_dispatch:
@@ -7,28 +7,95 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  rebuild-structure:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || echo "No gradlew found yet"
-
-      - name: Build with Gradle
+      - name: Full Clean and Standard Setup
         run: |
-          # اگر گریڈل فائلیں موجود ہیں تو اے پی کے بناؤ
-          ./gradlew assembleDebug || echo "Build failed, check gradle files"
+          # 1. پرانا تمام گند صاف کرنا (بشمول www اور غلط فائلیں)
+          rm -rf app www build.gradle settings.gradle
+          
+          # 2. سٹینڈرڈ اینڈرائیڈ فولڈرز بنانا
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/assets
+          
+          # 3. مین گریڈل فائل (Root settings.gradle)
+          cat <<EOF > settings.gradle
+          rootProject.name = "System Pro"
+          include ':app'
+          EOF
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Master-APK
-          path: app/build/outputs/apk/debug/*.apk
+          # 4. پروجیکٹ لیول گریڈل (build.gradle)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          # 5. ایپ لیول گریڈل (app/build.gradle)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.faisal"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # 6. مینی فیسٹ فائل (Manifest)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 7. جاوا کوڈ (MainActivity.java)
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          # 8. ڈیفالٹ ایچ ٹی ایم ایل فائل
+          echo "<h1>System Pro Master - Faisal Zaman</h1>" > app/src/main/assets/index.html
+
+      - name: Commit and Force Push
+        run: |
+          git config --global user.name "Faisal Zaman"
+          git config --global user.email "faisal@systempro.com"
+          git add .
+          git commit -m "System Pro: Standard Clean Structure Applied" || echo "No changes"
+          git push --force
