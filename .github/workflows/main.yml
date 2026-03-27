@@ -1,4 +1,4 @@
-name: System Pro Ultimate - Package Sync Fix
+name: System Pro - Maven Sync Fix
 
 on:
   push:
@@ -6,14 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-and-build:
+  sync-build:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 1. Fresh Checkout
+      - name: 1. Checkout
         uses: actions/checkout@v4
-        with:
-          clean: true
 
       - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
@@ -21,62 +19,58 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Deep Package Correction
+      - name: 3. Nuclear Cleanup & Repo Sync
         run: |
-          # مکمل صفائی
           rm -rf .gradle build app/build
           
-          # فولڈر اسٹرکچر کو پیکیج نیم کے مطابق سیٹ کریں
-          mkdir -p app/src/main/java/com/systempro/ultimate
-          mkdir -p app/src/main/res/values
-
-          # 1. ایپ لیول build.gradle (Namespace فکس)
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.systempro.ultimate'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.systempro.ultimate"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 8
-                  versionName "8.0"
+          # 1. پروجیکٹ لیول build.gradle (ریپوزٹریز کا صحیح آرڈر)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url "https://plugins.gradle.org/m2/" }
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url "https://jitpack.io" }
+              }
           }
           EOF
 
-          # 2. Manifest (Package Name کے بغیر، صرف Namespace پر انحصار)
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light">
-                  <activity android:name="com.systempro.ultimate.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
+          # 2. settings.gradle (نئے گریڈل کے لیے لازمی سیٹنگ)
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
           EOF
 
-      - name: 4. Build with Clean State
+      - name: 4. Build with Full Logs
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # اسٹیک ٹریس کو مزید تفصیل سے دیکھنے کے لیے --info شامل کیا ہے
-          ./gradlew assembleDebug --no-build-cache --no-daemon --info
+          # --stacktrace ہمیں اصل ایرر کی جڑ تک لے جائے گا
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: 5. Upload Fixed APK
+      - name: 5. Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V8-Final
