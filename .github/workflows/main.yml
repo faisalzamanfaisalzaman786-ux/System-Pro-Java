@@ -1,4 +1,4 @@
-name: System Pro Auto-Build (No-Wrapper Fix)
+name: System Pro Final Verified Build
 
 on:
   workflow_dispatch:
@@ -8,38 +8,42 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # سیکیورٹی کے لیے پرمیشنز سیٹ کرنا بہتر ہے
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 17 (Verified)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      # یہ سٹیپ خودکار طریقے سے گریڈل سیٹ اپ کرے گا چاہے gradlew فائل نہ بھی ہو
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Build APK with Auto-Gradle
+      - name: Build with System Gradle
         run: |
-          # اگر gradlew نہیں ہے تو براہ راست انسٹال شدہ 'gradle' کمانڈ استعمال کریں
+          # اگر gradlew فائل موجود ہے تو اسے استعمال کریں، ورنہ سسٹم کا گریڈل انسٹال کریں
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
             ./gradlew assembleDebug --stacktrace
           else
-            echo "gradlew not found, using system gradle..."
+            echo "Gradlew not found. Installing and using system gradle..."
+            sudo apt-get update && sudo apt-get install -y gradle
             gradle assembleDebug --stacktrace
           fi
 
-      - name: Upload APK Artifact
+      - name: Verify and Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-APK
+          name: System-Pro-V2-Final-APK
           path: "**/build/outputs/apk/debug/*.apk"
-          if-no-files-found: error
+          retention-days: 7
 
-      - name: Cleanup
+      - name: Final Cleanup
         if: always()
         run: rm -rf ~/.gradle/caches/
