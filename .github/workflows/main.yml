@@ -1,4 +1,4 @@
-name: System Pro Ultimate Fix
+name: System Pro Ultimate Fix V8
 
 on:
   workflow_dispatch:
@@ -19,16 +19,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Wrapper and Build
+      - name: Install and Upgrade Gradle
         run: |
-          # گریڈل انسٹال کریں اگر ضرورت ہو
-          sudo apt-get update && sudo apt-get install -y gradle
+          # پرانا گریڈل ہٹائیں اور نیا ورژن (8.5) سیٹ اپ کریں
+          wget https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          sudo unzip -d /opt/gradle gradle-8.5-bin.zip
+          export PATH=$PATH:/opt/gradle/gradle-8.5/bin
           
-          # ریپر جنریٹ کریں تاکہ پروجیکٹ کے مطابق ورژن سیٹ ہو جائے
-          gradle wrapper
+          # اب ریپر جنریٹ کریں تاکہ پروجیکٹ اسی ورژن پر چلے
+          /opt/gradle/gradle-8.5/bin/gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           
-          # اب بلڈ شروع کریں
+          # بلڈ شروع کریں
           ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload APK
