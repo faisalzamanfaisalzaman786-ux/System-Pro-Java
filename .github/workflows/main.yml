@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -18,23 +18,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Structure & Inject Data
+      - name: Clean & Generate Structure
         run: |
-          # پرانے فولڈرز کا مسئلہ حل کرنے کے لیے -p استعمال کیا گیا ہے
+          # پرانے فولڈرز کو صاف کر کے نئے سرے سے بنانا تاکہ 'File exists' ایرر نہ آئے
+          rm -rf app/src/main/res/mipmap-xxxhdpi
+          rm -rf app/src/main/assets/www
+          
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           mkdir -p app/src/main/assets/www
-          
-          # یہاں وہ فائلز ڈالیں جو ایپلیکیشن سے آ رہی ہیں
-          # مثال کے طور پر اگر index.html اور امیج آ رہے ہیں:
-          # mv user_data/index.html app/src/main/assets/www/
-          # mv user_data/icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
-          echo "Structure generated and data injected successfully."
 
-      - name: Dynamic Permissions & Package Rename
+      - name: Inject User Data (Image & HTML)
         run: |
-          # یہاں ہم ضرورت کے مطابق پیکج نیم یا پرمیشنز چینج کر سکتے ہیں
-          sed -i 's/com.old.package/com.systempro.master/g' app/build.gradle
+          # آپ کی ایپ سے آنے والی فائلز کو ان کی صحیح جگہ پر موو کرنا
+          # اگر فائل موجود ہو تو ہی موو کرے گا تاکہ ایرر نہ آئے
+          [ -f "ic_launcher.png" ] && mv ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || echo "Icon not found"
+          [ -f "index.html" ] && mv index.html app/src/main/assets/www/index.html || echo "HTML not found"
 
       - name: Prepare Gradle & Build
         run: |
@@ -44,5 +42,5 @@ jobs:
       - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-v1
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-App' }}
           path: app/build/outputs/apk/debug/*.apk
