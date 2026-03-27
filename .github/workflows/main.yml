@@ -124,39 +124,38 @@ jobs:
           echo "Using package name: $PACKAGE_NAME"
           echo "Version code: $VERSION_CODE"
 
-          cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace "$PACKAGE_NAME"
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PACKAGE_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode $VERSION_CODE
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      debuggable true
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
+          # Write build.gradle using printf to ensure variable expansion
+          printf '%s\n' 'plugins {' > app/build.gradle
+          printf '%s\n' '    id '\''com.android.application'\''' >> app/build.gradle
+          printf '%s\n' '}' >> app/build.gradle
+          printf '%s\n' '' >> app/build.gradle
+          printf '%s\n' 'android {' >> app/build.gradle
+          printf '%s\n' '    namespace "'"$PACKAGE_NAME"'"' >> app/build.gradle
+          printf '%s\n' '    compileSdk 34' >> app/build.gradle
+          printf '%s\n' '' >> app/build.gradle
+          printf '%s\n' '    defaultConfig {' >> app/build.gradle
+          printf '%s\n' '        applicationId "'"$PACKAGE_NAME"'"' >> app/build.gradle
+          printf '%s\n' '        minSdk 24' >> app/build.gradle
+          printf '%s\n' '        targetSdk 34' >> app/build.gradle
+          printf '%s\n' '        versionCode '"$VERSION_CODE" >> app/build.gradle
+          printf '%s\n' '        versionName "1.0"' >> app/build.gradle
+          printf '%s\n' '    }' >> app/build.gradle
+          printf '%s\n' '' >> app/build.gradle
+          printf '%s\n' '    buildTypes {' >> app/build.gradle
+          printf '%s\n' '        release {' >> app/build.gradle
+          printf '%s\n' '            minifyEnabled false' >> app/build.gradle
+          printf '%s\n' '        }' >> app/build.gradle
+          printf '%s\n' '        debug {' >> app/build.gradle
+          printf '%s\n' '            debuggable true' >> app/build.gradle
+          printf '%s\n' '        }' >> app/build.gradle
+          printf '%s\n' '    }' >> app/build.gradle
+          printf '%s\n' '}' >> app/build.gradle
+          printf '%s\n' '' >> app/build.gradle
+          printf '%s\n' 'dependencies {' >> app/build.gradle
+          printf '%s\n' '    implementation '\''androidx.appcompat:appcompat:1.6.1'\''' >> app/build.gradle
+          printf '%s\n' '    implementation '\''com.google.android.material:material:1.11.0'\''' >> app/build.gradle
+          printf '%s\n' '    implementation '\''androidx.constraintlayout:constraintlayout:2.1.4'\''' >> app/build.gradle
+          printf '%s\n' '}' >> app/build.gradle
 
       - name: Create AndroidManifest.xml with dynamic permissions
         run: |
