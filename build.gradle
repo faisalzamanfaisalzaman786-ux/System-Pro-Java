@@ -1,9 +1,11 @@
+// Top-level build file
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
+        // گریڈل 8.5 کے لیے یہ ورژن لازمی ہے
         classpath 'com.android.tools.build:gradle:8.2.2'
     }
 }
@@ -13,8 +15,4 @@ allprojects {
         google()
         mavenCentral()
     }
-}
-
-task clean(type: Delete) {
-    delete rootProject.buildDir
 }
