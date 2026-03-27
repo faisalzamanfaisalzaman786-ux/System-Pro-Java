@@ -121,7 +121,7 @@ jobs:
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
           TIMESTAMP=$(date +'%Y%m%d%H%M%S')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${TIMESTAMP}"
-          VERSION_CODE=$(date +%s)   # <--- یہاں تبدیلی: seconds since epoch
+          VERSION_CODE=$(date +%s)
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
@@ -166,7 +166,7 @@ jobs:
           echo "=== app/build.gradle (first 20 lines) ==="
           head -n 20 app/build.gradle
 
-      - name: Create AndroidManifest.xml with dynamic permissions
+      - name: Create AndroidManifest.xml with dynamic permissions + default background/internet
         run: |
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
 
@@ -174,10 +174,15 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+              <!-- ڈیفالٹ پرمیشنز (ہر بلڈ میں شامل) -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
           EOF
 
+          # اضافی پرمیشنز (صارف کی طرف سے منتخب کردہ)
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
