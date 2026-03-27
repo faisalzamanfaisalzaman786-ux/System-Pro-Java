@@ -1,53 +1,39 @@
-name: Build Android APK (System Pro Fix)
+name: System Pro Final Fix
 
 on:
-  push:
-    branches: [ "main", "master" ]
+  workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    # اگر gradlew فائل موجود ہے تو اسے پرمیشن دیں، ورنہ یہ اسٹیپ سکپ ہو جائے گا
-    - name: Grant Execute Permission
-      run: |
-        if [ -f "./gradlew" ]; then
+      - name: Find and Build
+        run: |
+          # خودکار طریقے سے gradlew فائل تلاش کریں
+          GRADLEW_PATH=$(find . -name gradlew)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew file not found anywhere in the repository!"
+            exit 1
+          fi
+          
+          # فائل والے فولڈر میں جائیں اور بلڈ شروع کریں
+          cd $(dirname "$GRADLEW_PATH")
           chmod +x gradlew
-        elif [ -f "app/gradlew" ]; then
-          chmod +x app/gradlew
-        else
-          echo "gradlew not found in root or app folder"
-        fi
+          ./gradlew assembleDebug --stacktrace
 
-    - name: Build Debug APK
-      run: |
-        if [ -f "./gradlew" ]; then
-          ./gradlew assembleDebug
-        else
-          # اگر فائل کسی اور فولڈر میں ہے تو وہاں جا کر چلائیں
-          cd $(find . -name gradlew -exec dirname {} \;) && ./gradlew assembleDebug
-        fi
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: System-Pro-Debug-APK
-        path: "**/build/outputs/apk/debug/*.apk"
-
-    - name: Cleanup Environment
-      if: always()
-      run: rm -rf ~/.gradle/caches/
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-APK
+          path: "**/build/outputs/apk/debug/*.apk"
