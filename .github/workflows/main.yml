@@ -32,19 +32,19 @@ jobs:
       - name: Process client payload (if any)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کوڈ کو assets میں ڈالیں
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML کوڈ کو assets میں ڈالیں (محفوظ طریقے سے)
+          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
           # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
           # پرمیشنز کو ایک فائل میں محفوظ کریں
-          echo "${{ github.event.client_payload.permissions }}" > permissions.txt
+          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
 
           # ایپ کا نام محفوظ کریں
-          echo "${{ github.event.client_payload.app_name }}" > app_name.txt
+          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Provide default files (if missing)
         run: |
