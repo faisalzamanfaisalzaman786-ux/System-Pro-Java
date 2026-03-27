@@ -1,45 +1,61 @@
-name: System Pro Ultimate Fix V8
+name: System Pro Ultimate - Triple Clean & Build
 
 on:
+  push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
-  repository_dispatch:
-    types: [build-apk]
 
 jobs:
-  build:
+  build-and-reconstruct:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: 2. Triple Phase Cleanup (گرین کلین اپ)
+        run: |
+          echo "مرحلہ 1: پرانی فائلوں کو فزیکلی ڈیلیٹ کیا جا رہا ہے..."
+          rm -rf .gradle build app/build
+          rm -f gradle/wrapper/gradle-wrapper.properties
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          
+          echo "مرحلہ 2: پوشیدہ فولڈرز اور عارضی فائلوں کی صفائی..."
+          find . -type d -name "build" -exec rm -rf {} +
+          find . -type d -name ".externalNativeBuild" -exec rm -rf {} +
+          
+          echo "مرحلہ 3: نئے اسٹرکچر کے لیے جگہ تیار کی جا رہی ہے..."
+          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res
+
+      - name: 3. Set up JDK 17 (Standard)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install and Upgrade Gradle
+      - name: 4. Reconstruct Gradle 8.5 (Physical Update)
         run: |
-          # پرانا گریڈل ہٹائیں اور نیا ورژن (8.5) سیٹ اپ کریں
-          wget https://services.gradle.org/distributions/gradle-8.5-bin.zip
-          sudo unzip -d /opt/gradle gradle-8.5-bin.zip
-          export PATH=$PATH:/opt/gradle/gradle-8.5/bin
-          
-          # اب ریپر جنریٹ کریں تاکہ پروجیکٹ اسی ورژن پر چلے
-          /opt/gradle/gradle-8.5/bin/gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          
-          # بلڈ شروع کریں
-          ./gradlew assembleDebug --stacktrace --info
+          # یہاں ہم فزیکلی نئی فائل لکھ رہے ہیں تاکہ پرانا ورژن ختم ہو جائے
+          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          networkTimeout=10000
+          validateDistributionUrl=true
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
 
-      - name: Upload APK
-        if: success()
+      - name: 5. Final Deep Clean & Build
+        run: |
+          # گریڈل کو حکم دیں کہ سب کچھ نئے سرے سے بنائے
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --no-build-cache --stacktrace
+
+      - name: 6. Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
-          path: "**/build/outputs/apk/debug/*.apk"
-
-      - name: Cleanup
-        if: always()
-        run: rm -rf ~/.gradle/caches/
+          name: System-Pro-V8-Final-Clean
+          path: app/build/outputs/apk/debug/*.apk
