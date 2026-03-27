@@ -1,4 +1,4 @@
-name: System Pro Ultimate - Structural Fix
+name: System Pro - Hard Reset Build
 
 on:
   push:
@@ -6,54 +6,72 @@ on:
   workflow_dispatch:
 
 jobs:
-  fix-and-build:
+  reset-and-build:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 1. Checkout Repository
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Force Physical Re-structure (تین گنا صفائی اور تعمیر)
+      - name: 2. Full Structural Overwrite
         run: |
-          # پرانے تمام غیر ضروری فولڈرز ڈیلیٹ کریں
+          # مکمل صفائی
           rm -rf .gradle build app/build
           
-          # پروفیشنل فولڈر اسٹرکچر بنائیں
+          # ضروری فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/systempro/ultimate
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
-          mkdir -p gradle/wrapper
 
-          # مین سیٹنگ فائل کو دوبارہ لکھیں تاکہ کنفلکٹ نہ آئے
+          # 1. Settings File
           echo "include ':app'" > settings.gradle
-          
-          # پروجیکٹ لیول build.gradle کو فکس کریں
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
+
+          # 2. Manifest File (یہ سب سے اہم ہے)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.ultimate">
+              <application
+                  android:allowBackup="true"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.AppCompat.Light">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 3. Basic Java File
+          cat <<EOF > app/src/main/java/com/systempro/ultimate/MainActivity.java
+          package com.systempro.ultimate;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
           }
           EOF
 
-      - name: 3. Set up JDK 17
+      - name: 3. Setup Java 17 & Gradle 8.5
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Re-generate Gradle Wrapper (8.5)
+      - name: 4. Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: 5. Final Deep Clean Build
-        run: |
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
-
-      - name: 6. Upload Fixed APK
+      - name: 5. Upload
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V8-Final
+          name: System-Pro-V8-Fixed
           path: app/build/outputs/apk/debug/*.apk
