@@ -7,6 +7,11 @@ on:
   repository_dispatch:
     types: [build-apk]
 
+# یہ کنکرنسی گروپ اس بات کو یقینی بناتا ہے کہ ایک وقت میں صرف ایک بلڈ چلے
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}
+  cancel-in-progress: false   # پہلے سے چل رہا بلڈ منسوخ نہیں ہوگا، نیا انتظار کرے گا
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -346,8 +351,12 @@ jobs:
       - name: Cleanup temp files (if from dispatch)
         if: github.event_name == 'repository_dispatch'
         run: |
-          curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}?message=Cleanup&sha=${{ github.event.client_payload.html_sha }}"
+          # HTML فائل ڈیلیٹ کریں (اگر موجود ہو)
+          if [ -n "${{ github.event.client_payload.html_file }}" ] && [ -n "${{ github.event.client_payload.html_sha }}" ]; then
+            curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}?message=Cleanup&sha=${{ github.event.client_payload.html_sha }}"
+          fi
+          # آئیکون فائل ڈیلیٹ کریں (اگر موجود ہو)
           if [ -n "${{ github.event.client_payload.icon_file }}" ] && [ -n "${{ github.event.client_payload.icon_sha }}" ]; then
             curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}?message=Cleanup&sha=${{ github.event.client_payload.icon_sha }}"
