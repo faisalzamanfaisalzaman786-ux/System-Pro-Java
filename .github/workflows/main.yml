@@ -16,13 +16,11 @@ jobs:
 
       - name: Fetch uploaded HTML and icon
         run: |
-          # HTML فائل حاصل کریں
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                -H "Accept: application/vnd.github.v3.raw" \
                -o index.html \
                "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}"
           
-          # اگر آئیکون اپ لوڈ کیا گیا ہو تو اسے ڈاؤن لوڈ کریں
           if [ -n "${{ github.event.client_payload.icon_file }}" ]; then
             curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  -H "Accept: application/vnd.github.v3.raw" \
@@ -30,29 +28,32 @@ jobs:
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}"
           fi
 
-      - name: Set up Java (if needed for Android build)
-        uses: actions/setup-java@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          node-version: '18'
 
-      - name: Set up Android SDK (if needed)
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-33 build-tools;30.0.3'
+      - name: Install Cordova
+        run: npm install -g cordova
 
-      - name: Build APK using custom script
+      - name: Build APK using Cordova
         run: |
-          # یہاں آپ کا اصل بلڈ اسکرپٹ لگائیں
-          # فرض کریں کہ آپ کے پاس build.py ہے جو index.html اور icon_base64.txt سے APK بناتا ہے
-          # مثال:
-          python build.py --html index.html --icon icon_base64.txt \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --permissions "${{ join(github.event.client_payload.permissions, ',') }}"
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          cordova create app com.example.myapp "$APP_NAME"
+          cd app
+          cp ../index.html www/index.html
           
-          # اگر آپ کا اسکرپٹ APK کو کسی مخصوص مقام پر رکھتا ہے، تو اسے output/ میں کاپی کریں
-          mkdir -p output
-          cp /path/to/your/app.apk output/app.apk   # اپنا اصلی پاتھ لگائیں
+          if [ -f ../icon_base64.txt ]; then
+            base64 -d ../icon_base64.txt > www/img/icon.png
+            mkdir -p res/icon/android
+            cp www/img/icon.png res/icon/android/icon.png
+            sed -i 's|<icon src="[^"]*" />|<icon src="res/icon/android/icon.png" />|' config.xml
+          fi
+          
+          cordova platform add android
+          cordova build android --release
+          mkdir -p ../output
+          cp platforms/android/app/build/outputs/apk/release/app-release.apk ../output/app.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -63,10 +64,8 @@ jobs:
       - name: Cleanup temp files
         if: always()
         run: |
-          # HTML فائل حذف کریں
           curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}?message=Cleanup&sha=${{ github.event.client_payload.html_sha }}"
-          # اگر آئیکون فائل موجود ہو تو حذف کریں
           if [ -n "${{ github.event.client_payload.icon_file }}" ] && [ -n "${{ github.event.client_payload.icon_sha }}" ]; then
             curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}?message=Cleanup&sha=${{ github.event.client_payload.icon_sha }}"
