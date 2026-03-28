@@ -6,8 +6,7 @@ on:
 
 concurrency:
   group: build-apk-single
-  cancel-in-progress: false   # false: پہلے والا ختم ہونے دے، پھر نیا شروع ہو
-  # اگر چاہیں کہ نیا آنے پر پرانا فوراً کینسل ہو جائے تو true کریں
+  cancel-in-progress: false   # پہلے رن کو ختم ہونے دیں، پھر نیا شروع ہو
 
 jobs:
   build:
@@ -31,47 +30,52 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Process client payload
+      - name: Process client payload (HTML, icon, permissions, app name)
         run: |
-          # HTML کوڈ کو assets میں ڈالیں
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML کو محفوظ طریقے سے assets میں ڈالیں (here-doc)
+          cat <<'HTML_EOF' > app/src/main/assets/index.html
+          ${{ github.event.client_payload.app_html }}
+          HTML_EOF
 
           # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # پرمیشنز کو ایک فائل میں محفوظ کریں
+          # پرمیشنز محفوظ کریں
           echo "${{ github.event.client_payload.permissions }}" > permissions.txt
 
           # ایپ کا نام محفوظ کریں
           echo "${{ github.event.client_payload.app_name }}" > app_name.txt
 
-      - name: Provide default files (if missing)
+      - name: Verify HTML file
         run: |
-          # اگر assets/index.html موجود نہیں تو ڈیفالٹ بنا دیں
-          if [ ! -f app/src/main/assets/index.html ]; then
-            cat <<EOF > app/src/main/assets/index.html
+          if [ ! -s app/src/main/assets/index.html ]; then
+            echo "Warning: index.html is empty or missing. Using default."
+            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
           <head><meta charset="UTF-8"><title>System Pro</title></head>
           <body><h1>System Pro</h1><p>یہ ڈیفالٹ HTML ہے۔</p></body>
           </html>
-          EOF
+          DEFAULT_HTML
           fi
+          echo "HTML content (first 200 chars):"
+          head -c 200 app/src/main/assets/index.html
 
-          # اگر آئیکون موجود نہیں تو 1x1 سفید PNG (base64) بنا دیں
+      - name: Provide default icon and permissions (if missing)
+        run: |
+          # اگر آئیکون نہیں تو 1x1 سفید PNG
           if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
-            # ایک چھوٹا سا 1x1 PNG (بیس 64)
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # اگر پرمیشنز کی فائل نہیں تو خالی بنا دیں
+          # پرمیشنز کی فائل نہ ہو تو خالی
           if [ ! -f permissions.txt ]; then
             touch permissions.txt
           fi
 
-          # اگر ایپ کا نام نہیں تو ڈیفالٹ
+          # ایپ کا نام نہ ہو تو ڈیفالٹ
           if [ ! -f app_name.txt ]; then
             echo "System Pro" > app_name.txt
           fi
@@ -88,7 +92,7 @@ jobs:
 
       - name: Create project build.gradle
         run: |
-          cat <<EOF > build.gradle
+          cat <<'EOF' > build.gradle
           buildscript {
               repositories {
                   google()
@@ -110,7 +114,7 @@ jobs:
 
       - name: Create settings.gradle
         run: |
-          cat <<EOF > settings.gradle
+          cat <<'EOF' > settings.gradle
           pluginManagement {
               repositories {
                   google()
@@ -130,12 +134,12 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic namespace
+      - name: Create app build.gradle with dynamic namespace + timestamp
         run: |
-          # ایپ کا نام پڑھیں، پیکیج نام بنائیں
           APP_NAME=$(cat app_name.txt)
+          TIMESTAMP=$(date +%s)   # یونکس ٹائم سٹیمپ
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.${TIMESTAMP}"
           echo "Using package name: $PACKAGE_NAME"
 
           cat <<EOF > app/build.gradle
@@ -177,7 +181,7 @@ jobs:
           APP_NAME=$(cat app_name.txt)
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
 
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -185,14 +189,12 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
           EOF
 
-          # اضافی پرمیشنز شامل کریں
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
             fi
           done
 
-          # آئیکون شامل کریں (صرف اگر موجود ہو)
           if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
             ICON_ATTR='android:icon="@drawable/ic_launcher"'
           else
@@ -223,12 +225,13 @@ jobs:
       - name: Create MainActivity.java with dynamic package
         run: |
           APP_NAME=$(cat app_name.txt)
+          TIMESTAMP=$(date +%s)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.${TIMESTAMP}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          cat <<'EOF' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
           import android.os.Bundle;
@@ -288,9 +291,12 @@ jobs:
           }
           EOF
 
+          # متغیر کو replace کریں
+          sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+
       - name: Create activity_main.xml
         run: |
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
@@ -300,7 +306,7 @@ jobs:
 
       - name: Create minimal styles.xml
         run: |
-          cat <<EOF > app/src/main/res/values/styles.xml
+          cat <<'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
