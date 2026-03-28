@@ -147,16 +147,16 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic namespace
+      - name: Create app build.gradle with unique package name
         run: |
           APP_NAME=$(cat app_name.txt)
           # پیکیج نام بنائیں: صرف حروف تہجی، اعداد، انڈر اسکور۔ پہلا حرف حرف ہو۔
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          # اگر پہلا حرف عدد ہے تو آگے 'a' لگا دیں
           if [[ "$PACKAGE_BASE" =~ ^[0-9] ]]; then
             PACKAGE_BASE="a_$PACKAGE_BASE"
           fi
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          # منفرد بنانے کے لیے run_id شامل کریں
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${{ github.run_id }}"
           echo "Using package name: $PACKAGE_NAME"
 
           cat <<EOF > app/build.gradle
@@ -243,7 +243,7 @@ jobs:
           if [[ "$PACKAGE_BASE" =~ ^[0-9] ]]; then
             PACKAGE_BASE="a_$PACKAGE_BASE"
           fi
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${{ github.run_id }}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
@@ -340,7 +340,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-App-${{ github.run_id }}
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Cleanup temp files (if from dispatch)
