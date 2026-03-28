@@ -1,7 +1,6 @@
 name: System Pro - Dynamic APK Builder
 
 on:
-  # Removed push trigger to avoid auto runs
   workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
@@ -63,7 +62,7 @@ jobs:
           # ---------- Fix HTML ----------
           if [ ! -s app/src/main/assets/index.html ]; then
             echo "Warning: index.html empty, using default."
-            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
+            cat << 'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
           <head><meta charset="UTF-8"><title>System Pro</title></head>
@@ -76,7 +75,6 @@ jobs:
           # ---------- Fix Icon ----------
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
 
-          # Check if existing icon is valid (size > 100 bytes)
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -84,19 +82,14 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              # Optional: show PNG header
-              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
-          # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
-            # Try using ImageMagick (available on runners)
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
-              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
               printf '%s' \
                 "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
                 "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -125,7 +118,7 @@ jobs:
 
       - name: Create project build.gradle
         run: |
-          cat <<'EOF' > build.gradle
+          cat << 'EOF' > build.gradle
           buildscript {
               repositories {
                   google()
@@ -147,7 +140,7 @@ jobs:
 
       - name: Create settings.gradle
         run: |
-          cat <<'EOF' > settings.gradle
+          cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
                   google()
@@ -174,7 +167,7 @@ jobs:
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           echo "Using package name: $PACKAGE_NAME"
 
-          cat <<EOF > app/build.gradle
+          cat << EOF > app/build.gradle
           plugins {
               id 'com.android.application'
           }
@@ -213,7 +206,7 @@ jobs:
           APP_NAME=$(cat app_name.txt)
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
 
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -227,8 +220,7 @@ jobs:
             fi
           done
 
-          # Icon is always referenced (we ensured it exists)
-          cat <<EOF >> app/src/main/AndroidManifest.xml
+          cat << EOF >> app/src/main/AndroidManifest.xml
 
               <application
                   android:allowBackup="true"
@@ -257,7 +249,7 @@ jobs:
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          cat << EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
           import android.os.Bundle;
@@ -283,23 +275,17 @@ jobs:
                   webView = findViewById(R.id.webview);
                   WebSettings webSettings = webView.getSettings();
 
-                  // Enable JavaScript and DOM storage
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
-                  // Allow file access for assets
                   webSettings.setAllowFileAccess(true);
                   webSettings.setAllowContentAccess(true);
-                  // Allow mixed content (HTTP + HTTPS)
                   webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  // Enable caching for better performance
                   webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-                  // Enable remote debugging (for Chrome DevTools)
                   if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
                       WebView.setWebContentsDebuggingEnabled(true);
                   }
 
-                  // Ensure links open inside WebView
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, String url) {
@@ -308,7 +294,6 @@ jobs:
                       }
                   });
 
-                  // Handle file chooser and alerts
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
@@ -322,7 +307,6 @@ jobs:
                       }
                   });
 
-                  // Load the HTML from assets
                   webView.loadUrl("file:///android_asset/index.html");
               }
 
@@ -344,7 +328,7 @@ jobs:
 
       - name: Create activity_main.xml
         run: |
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
@@ -354,7 +338,7 @@ jobs:
 
       - name: Create minimal styles.xml
         run: |
-          cat <<'EOF' > app/src/main/res/values/styles.xml
+          cat << 'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
