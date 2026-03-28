@@ -34,15 +34,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-      - name: Setup Node.js (for building)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Get app details from payload (or workflow inputs)
+      - name: Get app details from payload
         id: details
         run: |
-          # Use inputs if workflow_dispatch, else use client_payload
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             APP_NAME="${{ github.event.inputs.app_name }}"
             PERMISSIONS="${{ github.event.inputs.permissions }}"
@@ -58,16 +57,13 @@ jobs:
 
       - name: Prepare HTML file (from repo)
         run: |
-          # HTML file is already in repo as index.html
-          # Ensure it exists
           if [ ! -f "index.html" ]; then
             echo "Error: index.html not found in repository root!"
             exit 1
           fi
-          # Create a working directory
           mkdir -p app
           cp index.html app/index.html
-          echo "HTML file copied from repository."
+          echo "HTML file copied."
 
       - name: Decode and save icon (if provided)
         run: |
@@ -101,45 +97,55 @@ jobs:
                   </activity>
               </application>
           EOF
-          # Add permissions
           IFS=',' read -ra PERM_ARRAY <<< "$PERMISSIONS"
           for perm in "${PERM_ARRAY[@]}"; do
             if [ -n "$perm" ]; then
               sed -i "/<\/application>/i \    <uses-permission android:name=\"$perm\" />" app/AndroidManifest.xml
             fi
           done
-          echo "AndroidManifest.xml created with permissions."
+          echo "AndroidManifest.xml created."
 
-      - name: Install Cordova and build APK/AAB
+      - name: Install Cordova and build APK (debug)
         run: |
           npm install -g cordova
           cordova create myapp com.example.${{ steps.details.outputs.app_name }} "${{ steps.details.outputs.app_name }}"
           cd myapp
-          # Replace www with our app folder
           rm -rf www
           cp -r ../app www
-          # Add Android platform
           cordova platform add android
-          # Build release (will generate AAB)
-          cordova build android --release
+
+          # Set custom icon if provided
+          if [ -f "../app/icon.png" ]; then
+            # Create mipmap folders and copy icon
+            mkdir -p platforms/android/app/src/main/res/mipmap-hdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-mdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xhdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xxhdpi
+            mkdir -p platforms/android/app/src/main/res/mipmap-xxxhdpi
+            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            # Update config.xml to use custom icon
+            if ! grep -q '<icon' config.xml; then
+              sed -i '/<platform name="android">/a \        <icon src="res\/mipmap\/ic_launcher.png" />' config.xml
+            fi
+            echo "Custom icon applied."
+          fi
+
+          # Build debug APK (signed with debug key)
+          cordova build android
           cd ..
 
-      - name: Convert AAB to APK using bundletool
-        run: |
-          # Download bundletool
-          wget -q https://github.com/google/bundletool/releases/download/1.15.6/bundletool-all-1.15.6.jar -O bundletool.jar
-          # Locate AAB file
-          AAB_PATH=$(find . -name "*.aab" | head -n 1)
-          if [ -z "$AAB_PATH" ]; then
-            echo "Error: No AAB file found."
+          # Locate the debug APK
+          DEBUG_APK=$(find . -path "*/app/build/outputs/apk/debug/*.apk" | head -n 1)
+          if [ -z "$DEBUG_APK" ]; then
+            echo "Error: No debug APK found."
             exit 1
           fi
-          echo "Found AAB: $AAB_PATH"
-          # Generate universal APK from AAB
-          java -jar bundletool.jar build-apks --bundle="$AAB_PATH" --output=output.apks --mode=universal
-          # Extract the universal APK
-          unzip -p output.apks universal.apk > app.apk
-          echo "APK generated successfully."
+          echo "Found debug APK: $DEBUG_APK"
+          cp "$DEBUG_APK" app.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
@@ -147,10 +153,9 @@ jobs:
           name: app-${{ steps.details.outputs.app_name }}
           path: app.apk
 
-      - name: Create Release (optional)
+      - name: Create Release
         if: github.event_name == 'repository_dispatch'
         run: |
-          # Create a tag and release for the APK
           RUN_ID=${{ github.run_id }}
           gh release create "run-${RUN_ID}" app.apk --title "APK Build ${{ steps.details.outputs.app_name }}" --notes "Generated from workflow run ${{ github.run_id }}" --repo ${{ github.repository }}
         env:
