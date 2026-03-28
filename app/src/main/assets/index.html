@@ -1,1843 +1,829 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ur">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Enhanced Salat Clock - Sehri & Iftar</title>
-    <meta name="theme-color" content="#0c1445">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>اسمارٹ اسٹوڈیو · APK بلڈر</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap');
-        
-        :root {
-            --led-red: #FF4136;
-            --led-green: #2ECC40;
-            --led-blue: #00BFFF;
-            --gold-dark: #B8860B;
-            --gold-light: #FFD700;
-            --frame-gradient: linear-gradient(145deg, #1c1c1c, #000000);
-            --bg-gradient: linear-gradient(135deg, #0c1445, #1c1c3c);
-            --clock-width: 95vw;
-            --clock-height: 95vh;
-            --shadow-glow: 0 0 20px rgba(255, 215, 0, 0.3);
-        }
-        
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-            -webkit-tap-highlight-color: transparent; 
-        }
-        
-        html, body {
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-            font-family: 'Poppins', sans-serif;
-            background: var(--bg-gradient);
-            color: white;
-            touch-action: manipulation;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
-
-        /* Animated background particles */
-        .particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            pointer-events: none;
-        }
-        .particle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: var(--gold-light);
-            border-radius: 50%;
-            opacity: 0.3;
-            animation: float 20s infinite linear;
-        }
-        @keyframes float {
-            0% { transform: translateY(0) translateX(0); }
-            25% { transform: translateY(-100px) translateX(100px); }
-            50% { transform: translateY(-50px) translateX(-50px); }
-            75% { transform: translateY(100px) translateX(-100px); }
-            100% { transform: translateY(0) translateX(0); }
-        }
-        
-        .clock-container {
-            width: var(--clock-width);
-            height: var(--clock-height);
-            max-width: 500px;
-            max-height: 800px;
-            background: var(--frame-gradient);
-            border-radius: 25px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            z-index: 1;
-            box-shadow: 
-                0 20px 40px rgba(0,0,0,0.8),
-                0 0 60px rgba(184, 134, 11, 0.3),
-                inset 0 0 30px rgba(0,0,0,0.9);
-        }
-
-        /* Animated border effect */
-        .clock-container::before {
-            content: '';
-            position: absolute;
-            top: -3px;
-            left: -3px;
-            right: -3px;
-            bottom: -3px;
-            background: linear-gradient(45deg, 
-                #ffd700, #ffed4e, #ffd700, 
-                #b8860b, #ffd700, #b8860b);
-            border-radius: 28px;
-            z-index: -1;
-            animation: borderGlow 3s linear infinite;
-            background-size: 300% 300%;
-            opacity: 0.7;
-        }
-
-        .clock-container::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: -1px;
-            right: -1px;
-            bottom: -1px;
-            background: linear-gradient(45deg, 
-                transparent 40%, 
-                rgba(255, 215, 0, 0.8) 50%, 
-                transparent 60%);
-            border-radius: 25px;
-            z-index: -1;
-            animation: borderScan 4s linear infinite;
-            background-size: 200% 200%;
-        }
-
-        @keyframes borderGlow {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        @keyframes borderScan {
-            0% { background-position: -200% 0%; }
-            100% { background-position: 200% 0%; }
-        }
-        
-        .screen {
-            background: linear-gradient(145deg, #0a0a0a, #121212);
-            border-radius: 18px;
-            padding: 15px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            box-shadow: 
-                inset 0 0 20px rgba(0,0,0,0.9),
-                0 5px 15px rgba(0,0,0,0.5);
-            position: relative;
-            overflow: hidden;
-            border: 1px solid rgba(184, 134, 11, 0.2);
-        }
-
-        .screen::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, 
-                transparent, 
-                var(--gold-light), 
-                transparent);
-            animation: screenScan 6s linear infinite;
-        }
-
-        @keyframes screenScan {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        
-        .clock-header { 
-            text-align: center; 
-            padding-bottom: 12px; 
-            position: relative; 
-            min-height: 100px;
-            border-bottom: 1px solid rgba(184, 134, 11, 0.3);
-        }
-        
-        .header-icons { 
-            position: absolute; 
-            top: 5px; 
-            right: 5px; 
-            z-index: 100; 
-            display: flex;
-            gap: 8px;
-        }
-        .header-icons-left { 
-            position: absolute; 
-            top: 5px; 
-            left: 5px; 
-            z-index: 100; 
-            display: flex; 
-            gap: 8px;
-        }
-        
-        #stop-alarm-btn { 
-            color: var(--led-red); 
-            text-shadow: 0 0 8px var(--led-red);
-            display: none;
-            animation: alarmPulse 2s infinite;
-        }
-
-        @keyframes alarmPulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-        .icon-btn { 
-            background: rgba(184, 134, 11, 0.1);
-            border: 1px solid rgba(184, 134, 11, 0.3);
-            color: var(--gold-light); 
-            font-size: 1.2rem; 
-            cursor: pointer; 
-            padding: 8px;
-            width: 44px; 
-            height: 44px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            border-radius: 12px; 
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        .icon-btn:hover { 
-            background: rgba(184, 134, 11, 0.2);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
-        }
-        .icon-btn:active { 
-            transform: translateY(0);
-        }
-
-        .shahada { 
-            font-size: 1.1rem;
-            color: var(--led-green); 
-            text-shadow: 0 0 8px var(--led-green); 
-            margin: 15px 0 10px 0; 
-            line-height: 1.4;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-        }
-        
-        .main-clock { 
-            font-family: 'Orbitron', sans-serif; 
-            font-size: 2.8rem;
-            font-weight: 700; 
-            color: var(--led-red); 
-            text-shadow: 0 0 12px var(--led-red); 
-            margin: 10px 0;
-            position: relative;
-            display: inline-block;
-        }
-
-        .main-clock::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100px;
-            height: 3px;
-            background: linear-gradient(90deg, 
-                transparent, 
-                var(--led-red), 
-                transparent);
-            border-radius: 2px;
-        }
-        
-        .date-display { 
-            font-size: 1.1rem;
-            color: var(--led-green); 
-            margin-top: 8px; 
-            font-weight: 300;
-            letter-spacing: 1px;
-        }
-
-        .prayer-times-container { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 8px; 
-            overflow-y: auto; 
-            padding-right: 5px; 
-            margin: 10px 0;
-        }
-
-        .prayer-times-container::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .prayer-times-container::-webkit-scrollbar-track {
-            background: rgba(0,0,0,0.2);
-            border-radius: 2px;
-        }
-
-        .prayer-times-container::-webkit-scrollbar-thumb {
-            background: var(--gold-dark);
-            border-radius: 2px;
-        }
-
-        .prayer-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 16px 18px;
-            background: linear-gradient(145deg, #1a1a1a, #151515); 
-            border-radius: 12px; 
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            position: relative;
-            overflow: hidden;
-            cursor: pointer;
-        }
-
-        .prayer-item::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, 
-                transparent, 
-                rgba(255, 215, 0, 0.1), 
-                transparent);
-            transition: left 0.5s ease;
-        }
-
-        .prayer-item:hover::before {
-            left: 100%;
-        }
-
-        .prayer-item:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-            border-color: rgba(184, 134, 11, 0.3);
-        }
-
-        @keyframes prayerPulse { 
-            0% { 
-                box-shadow: 0 0 0 0 rgba(46, 204, 64, 0.4),
-                            inset 0 0 0 0 rgba(46, 204, 64, 0.1);
-            } 
-            70% { 
-                box-shadow: 0 0 0 10px rgba(46, 204, 64, 0),
-                            inset 0 0 0 5px rgba(46, 204, 64, 0);
-            }
-            100% { 
-                box-shadow: 0 0 0 0 rgba(46, 204, 64, 0),
-                            inset 0 0 0 0 rgba(46, 204, 64, 0);
-            } 
-        }
-
-        .prayer-item.active { 
-            background: linear-gradient(145deg, #252525, #1a1a1a); 
-            border: 1px solid rgba(46, 204, 64, 0.3);
-            animation: prayerPulse 2s infinite;
-            transform: scale(1.02);
-        }
-
-        .prayer-name { 
-            font-size: 1.3rem;
-            color: #ddd; 
-            font-weight: 500;
-            position: relative;
-            padding-left: 10px;
-        }
-
-        .prayer-name::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 4px;
-            height: 60%;
-            background: var(--gold-light);
-            border-radius: 2px;
-        }
-
-        .prayer-time { 
-            font-family: 'Orbitron', sans-serif; 
-            font-size: 1.4rem;
-            color: var(--led-red); 
-            text-shadow: 0 0 8px var(--led-red); 
-            font-weight: 600;
-        }
-
-        .prayer-item.active .prayer-time { 
-            color: var(--led-green); 
-            text-shadow: 0 0 12px var(--led-green); 
-        }
-
-        .time-period { 
-            font-size: 0.5em; 
-            margin-left: 4px; 
-            vertical-align: middle; 
-        }
-
-        .btn { 
-            padding: 18px 15px;
-            font-size: 1.1rem;
-            background: linear-gradient(145deg, #2a2a2a, #1a1a1a); 
-            color: white; 
-            border: 1px solid rgba(184, 134, 11, 0.5);
-            border-radius: 12px; 
-            cursor: pointer; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            gap: 10px; 
-            min-height: 58px;
-            font-weight: 500;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 215, 0, 0.1);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-
-        .btn:hover::before {
-            width: 300px;
-            height: 300px;
-        }
-
-        .btn:hover { 
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.4),
-                        inset 0 0 0 1px rgba(184, 134, 11, 0.5);
-            background: linear-gradient(145deg, #333333, #222222);
-        }
-
-        .btn:active { 
-            transform: translateY(-1px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-
-        #modal-overlay { 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0, 0, 0, 0.8); 
-            z-index: 1000; 
-            opacity: 0; 
-            pointer-events: none; 
-            transition: opacity 0.4s ease-in-out; 
-            backdrop-filter: blur(5px);
-        }
-
-        #modal-overlay.open { 
-            opacity: 1; 
-            pointer-events: auto; 
-        }
-
-        #settings-screen { 
-            font-family: 'Poppins', sans-serif; 
-            position: fixed; 
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(145deg, #0a0a0a, #151515);
-            border: none;
-            border-radius: 0;
-            box-shadow: none;
-            z-index: 1001; 
-            display: flex; 
-            flex-direction: column; 
-            opacity: 0; 
-            pointer-events: none; 
-            transition: opacity 0.3s ease-in-out; 
-            overflow-y: auto;
-            transform: translateY(20px);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        #settings-screen.open { 
-            opacity: 1; 
-            pointer-events: auto; 
-            transform: translateY(0);
-        }
-
-        .settings-header { 
-            display: flex; 
-            align-items: center; 
-            padding: 20px; 
-            background: linear-gradient(145deg, #000000, #0a0a0a);
-            border-bottom: 1px solid rgba(184, 134, 11, 0.3);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            backdrop-filter: blur(10px);
-        }
-
-        .settings-header h2 { 
-            font-size: 1.4rem; 
-            color: var(--gold-light); 
-            margin-left: 15px; 
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-
-        #back-btn { 
-            background: rgba(184, 134, 11, 0.1); 
-            border: 1px solid rgba(184, 134, 11, 0.3); 
-            color: var(--gold-light); 
-            font-size: 1.3rem; 
-            cursor: pointer; 
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-
-        #back-btn:hover {
-            background: rgba(184, 134, 11, 0.2);
-            transform: translateX(-3px);
-        }
-
-        .settings-content { 
-            padding: 20px; 
-            overflow-y: auto; 
-            flex: 1; 
-        }
-
-        .settings-group { 
-            margin-bottom: 25px; 
-            padding: 20px;
-            background: linear-gradient(145deg, #151515, #101010);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .settings-group::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(180deg, var(--gold-light), var(--gold-dark));
-        }
-
-        .settings-group label { 
-            display: block; 
-            margin-bottom: 12px; 
-            font-size: 1.1rem; 
-            color: var(--gold-light); 
-            font-weight: 500;
-        }
-
-        .settings-group input, .settings-group select { 
-            width: 100%; 
-            padding: 14px; 
-            font-size: 1rem; 
-            background: rgba(28, 28, 60, 0.3);
-            border: 1px solid rgba(184, 134, 11, 0.5); 
-            border-radius: 10px; 
-            color: white; 
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .settings-group input:focus, .settings-group select:focus {
-            outline: none;
-            border-color: var(--gold-light);
-            box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.2);
-        }
-
-        .settings-group input:disabled { 
-            background-color: #333; 
-            cursor: not-allowed; 
-            opacity: 0.6;
-        }
-
-        .settings-divider { 
-            text-align: center; 
-            color: #888; 
-            margin: 25px 0; 
-            font-weight: 500;
-            position: relative;
-        }
-
-        .settings-divider::before,
-        .settings-divider::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            width: 30%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(184, 134, 11, 0.5), transparent);
-        }
-
-        .settings-divider::before {
-            left: 0;
-        }
-
-        .settings-divider::after {
-            right: 0;
-        }
-
-        .settings-footer { 
-            padding: 20px; 
-            border-top: 1px solid rgba(51, 51, 51, 0.5); 
-            position: sticky;
-            bottom: 0;
-            background: rgba(10, 10, 10, 0.9);
-            backdrop-filter: blur(10px);
-        }
-
-        .alarm-toggle-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 15px 0; 
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .alarm-toggle-item:last-child {
-            border-bottom: none;
-        }
-
-        .alarm-toggle-item span { 
-            font-size: 1.1rem; 
-            color: #ccc; 
-            font-weight: 400;
-        }
-
-        .toggle-switch { 
-            position: relative; 
-            display: inline-block; 
-            width: 54px; 
-            height: 30px; 
-        }
-
-        .toggle-switch input { 
-            opacity: 0; 
-            width: 0; 
-            height: 0; 
-        }
-
-        .slider { 
-            position: absolute; 
-            cursor: pointer; 
-            top: 0; 
-            left: 0; 
-            right: 0; 
-            bottom: 0; 
-            background: linear-gradient(145deg, #333, #222);
-            transition: .4s; 
-            border-radius: 34px; 
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .slider:before { 
-            position: absolute; 
-            content: ""; 
-            height: 22px; 
-            width: 22px; 
-            left: 4px; 
-            bottom: 3px; 
-            background: linear-gradient(145deg, #ddd, #fff);
-            transition: .4s; 
-            border-radius: 50%; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-
-        input:checked + .slider { 
-            background: linear-gradient(145deg, var(--led-green), #26a125);
-        }
-
-        input:checked + .slider:before { 
-            transform: translateX(22px); 
-        }
-
-        .manual-time-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 12px 0; 
-            gap: 10px; 
-        }
-
-        .manual-time-item span { 
-            font-size: 1rem; 
-            color: #ccc; 
-            flex-basis: 25%; 
-            text-align: left; 
-        }
-
-        .manual-time-item .calculated-time { 
-            font-family: 'Orbitron', sans-serif; 
-            color: var(--led-blue); 
-            text-align: center; 
-            flex-basis: 30%; 
-            font-size: 1rem;
-            font-weight: 500;
-        }
-
-        .manual-time-item input[type="time"] { 
-            flex-basis: 45%; 
-            padding: 12px; 
-            background: rgba(28, 28, 60, 0.3);
-            border: 1px solid rgba(184, 134, 11, 0.5); 
-            border-radius: 8px; 
-            color: white; 
-            font-family: 'Orbitron', sans-serif; 
-            font-size: 1rem; 
-            color-scheme: dark; 
-        }
-
-        .manual-time-item input[type="time"]::-webkit-calendar-picker-indicator { 
-            filter: invert(1); 
-            cursor: pointer;
-        }
-
-        .loading-overlay { 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.9); 
-            z-index: 2000; 
-            display: none; 
-            justify-content: center; 
-            align-items: center; 
-            backdrop-filter: blur(10px);
-        }
-
-        .spinner { 
-            width: 60px; 
-            height: 60px; 
-            border: 3px solid rgba(85, 85, 85, 0.3); 
-            border-top-color: var(--gold-light); 
-            border-radius: 50%; 
-            animation: spin 1s linear infinite; 
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
-        }
-
-        @keyframes spin { 
-            to { transform: rotate(360deg); } 
-        }
-
-        .slider-bar { 
-            background: linear-gradient(145deg, #0a0a0a, #151515); 
-            border-top: 1px solid rgba(184, 134, 11, 0.3); 
-            border-bottom: 1px solid rgba(184, 134, 11, 0.1); 
-            border-radius: 12px; 
-            padding: 18px 0;
-            overflow: hidden; 
-            margin-top: auto; 
-            flex-shrink: 0; 
-            height: 65px;
-            position: relative;
-        }
-
-        .slider-bar::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, 
-                transparent, 
-                var(--gold-light), 
-                transparent);
-            animation: borderScan 3s linear infinite;
-        }
-
-        .slider-content { 
-            display: flex; 
-            width: fit-content; 
-            white-space: nowrap; 
-            font-size: 1.5rem;
-            font-weight: 600; 
-            animation: slide-seamless 30s linear infinite, colorize 30s linear infinite; 
-            height: 100%;
-            align-items: center;
-            letter-spacing: 0.5px;
-        }
-
-        .slider-content span { 
-            padding: 0 2.5em;
-            flex-shrink: 0; 
-            text-shadow: 0 2px 6px rgba(0,0,0,0.6);
-        }
-
-        @keyframes slide-seamless { 
-            from { transform: translateX(0); } 
-            to { transform: translateX(-50%); } 
-        }
-
-        @keyframes colorize {
-            0%   { color: var(--led-green); text-shadow: 0 0 12px var(--led-green); } 
-            25%  { color: var(--led-red); text-shadow: 0 0 12px var(--led-red); } 
-            50%  { color: var(--gold-light); text-shadow: 0 0 12px var(--gold-light); } 
-            75%  { color: #39CCCC; text-shadow: 0 0 12px #39CCCC; } 
-            100% { color: var(--led-green); text-shadow: 0 0 12px var(--led-green); }
-        }
-
-        .notification {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%) translateY(20px);
-            padding: 16px 24px;
-            border-radius: 12px;
-            background: linear-gradient(145deg, #252525, #1a1a1a);
-            color: white;
-            font-weight: 500;
-            z-index: 2000;
-            opacity: 0;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            backdrop-filter: blur(10px);
-        }
-
-        .notification.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        .notification.success {
-            background: linear-gradient(145deg, #2ECC40, #26a125);
-            border-color: rgba(46, 204, 64, 0.3);
-        }
-
-        .notification.error {
-            background: linear-gradient(145deg, #FF4136, #d63031);
-            border-color: rgba(255, 65, 54, 0.3);
-        }
-
-        .size-adjustment {
-            margin: 15px 0;
-            padding: 15px;
-            background: rgba(28, 28, 60, 0.2);
-            border-radius: 10px;
-            border: 1px solid rgba(184, 134, 11, 0.2);
-        }
-
-        .size-slider {
-            width: 100%;
-            margin: 15px 0;
-            -webkit-appearance: none;
-            height: 6px;
-            background: linear-gradient(90deg, var(--gold-dark), var(--gold-light));
-            border-radius: 3px;
-            outline: none;
-        }
-
-        .size-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: var(--gold-light);
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
-            border: 2px solid white;
-        }
-
-        .size-value {
-            color: var(--gold-light);
-            font-weight: 600;
-            margin-left: 10px;
-            font-family: 'Orbitron', sans-serif;
-            text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
-        }
-
-        #test-alarm-btn {
-            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
-            border-color: var(--led-red);
-        }
-        #test-alarm-btn i {
-            color: var(--led-red);
-        }
-
-        @media (max-height: 700px) {
-            .clock-header { 
-                min-height: 90px;
-                padding-bottom: 8px;
-            }
-            .shahada { 
-                font-size: 1rem; 
-                margin: 12px 0 8px 0; 
-            }
-            .main-clock { 
-                font-size: 2.4rem; 
-                margin: 8px 0;
-            }
-            .date-display { 
-                font-size: 1rem; 
-            }
-            .prayer-item { 
-                padding: 12px 15px; 
-            }
-            .prayer-name { 
-                font-size: 1.2rem; 
-            }
-            .prayer-time { 
-                font-size: 1.2rem; 
-            }
-            .slider-bar {
-                height: 60px;
-                padding: 15px 0;
-            }
-            .slider-content {
-                font-size: 1.3rem;
-            }
-        }
-
-        @media (max-height: 600px) {
-            .clock-header { 
-                min-height: 80px;
-            }
-            .shahada { 
-                font-size: 0.9rem; 
-            }
-            .main-clock { 
-                font-size: 2rem; 
-            }
-            .prayer-times-container { 
-                gap: 6px; 
-            }
-            .prayer-item { 
-                padding: 10px 12px; 
-            }
-            .slider-bar {
-                height: 55px;
-                padding: 12px 0;
-            }
-            .slider-content {
-                font-size: 1.2rem;
-            }
-        }
-
-        @media (max-width: 350px) {
-            .screen {
-                padding: 12px;
-            }
-            .icon-btn { 
-                width: 40px; 
-                height: 40px; 
-                font-size: 1.1rem;
-            }
-            .shahada { 
-                font-size: 0.9rem; 
-            }
-            .main-clock { 
-                font-size: 1.8rem; 
-            }
-            .prayer-name { 
-                font-size: 1.1rem; 
-            }
-            .prayer-time { 
-                font-size: 1.1rem; 
-            }
-            .slider-content {
-                font-size: 1.1rem;
-            }
-        }
-        
-        @media screen and (max-width: 768px) {
-            input, select, textarea {
-                font-size: 16px !important;
-            }
-        }
-
-        .fade-in {
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .pulse {
-            animation: gentlePulse 2s infinite;
-        }
-
-        @keyframes gentlePulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.8; }
-            100% { opacity: 1; }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --primary: #A52A2A; --secondary: #DC143C; --primary-light: #f5d6d6; --secondary-light: #ffe0e5; --bg-gradient-from: #fce4e4; --bg-gradient-to: #ffd9d9; --text-dark: #2d1e1e; --text-light: #8b1a1a; --card-bg: rgba(255,248,248,0.95); --border-light: #e6b3b3; --border-focus: #A52A2A; --status-green: #10b981; --status-red: #ef4444; --status-yellow: #f59e0b; }
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(145deg, var(--bg-gradient-from), var(--bg-gradient-to)); min-height: 100vh; padding: 8px; display: flex; flex-direction: column; color: var(--text-dark); }
+        .app { max-width: 500px; margin: 0 auto; width: 100%; background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border-light); border-radius: 28px; padding: 16px 12px; box-shadow: 0 20px 40px -12px rgba(165,42,42,0.3); }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .header h1 { font-size: 1.4rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 6px; margin: 0; }
+        .header-right { display: flex; gap: 8px; align-items: center; }
+        .icon-btn { background: white; border: 1px solid var(--border-light); color: var(--primary); width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+        .icon-btn:active { transform: scale(0.96); background: var(--primary-light); }
+        .status-indicator { display: flex; align-items: center; gap: 6px; background: white; padding: 5px 12px; border-radius: 40px; border: 1px solid var(--border-light); font-size: 0.75rem; font-weight: 500; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-yellow); transition: background 0.3s; }
+        .status-dot.green { background: var(--status-green); }
+        .status-dot.red { background: var(--status-red); }
+        .status-dot.yellow { background: var(--status-yellow); }
+        .token-area { display: flex; background: #ffffff; border-radius: 40px; border: 1px solid var(--border-light); width: 100%; margin-bottom: 12px; gap: 5px; }
+        .token-area input { flex: 1; background: transparent; border: none; padding: 10px 14px; color: var(--text-dark); font-size: 0.8rem; outline: none; }
+        .token-area button { background: linear-gradient(145deg, var(--primary), var(--secondary)); border: none; color: white; padding: 10px 16px; border-radius: 40px; font-weight: 600; font-size: 0.75rem; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 8px rgba(165,42,42,0.3); }
+        .token-area button:active { transform: scale(0.97); }
+        .section-title { font-size: 1rem; font-weight: 600; margin: 12px 0 6px; color: var(--primary); border-right: 3px solid var(--primary); padding-right: 8px; }
+        .code-box { background: #ffffff; border: 1px solid var(--border-light); border-radius: 20px; margin-bottom: 12px; overflow: hidden; }
+        .code-header { background: #1a1e24; padding: 10px 14px; display: flex; justify-content: space-between; font-weight: 600; font-size: 0.8rem; color: #ffb3b3; border-bottom: 1px solid #3a2a2a; }
+        .code-header i { margin-right: 8px; color: #ff8080; }
+        .code-header small { color: #a67a7a; background: #0f1419; padding: 3px 8px; border-radius: 30px; }
+        .code-box textarea { width: 100%; background: #0a0e12 !important; border: none; color: #ffb3b3 !important; font-family: 'Fira Code', monospace; font-size: 13px; line-height: 1.5; padding: 14px; min-height: 180px; resize: vertical; outline: none; caret-color: #ff8080; }
+        .app-info { background: #ffffff; border-radius: 20px; padding: 14px; margin: 12px 0; border: 1px solid var(--border-light); }
+        .field { margin-bottom: 12px; }
+        .field label { display: block; font-size: 0.75rem; color: var(--primary); margin-bottom: 4px; font-weight: 500; }
+        .field input, .field .file-input { width: 100%; background: var(--primary-light); border: 1px solid var(--border-light); border-radius: 30px; padding: 10px 14px; color: var(--text-dark); font-size: 0.85rem; }
+        .field input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(165,42,42,0.2); }
+        .permissions-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+        .permissions-grid label { background: var(--primary-light); border-radius: 30px; padding: 6px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+        .build-btn { background: linear-gradient(145deg, var(--primary), var(--secondary)); border: none; color: white; font-weight: 700; font-size: 1rem; padding: 14px; border-radius: 40px; width: 100%; margin: 8px 0; cursor: pointer; }
+        .build-btn:active { transform: scale(0.98); }
+        .build-btn:disabled { opacity: 0.6; transform: none; cursor: not-allowed; }
+        #status { background: #ffffff; border: 1px solid var(--border-light); border-radius: 20px; padding: 14px; margin-top: 12px; display: none; }
+        .progress-bar { height: 6px; background: var(--primary-light); border-radius: 20px; margin: 8px 0; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--secondary)); }
+        .log { font-size: 0.7rem; background: var(--primary-light); padding: 10px; border-radius: 14px; max-height: 90px; overflow-y: auto; color: var(--text-light); border: 1px solid var(--border-light); }
+        .download-btn { display: block; background: linear-gradient(145deg, var(--primary), var(--secondary)); color: white; text-decoration: none; padding: 12px; border-radius: 40px; text-align: center; margin: 12px 0; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: none; width: 100%; }
+        .download-btn:active { transform: scale(0.98); }
+        .history-list { margin-top: 10px; }
+        .history-item { background: #ffffff; border: 1px solid var(--border-light); border-radius: 18px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; }
+        .history-item a { color: var(--primary); text-decoration: none; font-weight: 500; }
+        .clear-btn { background: #dc2626; border: none; color: white; padding: 10px; border-radius: 40px; width: 100%; margin-top: 10px; font-weight: 600; }
+        .clear-btn:active { transform: scale(0.98); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: white; border-radius: 28px; max-width: 90%; width: 400px; max-height: 80%; overflow-y: auto; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); }
+        .modal-header h3 { font-size: 1.2rem; color: var(--primary); }
+        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--primary); }
+        .settings-panel { background: transparent; padding: 0; margin-top: 0; border: none; }
+        .settings-field { margin-bottom: 16px; }
+        .settings-field label { display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-dark); font-size: 0.8rem; }
+        .settings-field input { width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 30px; background: var(--primary-light); color: var(--text-dark); outline: none; font-size: 0.85rem; }
+        .color-row { margin-bottom: 16px; }
+        .color-row label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.8rem; color: var(--text-dark); }
+        .color-row input[type="color"] { width: 100%; height: 45px; border: 2px solid var(--border-light); border-radius: 16px; cursor: pointer; background: white; }
+        .preview-box { width: 100%; height: 50px; border-radius: 16px; background: linear-gradient(145deg, var(--primary), var(--secondary)); margin: 15px 0; border: 2px solid white; }
+        .settings-actions { display: flex; gap: 12px; margin-top: 20px; }
+        .settings-actions button { flex: 1; padding: 12px; border: none; border-radius: 40px; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+        .save-settings { background: linear-gradient(145deg, var(--primary), var(--secondary)); color: white; }
+        .reset-settings { background: #e2e8f0; color: #334155; }
+        .payload-size { background: var(--primary-light); border-radius: 20px; padding: 8px 12px; margin-top: 8px; font-size: 0.75rem; font-weight: 500; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-light); }
+        .payload-size span:first-child { color: var(--primary); }
+        .payload-size .size-value { font-family: monospace; font-weight: bold; }
+        .warning { color: #dc2626; font-weight: bold; }
+        @media (max-width: 360px) { .header h1 { font-size: 1.2rem; } .status-indicator { padding: 4px 8px; font-size: 0.7rem; } .token-area button { padding: 8px 12px; font-size: 0.7rem; } }
     </style>
 </head>
 <body>
-    <!-- Animated background particles -->
-    <div class="particles" id="particles"></div>
-    
-    <div id="notification" class="notification"></div>
-    
-    <div class="clock-container">
-        <div class="screen">
-             <div class="clock-header">
-                <div class="header-icons-left">
-                    <button id="stop-alarm-btn" class="icon-btn"><i class="fas fa-bell-slash"></i></button>
-                </div>
-                <div class="header-icons">
-                    <button id="settings-btn" class="icon-btn"><i class="fas fa-cog"></i></button>
-                </div>
-                <div class="shahada">لَا إِلٰهَ إِلَّا الله مُحَمَّدٌ رَسُولُ الله</div>
-                <div id="main-clock" class="main-clock">00:00:00</div>
-                <div id="date-display" class="date-display">Loading date...</div>
+<div class="app">
+    <div class="header">
+        <h1><i class="fas fa-crown"></i> اسمارٹ اسٹوڈیو</h1>
+        <div class="header-right">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">منتظر...</span>
             </div>
-            <div class="prayer-times-container">
-                <div class="prayer-item" id="fajr-item"><span class="prayer-name">Fajr</span><span class="prayer-time" id="fajr-time">--:--</span></div>
-                <div class="prayer-item" id="sunrise-item"><span class="prayer-name">Sunrise</span><span class="prayer-time" id="sunrise-time">--:--</span></div>
-                <div class="prayer-item" id="dhuhr-item"><span class="prayer-name">Dhuhr</span><span class="prayer-time" id="dhuhr-time">--:--</span></div>
-                <div class="prayer-item" id="asr-item"><span class="prayer-name">Asr</span><span class="prayer-time" id="asr-time">--:--</span></div>
-                <div class="prayer-item" id="maghrib-item"><span class="prayer-name">Maghrib</span><span class="prayer-time" id="maghrib-time">--:--</span></div>
-                <div class="prayer-item" id="isha-item"><span class="prayer-name">Isha</span><span class="prayer-time" id="isha-time">--:--</span></div>
-                <div class="prayer-item" id="next-prayer-item"><span class="prayer-name">Next Prayer</span><span class="prayer-time" id="next-prayer-name">--</span></div>
-                <div class="prayer-item" id="time-left-item"><span class="prayer-name">Time Left</span><span class="prayer-time" id="time-left">--:--:--</span></div>
-            </div>
-            
-            <div class="slider-bar">
-                <div class="slider-content" id="slider-content">
-                    <span id="slider-date-1">DATE: --</span>
-                    <span id="slider-time-1">TIME: --:--:--</span>
-                    <span id="slider-hijri-date-1">HIJRI: --</span>
-                    <span id="slider-location-1">LOC: --</span>
-                    <span id="slider-sehri-1">SEHRI: --:--</span>
-                    <span id="slider-iftar-1">IFTAR: --:--</span>
-                    <span>:: MADE BY FAISAL ZAMAN ::</span>
-                    <span id="slider-date-2">DATE: --</span>
-                    <span id="slider-time-2">TIME: --:--:--</span>
-                    <span id="slider-hijri-date-2">HIJRI: --</span>
-                    <span id="slider-location-2">LOC: --</span>
-                    <span id="slider-sehri-2">SEHRI: --:--</span>
-                    <span id="slider-iftar-2">IFTAR: --:--</span>
-                    <span>:: MADE BY FAISAL ZAMAN ::</span>
-                </div>
-            </div>
+            <button class="icon-btn" id="refreshBtn" title="ریفریش کریں"><i class="fas fa-sync-alt"></i></button>
+            <button class="icon-btn" id="settingsIcon" title="ترتیبات"><i class="fas fa-cog"></i></button>
         </div>
     </div>
 
-    <div id="modal-overlay"></div>
-    <div id="settings-screen">
-        <div class="settings-header">
-            <button id="back-btn"><i class="fas fa-arrow-left"></i></button>
-            <h2>Settings</h2>
+    <div class="token-area">
+        <input type="password" id="token" placeholder="گٹ ہب ٹوکن" value="">
+        <button id="saveTokenBtn">محفوظ</button>
+        <button id="testConnectionBtn" style="background: #6c757d;">ٹیسٹ</button>
+    </div>
+
+    <div class="section-title"><i class="fab fa-html5"></i> HTML کوڈ پیسٹ کریں</div>
+    <div class="code-box">
+        <div class="code-header">
+            <span><i class="fab fa-html5"></i> index.html</span>
+            <small>براہ راست ایڈٹ کریں</small>
         </div>
-        <div class="settings-content">
-            <div class="settings-group">
-                <label>Clock Size Adjustments</label>
-                <div class="size-adjustment">
-                    <span>Width: <span id="width-value" class="size-value">95vw</span></span>
-                    <input type="range" min="70" max="100" value="95" class="size-slider" id="width-slider">
-                </div>
-                <div class="size-adjustment">
-                    <span>Height: <span id="height-value" class="size-value">95vh</span></span>
-                    <input type="range" min="70" max="100" value="95" class="size-slider" id="height-slider">
-                </div>
-            </div>
-            
-            <div class="settings-group">
-                <label>Location</label>
-                <button class="btn" id="detect-location-btn"><i class="fas fa-location-arrow"></i> Detect My Location</button>
-                <button class="btn" id="manual-location-btn" style="margin-top: 10px;"><i class="fas fa-keyboard"></i> Enter City Manually</button>
-            </div>
-            <div class="settings-divider">OR</div>
-            <div class="settings-group">
-                <label for="city-input">City</label>
-                <input type="text" id="city-input" placeholder="e.g., Karachi">
-            </div>
-            <div class="settings-group">
-                <label for="country-input">Country</label>
-                <input type="text" id="country-input" placeholder="e.g., Pakistan">
-            </div>
-             <div class="settings-divider"></div>
-            <div class="settings-group">
-                <label for="method-select">Calculation Method</label>
-                <select id="method-select">
-                    <option value="1">University of Islamic Sciences, Karachi</option>
-                    <option value="2">Islamic Society of North America (ISNA)</option>
-                    <option value="3">Muslim World League</option>
-                    <option value="4">Umm Al-Qura University, Makkah</option>
-                    <option value="5">Egyptian General Authority of Survey</option>
-                </select>
-            </div>
-            <div class="settings-group">
-                <label for="school-select">Asr Juristic Method</label>
-                <select id="school-select">
-                    <option value="0">Standard (Shafi, Maliki, Hanbali)</option>
-                    <option value="1">Hanafi</option>
-                </select>
-            </div>
-            <div class="settings-group">
-                <label for="time-format-select">Time Format</label>
-                <select id="time-format-select">
-                    <option value="24">24-Hour</option>
-                    <option value="12">12-Hour (AM/PM)</option>
-                </select>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="settings-group">
-                <label>Azan Ringtone</label>
-                <span id="current-ringtone-name" style="color: #ccc; font-size: 0.9em; display: block; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Default Azan</span>
-                <button class="btn" id="change-ringtone-btn"><i class="fas fa-music"></i> Choose from Storage</button>
-                <input type="file" id="ringtone-input" accept="audio/*" style="display:none;">
-            </div>
-            <div class="settings-group">
-                <label>Alarm Test</label>
-                <button class="btn" id="test-alarm-btn"><i class="fas fa-volume-up"></i> Test Alarm Sound</button>
-                <small style="color: #aaa; display: block; margin-top: 5px;">Tap to enable audio & test</small>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="settings-group">
-                <label>Azan Alarms</label>
-                <div class="alarm-settings-container">
-                    <div class="alarm-toggle-item"><span>Fajr</span><label class="toggle-switch"><input type="checkbox" id="alarm-fajr" data-prayer="Fajr"><span class="slider"></span></label></div>
-                    <div class="alarm-toggle-item"><span>Dhuhr</span><label class="toggle-switch"><input type="checkbox" id="alarm-dhuhr" data-prayer="Dhuhr"><span class="slider"></span></label></div>
-                    <div class="alarm-toggle-item"><span>Asr</span><label class="toggle-switch"><input type="checkbox" id="alarm-asr" data-prayer="Asr"><span class="slider"></span></label></div>
-                    <div class="alarm-toggle-item"><span>Maghrib</span><label class="toggle-switch"><input type="checkbox" id="alarm-maghrib" data-prayer="Maghrib"><span class="slider"></span></label></div>
-                    <div class="alarm-toggle-item"><span>Isha</span><label class="toggle-switch"><input type="checkbox" id="alarm-isha" data-prayer="Isha"><span class="slider"></span></label></div>
-                </div>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="settings-group">
-                <label>Manual Time Adjustments</label>
-                <div id="manual-times-container">
-                    <div class="manual-time-item"><span>Fajr</span><span class="calculated-time" id="manual-fajr-display">--:--</span><input type="time" id="manual-fajr-input"></div>
-                    <div class="manual-time-item"><span>Dhuhr</span><span class="calculated-time" id="manual-dhuhr-display">--:--</span><input type="time" id="manual-dhuhr-input"></div>
-                    <div class="manual-time-item"><span>Asr</span><span class="calculated-time" id="manual-asr-display">--:--</span><input type="time" id="manual-asr-input"></div>
-                    <div class="manual-time-item"><span>Maghrib</span><span class="calculated-time" id="manual-maghrib-display">--:--</span><input type="time" id="manual-maghrib-input"></div>
-                    <div class="manual-time-item"><span>Isha</span><span class="calculated-time" id="manual-isha-display">--:--</span><input type="time" id="manual-isha-input"></div>
-                </div>
-            </div>
+        <textarea id="htmlCode" placeholder="&lt;!DOCTYPE html&gt;&#10;&lt;html&gt;&#10;&lt;head&gt;&lt;meta charset=&quot;UTF-8&quot;&gt;&lt;title&gt;میری ایپ&lt;/title&gt;&lt;/head&gt;&#10;&lt;body&gt;&#10;    &lt;h1&gt;ہیلو دنیا&lt;/h1&gt;&#10;&lt;/body&gt;&#10;&lt;/html&gt;"></textarea>
+    </div>
+
+    <div class="app-info">
+        <div class="field">
+            <label><i class="fas fa-tag"></i> ایپ کا نام</label>
+            <input type="text" id="appName" placeholder="مثلاً میری ایپ" value="MyApp">
         </div>
-        <div class="settings-footer">
-            <button class="btn" id="save-settings-btn"><i class="fas fa-save"></i> Save & Recalculate</button>
+        <div class="field">
+            <label><i class="fas fa-image"></i> آئیکون (اختیاری، PNG)</label>
+            <input type="file" id="appIcon" accept="image/png,image/jpeg,image/jpg" class="file-input">
         </div>
     </div>
 
-    <div class="loading-overlay" id="loading-overlay">
-        <div class="spinner"></div>
+    <div class="section-title"><i class="fas fa-lock"></i> پرمیشنز منتخب کریں</div>
+    <div class="app-info" style="margin-top: 0;">
+        <div class="permissions-grid" id="permissionsGrid">
+            <label><input type="checkbox" value="android.permission.CAMERA"> کیمرہ</label>
+            <label><input type="checkbox" value="android.permission.ACCESS_FINE_LOCATION"> لوکیشن</label>
+            <label><input type="checkbox" value="android.permission.RECORD_AUDIO"> مائیکروفون</label>
+            <label><input type="checkbox" value="android.permission.READ_EXTERNAL_STORAGE"> اسٹوریج پڑھنا</label>
+            <label><input type="checkbox" value="android.permission.WRITE_EXTERNAL_STORAGE"> اسٹوریج لکھنا</label>
+            <label><input type="checkbox" value="android.permission.CALL_PHONE"> کالز</label>
+            <label><input type="checkbox" value="android.permission.READ_CONTACTS"> کنٹیکٹس</label>
+        </div>
+        <p style="font-size:0.7rem; margin-top:8px;">نوٹ: ان پرمیشنز کا استعمال آپ کی ویب ایپ میں کیمرہ، مائیک وغیرہ کے لیے ہو گا۔</p>
     </div>
 
-    <audio id="azan-audio" src="https://www.islamcan.com/audio/adhan/azan2.mp3" preload="auto"></audio>
+    <div class="payload-size" id="payloadSizeDisplay">
+        <span><i class="fas fa-weight-hanging"></i> پے لوڈ سائز:</span>
+        <span class="size-value" id="payloadSizeValue">0 KB</span>
+    </div>
 
-    <script>
-        // Create animated particles for background
-        function createParticles() {
-            const particlesContainer = document.getElementById('particles');
-            const particleCount = 50;
-            
-            for (let i = 0; i < particleCount; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                
-                // Random position
-                particle.style.left = `${Math.random() * 100}%`;
-                particle.style.top = `${Math.random() * 100}%`;
-                
-                // Random size
-                const size = Math.random() * 4 + 1;
-                particle.style.width = `${size}px`;
-                particle.style.height = `${size}px`;
-                
-                // Random opacity
-                particle.style.opacity = Math.random() * 0.4 + 0.1;
-                
-                // Random animation delay
-                particle.style.animationDelay = `${Math.random() * 20}s`;
-                
-                // Random animation duration
-                particle.style.animationDuration = `${Math.random() * 15 + 10}s`;
-                
-                particlesContainer.appendChild(particle);
-            }
+    <button class="build-btn" id="buildBtn"><i class="fas fa-cogs"></i> APK بنائیں</button>
+
+    <div id="status">
+        <div style="display: flex; justify-content: space-between;">
+            <span id="statusMsg"><i class="fas fa-spinner fa-pulse"></i> منتظر...</span>
+            <span id="statusPercent">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="log" id="log">⏳ تیار</div>
+    </div>
+
+    <div id="result"></div>
+
+    <div class="section-title"><i class="fas fa-history"></i> تاریخ</div>
+    <div id="historyList" class="history-list"></div>
+    <button class="clear-btn" id="clearHistoryBtn"><i class="fas fa-trash-alt"></i> ہسٹری صاف کریں</button>
+</div>
+
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-sliders-h"></i> ترتیبات</h3>
+            <button class="close-modal" id="closeModalBtn">&times;</button>
+        </div>
+        <div class="settings-panel">
+            <div class="settings-field">
+                <label><i class="fab fa-github"></i> گٹ ہب ٹوکن</label>
+                <input type="password" id="settingsToken" placeholder="ghp_xxxx...">
+            </div>
+            <div class="settings-field">
+                <label><i class="fas fa-user"></i> مالک (یوزرنیم)</label>
+                <input type="text" id="settingsOwner" placeholder="faisalzamanfaisalzaman786-ux">
+            </div>
+            <div class="settings-field">
+                <label><i class="fas fa-book"></i> ریپوزٹری</label>
+                <input type="text" id="settingsRepo" placeholder="System-Pro-v2">
+            </div>
+            <div class="color-row">
+                <label>بنیادی رنگ (مہرون)</label>
+                <input type="color" id="primaryColor" value="#A52A2A">
+            </div>
+            <div class="color-row">
+                <label>ثانوی رنگ (ریڈ)</label>
+                <input type="color" id="secondaryColor" value="#DC143C">
+            </div>
+            <div class="preview-box" id="colorPreview"></div>
+            <div class="settings-actions">
+                <button class="save-settings" id="applySettings">محفوظ کریں</button>
+                <button class="reset-settings" id="resetColors">ڈیفالٹ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ========== CONFIGURATION ==========
+        let GITHUB_OWNER = 'faisalzamanfaisalzaman786-ux';
+        let GITHUB_REPO  = 'System-Pro-v2';
+        let pollInterval = null;
+        let currentRunId = null;
+        let buildCompleted = false;
+
+        const root = document.documentElement;
+        const defaultPrimary = '#A52A2A';
+        const defaultSecondary = '#DC143C';
+
+        // DOM elements
+        const tokenInput = document.getElementById('token');
+        const settingsToken = document.getElementById('settingsToken');
+        const settingsOwner = document.getElementById('settingsOwner');
+        const settingsRepo = document.getElementById('settingsRepo');
+        const htmlCode = document.getElementById('htmlCode');
+        const appNameInput = document.getElementById('appName');
+        const appIconInput = document.getElementById('appIcon');
+        const buildBtn = document.getElementById('buildBtn');
+        const statusDiv = document.getElementById('status');
+        const statusMsgSpan = document.getElementById('statusMsg');
+        const statusPercentSpan = document.getElementById('statusPercent');
+        const progressFill = document.getElementById('progressFill');
+        const logDiv = document.getElementById('log');
+        const resultDiv = document.getElementById('result');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const payloadSizeValueSpan = document.getElementById('payloadSizeValue');
+
+        // Helper functions
+        function resetUI() {
+            statusDiv.style.display = 'none';
+            resultDiv.innerHTML = '';
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = null;
+            buildCompleted = false;
+            currentRunId = null;
+            buildBtn.disabled = false;
         }
 
-        // Notification System
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
+        function appendLog(msg, isError = false) {
+            const line = isError ? `❌ ${msg}` : `✅ ${msg}`;
+            logDiv.innerHTML += `<br>› ${line}`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
         }
 
-        // DOM Elements
-        const modalOverlay = document.getElementById('modal-overlay');
-        const settingsScreen = document.getElementById('settings-screen');
-        const settingsBtn = document.getElementById('settings-btn');
-        const backBtn = document.getElementById('back-btn');
-        const saveSettingsBtn = document.getElementById('save-settings-btn');
-        const detectLocationBtn = document.getElementById('detect-location-btn');
-        const manualLocationBtn = document.getElementById('manual-location-btn');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const cityInput = document.getElementById('city-input');
-        const countryInput = document.getElementById('country-input');
-        const methodSelect = document.getElementById('method-select');
-        const schoolSelect = document.getElementById('school-select');
-        const timeFormatSelect = document.getElementById('time-format-select');
-        const mainClock = document.getElementById('main-clock');
-        const dateDisplay = document.getElementById('date-display');
-        const prayerTimeElements = { Fajr: document.getElementById('fajr-time'), Sunrise: document.getElementById('sunrise-time'), Dhuhr: document.getElementById('dhuhr-time'), Asr: document.getElementById('asr-time'), Maghrib: document.getElementById('maghrib-time'), Isha: document.getElementById('isha-time') };
-        const nextPrayerNameEl = document.getElementById('next-prayer-name');
-        const timeLeftEl = document.getElementById('time-left');
-        const prayerItems = document.querySelectorAll('.prayer-item');
-        const azanAudio = document.getElementById('azan-audio');
-        const alarmToggles = document.querySelectorAll('.toggle-switch input');
-        const changeRingtoneBtn = document.getElementById('change-ringtone-btn');
-        const ringtoneInput = document.getElementById('ringtone-input');
-        const currentRingtoneName = document.getElementById('current-ringtone-name');
-        const sliderDate1 = document.getElementById('slider-date-1');
-        const sliderTime1 = document.getElementById('slider-time-1');
-        const sliderHijriDate1 = document.getElementById('slider-hijri-date-1');
-        const sliderDate2 = document.getElementById('slider-date-2');
-        const sliderTime2 = document.getElementById('slider-time-2');
-        const sliderHijriDate2 = document.getElementById('slider-hijri-date-2');
-        const sliderLocation1 = document.getElementById('slider-location-1');
-        const sliderLocation2 = document.getElementById('slider-location-2');
-        // New Sehri and Iftar slider elements
-        const sliderSehri1 = document.getElementById('slider-sehri-1');
-        const sliderIftar1 = document.getElementById('slider-iftar-1');
-        const sliderSehri2 = document.getElementById('slider-sehri-2');
-        const sliderIftar2 = document.getElementById('slider-iftar-2');
-        
-        const stopAlarmBtn = document.getElementById('stop-alarm-btn');
-        const testAlarmBtn = document.getElementById('test-alarm-btn');
-        
-        // Size adjustment elements
-        const widthSlider = document.getElementById('width-slider');
-        const heightSlider = document.getElementById('height-slider');
-        const widthValue = document.getElementById('width-value');
-        const heightValue = document.getElementById('height-value');
-
-        // App State
-        let prayerTimesData = {};
-        let originalApiPrayerTimes = {};
-        let settings = {};
-        let countdownInterval;
-        let alarmCheckInterval;
-        let serverTimeOffset = 0;
-        let playedAlarmsForDate = null;
-        let isAudioUnlocked = false;
-        let audioContext = null;
-        
-        const PRAYER_NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-
-        function formatTime(time24) {
-            if (!time24) return '--:--';
-            if (settings.timeFormat === '12') {
-                const [hour, minute] = time24.split(':');
-                const hourInt = parseInt(hour, 10);
-                const period = hourInt >= 12 ? 'PM' : 'AM';
-                let hour12 = hourInt % 12;
-                if (hour12 === 0) hour12 = 12;
-                return `${String(hour12).padStart(2, '0')}:${minute} <span class="time-period">${period}</span>`;
-            }
-            return time24;
+        function updateStatus(msg, percent) {
+            statusMsgSpan.innerHTML = `<i class="fas fa-spinner fa-pulse"></i> ${msg}`;
+            statusPercentSpan.innerText = percent + '%';
+            progressFill.style.width = percent + '%';
         }
 
-        // For slider, we want plain 24h time without HTML
-        function formatTimePlain(time24) {
-            if (!time24) return '--:--';
-            return time24; // already in HH:MM format
+        // UTF‑8 safe base64
+        function utf8ToBase64(str) {
+            const bytes = new TextEncoder().encode(str);
+            const binString = String.fromCodePoint(...bytes);
+            return btoa(binString);
         }
 
-        function unlockAudio() {
-            if (isAudioUnlocked) return true;
-            
-            if (!audioContext) {
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) {
-                    console.warn("Web Audio API not supported", e);
-                }
-            }
-            
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().then(() => {
-                    console.log("AudioContext resumed successfully");
-                    isAudioUnlocked = true;
-                }).catch(e => console.error("Failed to resume AudioContext", e));
-            }
-            
-            azanAudio.play().then(() => {
-                azanAudio.pause();
-                azanAudio.currentTime = 0;
-                isAudioUnlocked = true;
-                console.log("Audio element unlocked.");
-            }).catch(e => {
-                console.warn("Audio element play failed, waiting for user gesture:", e);
-                showNotification('Tap any button to enable alarm sound', 'info');
-            });
-            
-            return isAudioUnlocked;
+        // Minify HTML (optional)
+        function minifyHTML(html) {
+            return html
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/\s{2,}/g, ' ')
+                .replace(/\n\s*/g, '')
+                .trim();
         }
 
-        function playAlarmSound() {
-            unlockAudio();
-            setTimeout(() => {
-                azanAudio.play().catch(e => {
-                    console.error("Alarm play failed:", e);
-                    showNotification('⚠️ Alarm blocked by browser. Tap "Test Alarm" to enable.', 'error');
-                });
-            }, 200);
-        }
-
-        async function syncClockWithAPI() {
-            try {
-                const response = await fetch('https://worldtimeapi.org/api/ip');
-                if (!response.ok) throw new Error('Network response was not ok.');
-                const data = await response.json();
-                const serverTime = data.unixtime * 1000;
-                serverTimeOffset = serverTime - Date.now();
-                console.log('Clock synchronized. Offset:', serverTimeOffset, 'ms');
-            } catch (error) {
-                console.error('Could not sync clock with World Time API:', error);
-                serverTimeOffset = 0;
-            }
-        }
-
-        function updateClock() {
-            const now = new Date(Date.now() + serverTimeOffset);
-            if (settings.timeFormat === '12') {
-                let hours = now.getHours();
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                const period = hours >= 12 ? 'PM' : 'AM';
-                hours = hours % 12;
-                hours = hours || 12;
-                const hoursStr = String(hours).padStart(2, '0');
-                const timeHtml = `${hoursStr}:${minutes}:${seconds} <span class="time-period">${period}</span>`;
-                mainClock.innerHTML = timeHtml;
-                sliderTime1.innerHTML = `TIME: ${timeHtml}`;
-                sliderTime2.innerHTML = `TIME: ${timeHtml}`;
-            } else {
-                const options = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-                const timeString = now.toLocaleTimeString('en-GB', options);
-                mainClock.textContent = timeString;
-                sliderTime1.textContent = `TIME: ${timeString}`;
-                sliderTime2.textContent = `TIME: ${timeString}`;
-            }
-        }
-
-        function openSettings() { 
-            document.querySelectorAll('.settings-group').forEach((group, index) => {
-                group.style.animationDelay = `${index * 0.1}s`;
-                group.classList.add('fade-in');
-            });
-            
-            populateManualTimeInputs(); 
-            widthSlider.value = parseInt(settings.clockWidth || 95);
-            heightSlider.value = parseInt(settings.clockHeight || 95);
-            widthValue.textContent = `${widthSlider.value}vw`;
-            heightValue.textContent = `${heightSlider.value}vh`;
-            
-            settingsScreen.classList.add('open'); 
-            modalOverlay.classList.add('open'); 
-        }
-        
-        function closeSettings() { 
-            settingsScreen.classList.remove('open'); 
-            modalOverlay.classList.remove('open'); 
-            document.querySelectorAll('.settings-group').forEach(group => {
-                group.classList.remove('fade-in');
-            });
-        }
-        
-        function loadSettings() {
-            try {
-                const savedSettings = localStorage.getItem('salatAppSettings');
-                if (savedSettings) {
-                    settings = JSON.parse(savedSettings);
-                }
-                
-                const defaultSettings = {
-                    city: 'Karachi', country: 'Pakistan', method: '1', school: '0', timeFormat: '24',
-                    alarms: { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
-                    customRingtone: null, manualTimes: {},
-                    clockWidth: '95', clockHeight: '95'
-                };
-                
-                settings = { ...defaultSettings, ...settings };
-                
-                cityInput.value = settings.city || '';
-                countryInput.value = settings.country || '';
-                methodSelect.value = settings.method || '1';
-                schoolSelect.value = settings.school || '0';
-                timeFormatSelect.value = settings.timeFormat || '24';
-                
-                document.documentElement.style.setProperty('--clock-width', `${settings.clockWidth || 95}vw`);
-                document.documentElement.style.setProperty('--clock-height', `${settings.clockHeight || 95}vh`);
-                
-                if (settings.latitude) {
-                    cityInput.value = `Lat: ${settings.latitude.toFixed(2)}`;
-                    countryInput.value = `Lon: ${settings.longitude.toFixed(2)}`;
-                    cityInput.disabled = true; 
-                    countryInput.disabled = true;
-                } else {
-                    cityInput.disabled = false; 
-                    countryInput.disabled = false;
-                }
-                
-                alarmToggles.forEach(toggle => {
-                    const prayer = toggle.dataset.prayer;
-                    toggle.checked = settings.alarms[prayer] !== false;
-                });
-                
-                applyCustomRingtone();
-                
-                console.log('Settings loaded successfully:', settings);
-                showNotification('Settings loaded successfully', 'success');
-            } catch (error) {
-                console.error('Error loading settings:', error);
-                const defaultSettings = {
-                    city: 'Karachi', country: 'Pakistan', method: '1', school: '0', timeFormat: '24',
-                    alarms: { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
-                    customRingtone: null, manualTimes: {},
-                    clockWidth: '95', clockHeight: '95'
-                };
-                settings = defaultSettings;
-                localStorage.setItem('salatAppSettings', JSON.stringify(defaultSettings));
-                showNotification('Loaded default settings', 'info');
-            }
-        }
-
-        function saveSettings() {
-            try {
-                unlockAudio();
-                
-                if (!cityInput.disabled) {
-                    settings.city = cityInput.value.trim(); 
-                    settings.country = countryInput.value.trim();
-                    delete settings.latitude; 
-                    delete settings.longitude;
-                } 
-                
-                settings.method = methodSelect.value;
-                settings.school = schoolSelect.value;
-                settings.timeFormat = timeFormatSelect.value;
-                settings.alarms = settings.alarms || {};
-                
-                settings.clockWidth = widthSlider.value;
-                settings.clockHeight = heightSlider.value;
-                
-                alarmToggles.forEach(toggle => { 
-                    settings.alarms[toggle.dataset.prayer] = toggle.checked; 
-                });
-                
-                settings.manualTimes = {};
-                PRAYER_NAMES.forEach(prayer => {
-                    const input = document.getElementById(`manual-${prayer.toLowerCase()}-input`);
-                    if (input.value) { 
-                        settings.manualTimes[prayer] = input.value; 
-                    }
-                });
-                
-                const settingsJSON = JSON.stringify(settings);
-                localStorage.setItem('salatAppSettings', settingsJSON);
-                
-                const verifySettings = localStorage.getItem('salatAppSettings');
-                if (verifySettings !== settingsJSON) {
-                    throw new Error('Settings failed to save properly');
-                }
-                
-                document.documentElement.style.setProperty('--clock-width', `${settings.clockWidth}vw`);
-                document.documentElement.style.setProperty('--clock-height', `${settings.clockHeight}vh`);
-                
-                console.log('Settings saved successfully:', settings);
-                showNotification('Settings saved successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error saving settings:', error);
-                showNotification('Error saving settings. Please try again.', 'error');
-            }
-            
-            closeSettings();
-            fetchPrayerTimes(); 
-        }
-
-        function populateManualTimeInputs() {
-            if (!originalApiPrayerTimes) return;
-            PRAYER_NAMES.forEach(prayer => {
-                const displayEl = document.getElementById(`manual-${prayer.toLowerCase()}-display`);
-                const inputEl = document.getElementById(`manual-${prayer.toLowerCase()}-input`);
-                const calculatedTime = originalApiPrayerTimes[prayer]?.split(' ')[0] || '--:--';
-                displayEl.textContent = calculatedTime;
-                inputEl.value = settings.manualTimes?.[prayer] || ''; 
-            });
-        }
-        
-        function handleLocationDetection() {
-            unlockAudio();
-            if ('geolocation' in navigator) {
-                loadingOverlay.style.display = 'flex';
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        settings.latitude = position.coords.latitude; 
-                        settings.longitude = position.coords.longitude;
-                        delete settings.city; 
-                        delete settings.country;
-                        cityInput.value = `Lat: ${settings.latitude.toFixed(2)}`;
-                        countryInput.value = `Lon: ${settings.longitude.toFixed(2)}`;
-                        cityInput.disabled = true; 
-                        countryInput.disabled = true;
-                        loadingOverlay.style.display = 'none';
+        // Compress image to ~8KB (return base64 without prefix)
+        async function compressImageToTarget(file, targetKB = 8) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async () => {
+                        let width = img.width, height = img.height;
+                        const sizes = [128, 96, 80, 64, 48, 32];
+                        const qualities = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2];
                         
-                        localStorage.setItem('salatAppSettings', JSON.stringify(settings));
-                        showNotification('Location detected successfully', 'success');
-                        fetchPrayerTimes();
-                    }, (error) => { 
-                        loadingOverlay.style.display = 'none'; 
-                        showNotification(`Error detecting location: ${error.message}`, 'error');
-                    },
-                    { timeout: 10000, enableHighAccuracy: false }
-                );
-            } else { 
-                showNotification('Geolocation is not supported by your browser.', 'error');
-            }
-        }
-        
-        function enableManualLocationEntry() {
-            delete settings.latitude; 
-            delete settings.longitude;
-            cityInput.disabled = false; 
-            countryInput.disabled = false;
-            cityInput.value = settings.city || ''; 
-            countryInput.value = settings.country || '';
-            cityInput.focus();
+                        for (let dim of sizes) {
+                            let newWidth = width, newHeight = height;
+                            if (newWidth > dim) {
+                                const ratio = dim / Math.max(newWidth, newHeight);
+                                newWidth = Math.floor(newWidth * ratio);
+                                newHeight = Math.floor(newHeight * ratio);
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = newWidth;
+                            canvas.height = newHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                            let base64 = canvas.toDataURL('image/png');
+                            let bytes = base64.length * 0.75;
+                            if (bytes <= targetKB * 1024) {
+                                resolve(base64.split(',')[1]);
+                                return;
+                            }
+                            for (let q of qualities) {
+                                base64 = canvas.toDataURL('image/jpeg', q);
+                                bytes = base64.length * 0.75;
+                                if (bytes <= targetKB * 1024) {
+                                    resolve(base64.split(',')[1]);
+                                    return;
+                                }
+                            }
+                        }
+                        // Fallback: 32x32 low quality
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 32;
+                        canvas.height = 32;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, 32, 32);
+                        const fallback = canvas.toDataURL('image/jpeg', 0.2).split(',')[1];
+                        resolve(fallback);
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+            });
         }
 
-        function handleRingtoneSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            if (!file.type.startsWith('audio/')) {
-                showNotification('Please select an audio file', 'error');
-                return;
-            }
-            
-            loadingOverlay.style.display = 'flex';
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                settings.customRingtone = { name: file.name, dataUrl: e.target.result };
-                localStorage.setItem('salatAppSettings', JSON.stringify(settings));
-                applyCustomRingtone();
-                loadingOverlay.style.display = 'none';
-                
-                if (confirm('Would you like to test the ringtone?')) {
-                    playAlarmSound();
+        // Update payload size display (just for information)
+        async function updatePayloadSizeDisplay() {
+            const name = appNameInput.value.trim();
+            const selectedPermissions = [];
+            document.querySelectorAll('#permissionsGrid input[type="checkbox"]:checked').forEach(cb => {
+                selectedPermissions.push(cb.value);
+            });
+            const payload = {
+                event_type: 'build-apk',
+                client_payload: {
+                    app_name: name,
+                    app_html: "<placeholder>",
+                    app_icon: "<placeholder>",
+                    permissions: selectedPermissions.join(',')
                 }
             };
-            reader.onerror = () => { 
-                showNotification('Error reading file.', 'error'); 
-                loadingOverlay.style.display = 'none'; 
-            }
-            reader.readAsDataURL(file);
-        }
-
-        function applyCustomRingtone() {
-             if (settings.customRingtone && settings.customRingtone.dataUrl) {
-                azanAudio.src = settings.customRingtone.dataUrl;
-                currentRingtoneName.textContent = settings.customRingtone.name;
+            const sizeKB = (new Blob([JSON.stringify(payload)]).size / 1024).toFixed(1);
+            payloadSizeValueSpan.innerText = sizeKB + ' KB';
+            if (parseFloat(sizeKB) > 9) {
+                payloadSizeValueSpan.classList.add('warning');
             } else {
-                azanAudio.src = "https://www.islamcan.com/audio/adhan/azan2.mp3";
-                currentRingtoneName.textContent = "Default Azan";
+                payloadSizeValueSpan.classList.remove('warning');
             }
         }
 
-        async function fetchPrayerTimes() {
-            loadingOverlay.style.display = 'flex';
-            let apiURL;
-            
-            if (settings.latitude && settings.longitude) {
-                apiURL = `https://api.aladhan.com/v1/timings?latitude=${settings.latitude}&longitude=${settings.longitude}&method=${settings.method}&school=${settings.school}`;
-            } else if (settings.city && settings.country) {
-                apiURL = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(settings.country)}&method=${settings.method}&school=${settings.school}`;
-            } else {
-                showNotification('Please set a location first', 'error');
-                loadingOverlay.style.display = 'none';
+        // Test GitHub connection
+        async function testConnection() {
+            const token = tokenInput.value.trim();
+            if (!token) {
+                alert('براہ کرم گٹ ہب ٹوکن درج کریں');
                 return;
             }
-            
             try {
-                const response = await fetch(apiURL);
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                const data = await response.json();
-                if (data.code === 200) {
-                    prayerTimesData = data.data;
-                    originalApiPrayerTimes = { ...prayerTimesData.timings };
-                    applyManualTimes();
-                    updateUITimes();
-                    updateNextPrayerInfo();
-                    updateSliderLocation();
-                    updateSehriIftar(); // New function to update slider with Sehri/Iftar
-                    startAlarmChecker();
-                } else { 
-                    showNotification('Could not fetch prayer times. Please check location settings.', 'error'); 
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (res.ok) {
+                    alert('✅ کنکشن کامیاب! ریپوزٹری موجود ہے۔');
+                    statusDot.className = 'status-dot green';
+                    statusText.innerText = 'منسلک';
+                } else {
+                    const error = await res.text();
+                    alert(`❌ کنکشن ناکام: ${res.status} ${error}`);
+                    statusDot.className = 'status-dot red';
+                    statusText.innerText = 'غلط ٹوکن/ریپو';
                 }
-            } catch (error) {
-                console.error("Error fetching prayer times:", error);
-                showNotification("Failed to fetch prayer times. Check internet and location.", 'error');
-            } finally { 
-                loadingOverlay.style.display = 'none'; 
+            } catch (err) {
+                alert(`❌ نیٹ ورک خرابی: ${err.message}`);
+                statusDot.className = 'status-dot red';
+                statusText.innerText = 'نیٹ ورک مسئلہ';
             }
         }
 
-        function updateSliderLocation() {
-            let locationText = '';
-            if (settings.latitude && settings.longitude) {
-                locationText = `LOC: ${settings.latitude.toFixed(2)}, ${settings.longitude.toFixed(2)}`;
-            } else if (settings.city && settings.country) {
-                locationText = `LOC: ${settings.city}, ${settings.country}`;
-            } else {
-                locationText = 'LOC: --';
-            }
-            
-            if (locationText.length > 20) {
-                locationText = locationText.substring(0, 17) + '...';
-            }
-            
-            sliderLocation1.textContent = locationText;
-            sliderLocation2.textContent = locationText;
-        }
-
-        function updateSehriIftar() {
-            if (!prayerTimesData.timings) return;
-            const fajrTime = prayerTimesData.timings.Fajr?.split(' ')[0] || '--:--';
-            const maghribTime = prayerTimesData.timings.Maghrib?.split(' ')[0] || '--:--';
-            
-            sliderSehri1.textContent = `SEHRI: ${formatTimePlain(fajrTime)}`;
-            sliderIftar1.textContent = `IFTAR: ${formatTimePlain(maghribTime)}`;
-            sliderSehri2.textContent = `SEHRI: ${formatTimePlain(fajrTime)}`;
-            sliderIftar2.textContent = `IFTAR: ${formatTimePlain(maghribTime)}`;
-        }
-
-        function applyManualTimes() {
-            if (!settings.manualTimes || Object.keys(settings.manualTimes).length === 0) {
-                prayerTimesData.timings = { ...originalApiPrayerTimes }; 
+        function checkServerStatus() {
+            const token = tokenInput.value.trim();
+            if (!token) {
+                statusDot.className = 'status-dot red';
+                statusText.innerText = 'ٹوکن درج کریں';
                 return;
             }
-            const newTimings = { ...originalApiPrayerTimes };
-            for (const prayer in settings.manualTimes) {
-                if (newTimings.hasOwnProperty(prayer)) { 
-                    newTimings[prayer] = settings.manualTimes[prayer]; 
+            fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}`, {
+                headers: { 'Authorization': `token ${token}` }
+            })
+            .then(res => {
+                if (res.ok) {
+                    statusDot.className = 'status-dot green';
+                    statusText.innerText = 'منسلک';
+                } else {
+                    statusDot.className = 'status-dot red';
+                    statusText.innerText = 'غلط ٹوکن/ریپو';
                 }
-            }
-            prayerTimesData.timings = newTimings;
-        }
-        
-        function startAlarmChecker() {
-            if (alarmCheckInterval) clearInterval(alarmCheckInterval);
-            alarmCheckInterval = setInterval(checkAndPlayAlarm, 5000);
-        }
-
-        function stopAlarmSound() {
-            azanAudio.pause(); 
-            azanAudio.currentTime = 0;
-            stopAlarmBtn.style.display = 'none';
-        }
-
-        function checkAndPlayAlarm() {
-            if (!prayerTimesData.timings) return;
-            
-            const now = new Date(Date.now() + serverTimeOffset);
-            const todayStr = now.toISOString().split('T')[0];
-            
-            if (playedAlarmsForDate !== todayStr) {
-                playedAlarmsForDate = todayStr; 
-                settings.playedAlarms = {};
-                console.log(`New day detected (${todayStr}). Resetting played alarms.`);
-            }
-            
-            for (const prayerName of PRAYER_NAMES) {
-                const prayerTimeStr = prayerTimesData.timings[prayerName]?.split(' ')[0];
-                if (!prayerTimeStr) continue;
-                
-                if (!settings.alarms[prayerName] || (settings.playedAlarms && settings.playedAlarms[prayerName])) continue;
-                
-                const [hour, minute] = prayerTimeStr.split(':');
-                const prayerDateTime = new Date(now);
-                prayerDateTime.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
-                
-                const timeDiff = now - prayerDateTime;
-                if (Math.abs(timeDiff) < 15000) { 
-                    console.log(`Alarm triggered for ${prayerName} at ${now.toLocaleTimeString()}`);
-                    stopAlarmBtn.style.display = 'flex';
-                    playAlarmSound();
-                    
-                    if (!settings.playedAlarms) settings.playedAlarms = {};
-                    settings.playedAlarms[prayerName] = true;
-                    break;
-                }
-            }
-        }
-
-        function updateUITimes() {
-            const times = prayerTimesData.timings;
-            for (const prayer in prayerTimeElements) {
-                if (times[prayer]) {
-                    const time24 = times[prayer].split(' ')[0];
-                    prayerTimeElements[prayer].innerHTML = formatTime(time24);
-                }
-            }
-            dateDisplay.textContent = `${prayerTimesData.date.readable} | ${prayerTimesData.date.hijri.date}`;
-            const { readable: readableDate, hijri: { date: hijriDate } } = prayerTimesData.date;
-            sliderDate1.textContent = `DATE: ${readableDate}`; 
-            sliderDate2.textContent = `DATE: ${readableDate}`;
-            sliderHijriDate1.textContent = `HIJRI: ${hijriDate}`; 
-            sliderHijriDate2.textContent = `HIJRI: ${hijriDate}`;
-            const weekday = prayerTimesData.date.gregorian.weekday.en;
-            document.querySelector('#dhuhr-item .prayer-name').textContent = (weekday === 'Friday') ? 'Jummah' : 'Dhuhr';
-            
-            // Also update Sehri/Iftar when times change
-            updateSehriIftar();
-        }
-        
-        function updateNextPrayerInfo() {
-            if (!prayerTimesData.timings) return;
-            const now = new Date(Date.now() + serverTimeOffset);
-            const prayerDateObjects = PRAYER_NAMES.map(name => {
-                const [hour, minute] = prayerTimesData.timings[name].split(':');
-                const date = new Date(now);
-                date.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
-                return { name, date };
-            }).sort((a, b) => a.date - b.date);
-            let nextPrayer = prayerDateObjects.find(p => p.date > now);
-            if (!nextPrayer) {
-                nextPrayer = prayerDateObjects[0];
-                nextPrayer.date.setDate(nextPrayer.date.getDate() + 1);
-            }
-            let nextPrayerDisplayName = nextPrayer.name === 'Dhuhr' && prayerTimesData.date.gregorian.weekday.en === 'Friday' ? 'Jummah' : nextPrayer.name;
-            nextPrayerNameEl.textContent = nextPrayerDisplayName;
-            if(countdownInterval) clearInterval(countdownInterval);
-            countdownInterval = setInterval(() => {
-                const timeLeftMs = nextPrayer.date - new Date(Date.now() + serverTimeOffset);
-                if (timeLeftMs <= 0) {
-                    clearInterval(countdownInterval);
-                    setTimeout(fetchPrayerTimes, 60000); 
-                    return;
-                }
-                const hours = Math.floor(timeLeftMs / 3600000);
-                const minutes = Math.floor((timeLeftMs % 3600000) / 60000);
-                const seconds = Math.floor((timeLeftMs % 60000) / 1000);
-                timeLeftEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            }, 1000);
-            let currentPrayer = null;
-            for(let i = prayerDateObjects.length - 1; i >= 0; i--) {
-                if(prayerDateObjects[i].date <= now) { 
-                    currentPrayer = prayerDateObjects[i]; 
-                    break; 
-                }
-            }
-            if (!currentPrayer) currentPrayer = { name: 'Isha' }; 
-            prayerItems.forEach(item => item.classList.remove('active'));
-            if(currentPrayer) document.getElementById(`${currentPrayer.name.toLowerCase()}-item`)?.classList.add('active');
-        }
-
-        function testAlarm() {
-            unlockAudio();
-            playAlarmSound();
-            stopAlarmBtn.style.display = 'flex';
-            showNotification('Testing alarm sound...', 'info');
-        }
-
-        async function initializeApp() {
-            createParticles();
-            
-            document.body.addEventListener('click', unlockAudio, { once: true });
-            document.body.addEventListener('touchend', unlockAudio, { once: true });
-
-            settingsBtn.addEventListener('click', openSettings);
-            backBtn.addEventListener('click', closeSettings);
-            modalOverlay.addEventListener('click', closeSettings);
-            saveSettingsBtn.addEventListener('click', saveSettings);
-            detectLocationBtn.addEventListener('click', handleLocationDetection);
-            manualLocationBtn.addEventListener('click', enableManualLocationEntry);
-            changeRingtoneBtn.addEventListener('click', () => ringtoneInput.click());
-            ringtoneInput.addEventListener('change', handleRingtoneSelect);
-            stopAlarmBtn.addEventListener('click', stopAlarmSound);
-            testAlarmBtn.addEventListener('click', testAlarm);
-            azanAudio.addEventListener('ended', () => { stopAlarmBtn.style.display = 'none'; });
-            
-            widthSlider.addEventListener('input', () => {
-                widthValue.textContent = `${widthSlider.value}vw`;
+            })
+            .catch(() => {
+                statusDot.className = 'status-dot red';
+                statusText.innerText = 'نیٹ ورک مسئلہ';
             });
-            
-            heightSlider.addEventListener('input', () => {
-                heightValue.textContent = `${heightSlider.value}vh`;
-            });
+        }
 
-            prayerItems.forEach(item => {
-                item.addEventListener('click', function() {
-                    this.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        this.style.transform = '';
-                    }, 150);
+        // Polling for workflow runs
+        async function pollRunStatus(token, runId) {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                try {
+                    const runRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}`, {
+                        headers: { 'Authorization': `token ${token}` }
+                    });
+                    if (!runRes.ok) throw new Error('رن کی معلومات حاصل نہیں ہو سکی');
+                    const run = await runRes.json();
+                    appendLog(`⏳ حالت: ${run.status || 'نامعلوم'}`);
+                    if (run.status === 'completed') {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        buildCompleted = true;
+                        if (run.conclusion === 'success') {
+                            updateStatus('✅ کامیاب!', 100);
+                            await fetchArtifactDownload(token, runId);
+                        } else {
+                            updateStatus('❌ ناکام', 0);
+                            await fetchFailedJobLogs(token, runId);
+                        }
+                    } else {
+                        updateStatus('تعمیر جاری ہے...', 70);
+                    }
+                } catch (err) {
+                    appendLog(`⚠️ پولنگ خرابی: ${err.message}`, true);
+                }
+            }, 7000);
+        }
+
+        async function pollWorkflowRun(token) {
+            appendLog('🔍 تازہ ترین رن ڈھونڈ رہے ہیں...');
+            try {
+                const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=1`, {
+                    headers: { 'Authorization': `token ${token}` }
                 });
-            });
-
-            loadSettings();
-            await syncClockWithAPI();
-            setInterval(updateClock, 1000);
-            fetchPrayerTimes();
+                if (!runsRes.ok) throw new Error('رنز حاصل نہیں ہو سکے');
+                const runsData = await runsRes.json();
+                const run = runsData.workflow_runs?.[0];
+                if (!run) throw new Error('کوئی رن نہیں');
+                appendLog(`📋 رن #${run.id}`);
+                currentRunId = run.id;
+                pollRunStatus(token, run.id);
+            } catch (err) {
+                appendLog(`⚠️ رن نہیں ملا، دوبارہ کوشش: ${err.message}`, true);
+                setTimeout(() => pollWorkflowRun(token), 8000);
+            }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeApp();
+        async function fetchArtifactDownload(token, runId) {
+            try {
+                // Try releases first
+                const releaseRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tags/run-${runId}`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (releaseRes.ok) {
+                    const release = await releaseRes.json();
+                    if (release.assets && release.assets.length > 0) {
+                        const asset = release.assets[0];
+                        resultDiv.innerHTML = `
+                            <a href="${asset.browser_download_url}" target="_blank" class="download-btn">
+                                <i class="fas fa-download"></i> APK ڈاؤن لوڈ (ریلیز)
+                            </a>`;
+                        appendLog('✅ ریلیز مل گئی');
+                        addToHistory(runId, appNameInput.value);
+                        return;
+                    }
+                }
+                // Fallback to artifacts
+                const artifactsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/artifacts`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (artifactsRes.ok) {
+                    const artifacts = await artifactsRes.json();
+                    if (artifacts.artifacts && artifacts.artifacts.length > 0) {
+                        const artifact = artifacts.artifacts[0];
+                        resultDiv.innerHTML = `
+                            <button class="download-btn" id="downloadArtifactBtn">
+                                <i class="fas fa-file-archive"></i> آرٹیفیکٹ (ZIP) ڈاؤن لوڈ
+                            </button>
+                            <p style="font-size:0.7rem; margin-top:5px;">اگر بٹن کام نہ کرے تو <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">یہاں جا کر</a> خود ڈاؤن لوڈ کریں۔</p>`;
+                        const downloadBtn = document.getElementById('downloadArtifactBtn');
+                        if (downloadBtn) {
+                            downloadBtn.onclick = () => downloadArtifactZip(token, artifact.id);
+                        }
+                        appendLog('📦 آرٹیفیکٹ مل گیا');
+                    } else {
+                        resultDiv.innerHTML = `<p style="color:var(--primary);">کوئی آرٹیفیکٹ نہیں۔ <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">یہاں چیک کریں</a>۔</p>`;
+                    }
+                } else {
+                    throw new Error('آرٹیفیکٹ حاصل نہ ہو سکے');
+                }
+                addToHistory(runId, appNameInput.value);
+            } catch (err) {
+                appendLog(`❌ ڈاؤن لوڈ خرابی: ${err.message}`, true);
+                resultDiv.innerHTML = `<p style="color:var(--primary);">APK تیار ہے – <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">آرٹیفیکٹ سے ڈاؤن لوڈ کریں</a></p>`;
+                addToHistory(runId, appNameInput.value);
+            } finally {
+                buildBtn.disabled = false;
+            }
+        }
+
+        window.downloadArtifactZip = async (token, artifactId) => {
+            try {
+                appendLog('📥 ڈاؤن لوڈ شروع ہو رہا ہے...');
+                const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/artifacts/${artifactId}/zip`;
+                const res = await fetch(url, { 
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(`HTTP ${res.status}: ${errorText}`);
+                }
+                const blob = await res.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `app-${artifactId}.zip`;
+                a.click();
+                window.URL.revokeObjectURL(blobUrl);
+                appendLog('✅ ڈاؤن لوڈ کامیاب');
+            } catch (err) {
+                appendLog(`❌ ڈاؤن لوڈ ایرر: ${err.message}`, true);
+                if (confirm('ڈاؤن لوڈ ناکام۔ کیا آپ GitHub Actions پر جا کر خود ڈاؤن لوڈ کرنا چاہتے ہیں؟')) {
+                    window.open(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${currentRunId}`, '_blank');
+                }
+            }
+        };
+
+        async function fetchFailedJobLogs(token, runId) {
+            try {
+                const jobsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/jobs`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                const jobs = await jobsRes.json();
+                const failedJob = jobs.jobs?.find(j => j.conclusion === 'failure');
+                if (failedJob) {
+                    resultDiv.innerHTML = `<p>❌ ناکام مرحلہ: ${failedJob.name}<br><a href="${failedJob.html_url}" target="_blank">لاگز</a></p>`;
+                } else {
+                    resultDiv.innerHTML = `<p><a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">مکمل لاگز</a></p>`;
+                }
+            } catch {
+                resultDiv.innerHTML = `<p><a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">لاگز دیکھیں</a></p>`;
+            }
+            buildBtn.disabled = false;
+        }
+
+        // Main build function: sends HTML, icon, permissions, app name directly
+        async function startBuild() {
+            resetUI();
+            const token = tokenInput.value.trim();
+            const name = appNameInput.value.trim();
+            let html = htmlCode.value.trim();
+            const iconFile = appIconInput.files[0];
+
+            if (!token || !name || !html) {
+                alert('براہ کرم ٹوکن، نام، اور HTML لازمی ہیں');
+                buildBtn.disabled = false;
+                return;
+            }
+
+            // Minify HTML
+            html = minifyHTML(html);
+
+            // Collect permissions
+            const selectedPermissions = [];
+            document.querySelectorAll('#permissionsGrid input[type="checkbox"]:checked').forEach(cb => {
+                selectedPermissions.push(cb.value);
+            });
+
+            statusDiv.style.display = 'block';
+            updateStatus('آئیکون تیار کیا جا رہا ہے...', 5);
+            let iconBase64 = '';
+            if (iconFile) {
+                try {
+                    iconBase64 = await compressImageToTarget(iconFile, 8);
+                } catch (err) {
+                    appendLog(`آئیکون کمپریشن ناکام: ${err.message}`, true);
+                    // Continue without icon
+                }
+            }
+
+            // Build payload
+            const payload = {
+                event_type: 'build-apk',
+                client_payload: {
+                    app_name: name,
+                    app_html: html,
+                    app_icon: iconBase64,
+                    permissions: selectedPermissions.join(',')
+                }
+            };
+
+            buildBtn.disabled = true;
+            try {
+                updateStatus('گٹ ہب کو بھیجا جا رہا ہے', 20);
+                const dispatchRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/dispatches`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!dispatchRes.ok) {
+                    const errText = await dispatchRes.text();
+                    throw new Error(`HTTP ${dispatchRes.status}: ${errText}`);
+                }
+                appendLog('✅ ڈسپیچ قبول ہوا');
+                updateStatus('ورک فلو شروع', 30);
+                setTimeout(() => pollWorkflowRun(token), 5000);
+            } catch (err) {
+                appendLog(`❌ خرابی: ${err.message}`, true);
+                updateStatus('ناکام', 0);
+                buildBtn.disabled = false;
+                alert('ورک فلو ڈسپیچ ناکام: ' + err.message);
+            }
+        }
+
+        // History functions
+        function addToHistory(runId, appName) {
+            let history = JSON.parse(localStorage.getItem('buildHistory') || '[]');
+            history.unshift({ runId, appName, date: new Date().toLocaleString() });
+            if (history.length > 20) history.pop();
+            localStorage.setItem('buildHistory', JSON.stringify(history));
+            loadHistory();
+        }
+
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('buildHistory') || '[]');
+            const listDiv = document.getElementById('historyList');
+            listDiv.innerHTML = '';
+            if (history.length === 0) {
+                listDiv.innerHTML = '<p style="color:var(--primary);">کوئی بلڈ نہیں</p>';
+                return;
+            }
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <span><i class="fas fa-mobile-alt"></i> ${item.appName} <small>(${item.date})</small></span>
+                    <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${item.runId}" target="_blank"><i class="fas fa-external-link-alt"></i></a>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+
+        function clearHistory() {
+            if (confirm('تاریخ صاف کریں؟')) {
+                localStorage.removeItem('buildHistory');
+                loadHistory();
+            }
+        }
+
+        // Settings
+        function loadGitHubSettings() {
+            const savedToken = localStorage.getItem('github_token');
+            if (savedToken) {
+                tokenInput.value = savedToken;
+                settingsToken.value = savedToken;
+            }
+            const savedOwner = localStorage.getItem('github_owner');
+            if (savedOwner) {
+                GITHUB_OWNER = savedOwner;
+                settingsOwner.value = savedOwner;
+            } else {
+                settingsOwner.value = GITHUB_OWNER;
+            }
+            const savedRepo = localStorage.getItem('github_repo');
+            if (savedRepo) {
+                GITHUB_REPO = savedRepo;
+                settingsRepo.value = savedRepo;
+            } else {
+                settingsRepo.value = GITHUB_REPO;
+            }
+        }
+
+        function saveGitHubSettings() {
+            const token = settingsToken.value.trim();
+            const owner = settingsOwner.value.trim();
+            const repo = settingsRepo.value.trim();
+
+            if (token) {
+                localStorage.setItem('github_token', token);
+                tokenInput.value = token;
+            }
+            if (owner) {
+                localStorage.setItem('github_owner', owner);
+                GITHUB_OWNER = owner;
+            }
+            if (repo) {
+                localStorage.setItem('github_repo', repo);
+                GITHUB_REPO = repo;
+            }
+            checkServerStatus();
+            appendLog('⚙️ گٹ ہب سیٹنگز محفوظ ہو گئیں');
+        }
+
+        // Colors
+        function loadColors() {
+            const savedPrimary = localStorage.getItem('theme_primary');
+            const savedSecondary = localStorage.getItem('theme_secondary');
+            if (savedPrimary && savedSecondary) {
+                applyColors(savedPrimary, savedSecondary, false);
+            } else {
+                applyColors(defaultPrimary, defaultSecondary, false);
+            }
+            document.getElementById('primaryColor').value = savedPrimary || defaultPrimary;
+            document.getElementById('secondaryColor').value = savedSecondary || defaultSecondary;
+            updatePreviewBox();
+        }
+
+        function updatePreviewBox() {
+            const primary = document.getElementById('primaryColor').value;
+            const secondary = document.getElementById('secondaryColor').value;
+            document.getElementById('colorPreview').style.background = `linear-gradient(145deg, ${primary}, ${secondary})`;
+        }
+
+        function applyColors(primary, secondary, saveToStorage = true) {
+            root.style.setProperty('--primary', primary);
+            root.style.setProperty('--secondary', secondary);
+            root.style.setProperty('--primary-light', primary + '20');
+            root.style.setProperty('--secondary-light', secondary + '20');
+            root.style.setProperty('--border-light', primary + '40');
+            root.style.setProperty('--border-focus', primary);
+            root.style.setProperty('--text-light', primary);
+            root.style.setProperty('--bg-gradient-from', primary + '20');
+            root.style.setProperty('--bg-gradient-to', secondary + '20');
+            if (saveToStorage) {
+                localStorage.setItem('theme_primary', primary);
+                localStorage.setItem('theme_secondary', secondary);
+            }
+            updatePreviewBox();
+        }
+
+        function resetColors() {
+            document.getElementById('primaryColor').value = defaultPrimary;
+            document.getElementById('secondaryColor').value = defaultSecondary;
+            applyColors(defaultPrimary, defaultSecondary);
+            appendLog('🎨 رنگ ڈیفالٹ پر واپس');
+        }
+
+        // Modal
+        function openSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveAllSettings() {
+            try {
+                const primary = document.getElementById('primaryColor').value;
+                const secondary = document.getElementById('secondaryColor').value;
+                applyColors(primary, secondary);
+                saveGitHubSettings();
+                appendLog('✔️ تمام ترتیبات محفوظ ہو گئیں');
+                closeSettingsModal();
+            } catch (error) {
+                console.error('سیٹنگز محفوظ کرتے وقت خرابی:', error);
+                appendLog('❌ خرابی: ' + error.message, true);
+                alert('سیٹنگز محفوظ نہیں ہو سکیں۔ دوبارہ کوشش کریں۔');
+            }
+        }
+
+        function refreshApp() {
+            appendLog('🔄 ریفریش کیا جا رہا ہے...');
+            checkServerStatus();
+            const token = tokenInput.value.trim();
+            if (currentRunId && token && !buildCompleted) {
+                appendLog('🔄 بلڈ کی حالت چیک کی جا رہی ہے');
+                if (pollInterval) clearInterval(pollInterval);
+                pollRunStatus(token, currentRunId);
+            } else if (currentRunId && token && buildCompleted) {
+                appendLog('🔄 ڈاؤن لوڈ دوبارہ کوشش');
+                fetchArtifactDownload(token, currentRunId);
+            }
+        }
+
+        // =================== INIT ===================
+        window.addEventListener('load', () => {
+            loadGitHubSettings();
+            loadColors();
+            checkServerStatus();
+            setInterval(checkServerStatus, 30000);
+
+            document.getElementById('saveTokenBtn').addEventListener('click', () => {
+                const token = tokenInput.value.trim();
+                if (token) {
+                    localStorage.setItem('github_token', token);
+                    settingsToken.value = token;
+                    checkServerStatus();
+                    appendLog('🔑 ٹوکن محفوظ');
+                } else alert('ٹوکن درج کریں');
+            });
+            document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
+
+            buildBtn.addEventListener('click', startBuild);
+            document.getElementById('refreshBtn').addEventListener('click', refreshApp);
+            document.getElementById('settingsIcon').addEventListener('click', openSettingsModal);
+            document.getElementById('closeModalBtn').addEventListener('click', closeSettingsModal);
+            document.getElementById('applySettings').addEventListener('click', saveAllSettings);
+            document.getElementById('resetColors').addEventListener('click', resetColors);
+            document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
+
+            document.getElementById('primaryColor').addEventListener('input', updatePreviewBox);
+            document.getElementById('secondaryColor').addEventListener('input', updatePreviewBox);
+
+            window.onclick = function(event) {
+                const modal = document.getElementById('settingsModal');
+                if (event.target === modal) closeSettingsModal();
+            };
+
+            // Payload size realtime
+            const updateFields = [htmlCode, appNameInput, appIconInput, ...document.querySelectorAll('#permissionsGrid input[type="checkbox"]')];
+            const updatePayload = () => updatePayloadSizeDisplay();
+            updateFields.forEach(field => {
+                if (field) field.addEventListener('input', updatePayload);
+                if (field && field.type === 'checkbox') field.addEventListener('change', updatePayload);
+            });
+            appIconInput.addEventListener('change', updatePayload);
+            updatePayloadSizeDisplay();
+
+            // Default HTML
+            const defaultHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>میری ایپ</title><style>body{font-family:sans-serif;text-align:center;margin-top:50px;background:#f0f0f0;}h1{color:#A52A2A;}</style></head><body><h1>ہیلو دنیا!</h1><p>یہ آپ کی ایپ ہے۔</p></body></html>`;
+            htmlCode.value = defaultHtml;
+            updatePayloadSizeDisplay();
         });
-    </script>
+    })();
+</script>
 </body>
 </html>
