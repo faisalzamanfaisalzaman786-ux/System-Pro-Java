@@ -33,22 +33,26 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+      # ------------------------------------------------------------
+      # اصلاح شدہ سٹیپ: پے لوڈ کو محفوظ طریقے سے ہینڈل کرنے کے لیے jq کا استعمال
+      # ------------------------------------------------------------
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML کو فائل میں لکھیں
+          jq -r '.client_payload.app_html // ""' "$GITHUB_EVENT_PATH" > app/src/main/assets/index.html
 
           # Icon (Base64 to PNG)
-          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          ICON_B64=$(jq -r '.client_payload.app_icon // ""' "$GITHUB_EVENT_PATH")
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            echo "$ICON_B64" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # Permissions
-          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+          # Permissions (comma separated list)
+          jq -r '.client_payload.permissions // ""' "$GITHUB_EVENT_PATH" > permissions.txt
 
           # App name
-          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
+          jq -r '.client_payload.app_name // ""' "$GITHUB_EVENT_PATH" > app_name.txt
 
       - name: Verify and fix HTML & Icon
         run: |
