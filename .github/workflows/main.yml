@@ -1,69 +1,150 @@
-Skip to content
-System-Pro-v2
-Repository navigation
-Code
-Issues
-Actions
-Build APK from HTML
-build-apk #318
-Annotations
-1 error and 1 warning
-build
-failed 1 minute ago in 1m 40s
-1s
-1s
-11s
-4s
-0s
-0s
-1m 20s
-Here are the highlights of this release:
- - Compiling and testing with Java 22
- - Cacheable Groovy script compilation
- - New methods in lazy collection properties
+name: Build APK from HTML
 
-For more details see https://docs.gradle.org/8.7/release-notes.html
+on:
+  repository_dispatch:
+    types: [build-apk]
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyApp'
+      permissions:
+        description: 'Permissions (comma separated)'
+        required: false
+      app_icon:
+        description: 'Icon base64 (optional)'
+        required: false
 
-Starting a Gradle Daemon (subsequent builds will be faster)
-> Task :app:preBuild UP-TO-DATE
-> Task :app:preDebugBuild UP-TO-DATE
-> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
-> Task :app:generateDebugBuildConfig
-> Task :CordovaLib:preBuild UP-TO-DATE
-> Task :CordovaLib:preDebugBuild UP-TO-DATE
-> Task :app:javaPreCompileDebug
-> Task :app:generateDebugResValues
-> Task :CordovaLib:generateDebugResValues
-> Task :CordovaLib:generateDebugResources
-> Task :CordovaLib:writeDebugAarMetadata
-> Task :CordovaLib:packageDebugResources
-> Task :app:checkDebugAarMetadata
-> Task :app:mapDebugSourceSetPaths
-> Task :app:generateDebugResources
-> Task :app:packageDebugResources
-> Task :app:mergeDebugResources FAILED
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
 
-FAILURE: Build failed with an exception.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-* What went wrong:
-Execution failed for task ':app:mergeDebugResources'.
-> A failure occurred while executing com.android.build.gradle.internal.res.ResourceCompilerRunnable
-   > Resource compilation failed (Failed to compile resource file: /home/runner/work/System-Pro-v2/System-Pro-v2/myapp/platforms/android/app/src/main/res/xml/config.xml: . Cause: javax.xml.stream.XMLStreamException: ParseError at [row,col]:[14,84]
-     Message: http://www.w3.org/TR/1999/REC-xml-names-19990114#AttributePrefixUnbound?uses-permission&android:name&android). Check logs for more details.
+      - name: Set up environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip curl
 
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-BUILD FAILED in 41s
-> Task :app:parseDebugLocalResources
-13 actionable tasks: 13 executed
-Command failed with exit code 1: /home/runner/work/System-Pro-v2/System-Pro-v2/myapp/platforms/android/tools/gradlew cdvBuildDebug
-Error: Process completed with exit code 1.
-0s
-0s
-0s
-1s
-0s
+      - name: Get app details
+        id: details
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            APP_NAME="${{ github.event.inputs.app_name }}"
+            PERMISSIONS="${{ github.event.inputs.permissions }}"
+            ICON_BASE64="${{ github.event.inputs.app_icon }}"
+          else
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+            PERMISSIONS="${{ github.event.client_payload.permissions }}"
+            ICON_BASE64="${{ github.event.client_payload.app_icon }}"
+          fi
+          # Package name: only lowercase letters, numbers, underscores
+          PKG_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:upper:]' '[:lower:]')
+          if [ -z "$PKG_NAME" ]; then PKG_NAME="myapp"; fi
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "package_name=$PKG_NAME" >> $GITHUB_OUTPUT
+          echo "permissions=$PERMISSIONS" >> $GITHUB_OUTPUT
+          echo "icon_base64=$ICON_BASE64" >> $GITHUB_OUTPUT
+
+      - name: Decode icon if provided
+        run: |
+          if [ -n "${{ steps.details.outputs.icon_base64 }}" ]; then
+            echo "${{ steps.details.outputs.icon_base64 }}" | base64 -d > icon.png
+            echo "Icon saved."
+          fi
+
+      - name: Build APK with Cordova
+        run: |
+          set -e
+          npm install -g cordova
+
+          APP_NAME="${{ steps.details.outputs.app_name }}"
+          PKG_NAME="${{ steps.details.outputs.package_name }}"
+
+          # Create project
+          cordova create myapp "com.example.$PKG_NAME" "$APP_NAME"
+          cd myapp
+
+          # Copy HTML
+          rm -rf www
+          mkdir -p www
+          cp ../index.html www/index.html
+
+          # Add Android platform
+          cordova platform add android
+
+          # ========== Add preferences and access rules ==========
+          # Insert before </widget>
+          sed -i '/<\/widget>/i \
+          <access origin="*" />\
+          <allow-navigation href="*" />\
+          <allow-intent href="http://*/*" />\
+          <allow-intent href="https://*/*" />\
+          <preference name="AndroidInsecureFileModeEnabled" value="true" />\
+          <preference name="AllowFileAccessFromFileURLs" value="true" />\
+          <preference name="AllowUniversalAccessFromFileURLs" value="true" />\
+          <preference name="loadUrlTimeoutValue" value="700000" />' config.xml
+
+          # ========== Add permissions ==========
+          PERMS="${{ steps.details.outputs.permissions }}"
+          if [ -n "$PERMS" ]; then
+            IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
+            for perm in "${PERM_ARRAY[@]}"; do
+              if [ -n "$perm" ]; then
+                # Insert before </platform> inside platform android
+                sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"$perm\" />\n        </config-file>" config.xml
+              fi
+            done
+          fi
+
+          # ========== Set icon if provided ==========
+          if [ -f "../icon.png" ]; then
+            # Copy icon to all mipmap folders
+            TARGET_DIR="platforms/android/app/src/main/res"
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p "$TARGET_DIR/mipmap-$density"
+              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher.png"
+              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher_round.png"
+            done
+            # Add icon reference in config.xml inside platform android
+            sed -i "/<platform name=\"android\">/a \        <icon src=\"res/icon.png\" />" config.xml
+          fi
+
+          # Build debug APK
+          cordova build android
+
+          # Locate APK
+          APK_PATH=$(find platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: APK not found"
+            exit 1
+          fi
+          cp "$APK_PATH" ../app.apk
+          cd ..
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ steps.details.outputs.package_name }}
+          path: app.apk
+
+      - name: Create Release
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          RUN_ID=${{ github.run_id }}
+          gh release create "run-${RUN_ID}" app.apk --title "APK Build ${{ steps.details.outputs.app_name }}" --notes "Generated from workflow run ${{ github.run_id }}" --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
