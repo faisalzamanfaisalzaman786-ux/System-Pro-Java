@@ -7,10 +7,10 @@ on:
   repository_dispatch:
     types: [build-apk]
 
-# یہ کنکرنسی گروپ اس بات کو یقینی بناتا ہے کہ ایک وقت میں صرف ایک بلڈ چلے
+# اس سے ایک وقت میں صرف ایک بلڈ چلے گا، چاہے کوئی بھی ایونٹ ٹرگر کرے
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}
-  cancel-in-progress: false   # پہلے سے چل رہا بلڈ منسوخ نہیں ہوگا، نیا انتظار کرے گا
+  group: system-pro-apk-builder
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -48,13 +48,11 @@ jobs:
       - name: Fetch uploaded HTML and icon (if any)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML فائل ڈاؤن لوڈ کریں
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                -H "Accept: application/vnd.github.v3.raw" \
                -o index.html \
                "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}"
 
-          # اگر آئیکون موجود ہو تو ڈاؤن لوڈ کریں
           if [ -n "${{ github.event.client_payload.icon_file }}" ]; then
             curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  -H "Accept: application/vnd.github.v3.raw" \
@@ -64,7 +62,6 @@ jobs:
 
       - name: Provide default files (if missing)
         run: |
-          # اگر HTML موجود نہیں تو ڈیفالٹ بنا دیں
           if [ ! -f index.html ]; then
             cat <<EOF > index.html
           <!DOCTYPE html>
@@ -75,19 +72,16 @@ jobs:
           EOF
           fi
 
-          # اگر آئیکون موجود نہیں تو 1x1 سفید PNG بنا دیں
           if [ ! -f icon_base64.txt ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" > icon_base64.txt
           fi
 
-          # پرمیشنز کی فائل بنائیں (اگر dispatch سے آئیں)
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
             echo "${{ join(github.event.client_payload.permissions, '\n') }}" > permissions.txt
           else
             touch permissions.txt
           fi
 
-          # ایپ کا نام (اگر dispatch سے آئے)
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             echo "${{ github.event.client_payload.app_name }}" > app_name.txt
           else
@@ -95,12 +89,10 @@ jobs:
           fi
 
       - name: Copy HTML to assets
-        run: |
-          cp index.html app/src/main/assets/index.html
+        run: cp index.html app/src/main/assets/index.html
 
       - name: Decode and copy icon
-        run: |
-          base64 -d icon_base64.txt > app/src/main/res/drawable/ic_launcher.png
+        run: base64 -d icon_base64.txt > app/src/main/res/drawable/ic_launcher.png
 
       - name: Create gradle.properties
         run: |
@@ -155,12 +147,10 @@ jobs:
       - name: Create app build.gradle with unique package name
         run: |
           APP_NAME=$(cat app_name.txt)
-          # پیکیج نام بنائیں: صرف حروف تہجی، اعداد، انڈر اسکور۔ پہلا حرف حرف ہو۔
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
           if [[ "$PACKAGE_BASE" =~ ^[0-9] ]]; then
             PACKAGE_BASE="a_$PACKAGE_BASE"
           fi
-          # منفرد بنانے کے لیے run_id شامل کریں
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${{ github.run_id }}"
           echo "Using package name: $PACKAGE_NAME"
 
@@ -201,8 +191,6 @@ jobs:
       - name: Create AndroidManifest.xml with dynamic permissions
         run: |
           APP_NAME=$(cat app_name.txt)
-          PERMISSIONS=$(cat permissions.txt)
-
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -211,7 +199,6 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
           EOF
 
-          # اضافی پرمیشنز شامل کریں (اگر موجود ہوں)
           if [ -s permissions.txt ]; then
             while IFS= read -r perm; do
               if [ -n "$perm" ]; then
@@ -351,12 +338,10 @@ jobs:
       - name: Cleanup temp files (if from dispatch)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML فائل ڈیلیٹ کریں (اگر موجود ہو)
           if [ -n "${{ github.event.client_payload.html_file }}" ] && [ -n "${{ github.event.client_payload.html_sha }}" ]; then
             curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}?message=Cleanup&sha=${{ github.event.client_payload.html_sha }}"
           fi
-          # آئیکون فائل ڈیلیٹ کریں (اگر موجود ہو)
           if [ -n "${{ github.event.client_payload.icon_file }}" ] && [ -n "${{ github.event.client_payload.icon_sha }}" ]; then
             curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}?message=Cleanup&sha=${{ github.event.client_payload.icon_sha }}"
