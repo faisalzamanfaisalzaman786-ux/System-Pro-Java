@@ -52,7 +52,7 @@ jobs:
 
       - name: Verify and fix HTML & Icon
         run: |
-          # HTML
+          # ---------- Fix HTML ----------
           if [ ! -s app/src/main/assets/index.html ]; then
             echo "Warning: index.html empty, using default."
             cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
@@ -65,30 +65,36 @@ jobs:
           fi
           echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
-          # Icon: check if valid PNG (at least 100 bytes)
-          if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
-            SIZE=$(wc -c < app/src/main/res/drawable/ic_launcher.png)
+          # ---------- Fix Icon ----------
+          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
+
+          # Check if existing icon is valid (size > 100 bytes)
+          if [ -f "$ICON_PATH" ]; then
+            SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
               echo "Icon too small ($SIZE bytes), replacing with default."
-              rm -f app/src/main/res/drawable/ic_launcher.png
+              rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              # Show first few bytes to confirm PNG header
-              head -c 20 app/src/main/res/drawable/ic_launcher.png | xxd
+              # Optional: show PNG header
+              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
-          # If no valid icon, create a visible default (blue square)
-          if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
-            echo "Creating default blue square icon."
-            # Base64 of a 48x48 blue PNG (simple)
-            cat <<'ICON_BASE64' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAA
-            C0lEQVR4nO3aMQ0AAAwDsP6f9g8BJCANFmSAAAAAElFTkSuQmCC
-            ICON_BASE64
-            # Above is a dummy; actual valid blue square PNG
-            # For a real visible icon, we can embed a proper PNG. Here's a simple blue 48x48.
-            # But to avoid complexity, we'll use a known small PNG.
+          # Create default icon if missing
+          if [ ! -f "$ICON_PATH" ]; then
+            echo "Creating default blue icon (48x48)."
+            # Try using ImageMagick (available on runners)
+            if command -v convert >/dev/null 2>&1; then
+              convert -size 48x48 xc:blue "$ICON_PATH"
+            else
+              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
+              printf '%s' \
+                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
+                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
+                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
+            fi
+            echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
           fi
 
       - name: Provide default permissions and app name
@@ -213,7 +219,7 @@ jobs:
             fi
           done
 
-          # Icon: always set, even if file missing, but we have ensured it exists
+          # Icon is always referenced (we ensured it exists)
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
