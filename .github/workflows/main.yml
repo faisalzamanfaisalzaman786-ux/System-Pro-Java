@@ -34,20 +34,29 @@ jobs:
 
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
+        env:
+          APP_HTML: ${{ github.event.client_payload.app_html }}
+          APP_ICON: ${{ github.event.client_payload.app_icon }}
+          PERMISSIONS: ${{ github.event.client_payload.permissions }}
+          APP_NAME: ${{ github.event.client_payload.app_name }}
         run: |
-          # HTML
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
-          # Icon (Base64 to PNG)
-          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          fi
-
-          # Permissions
-          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-
-          # App name
-          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
+          python3 << 'PYTHON_SCRIPT'
+          import os, base64
+          # Write HTML
+          with open('app/src/main/assets/index.html', 'w') as f:
+              f.write(os.environ.get('APP_HTML', ''))
+          # Write icon if provided
+          icon_data = os.environ.get('APP_ICON')
+          if icon_data:
+              with open('app/src/main/res/drawable/ic_launcher.png', 'wb') as f:
+                  f.write(base64.b64decode(icon_data))
+          # Write permissions
+          with open('permissions.txt', 'w') as f:
+              f.write(os.environ.get('PERMISSIONS', ''))
+          # Write app name
+          with open('app_name.txt', 'w') as f:
+              f.write(os.environ.get('APP_NAME', ''))
+          PYTHON_SCRIPT
 
       - name: Verify and fix HTML & Icon
         run: |
