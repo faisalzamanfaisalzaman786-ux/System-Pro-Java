@@ -7,6 +7,10 @@ on:
   repository_dispatch:
     types: [build-apk]
 
+concurrency:
+  group: build-apk-single
+  cancel-in-progress: false   # ایک وقت میں صرف ایک رن چلے
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,36 +36,43 @@ jobs:
       - name: Process client payload (if any)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کوڈ کو assets میں ڈالیں
-          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML کو محفوظ طریقے سے assets میں ڈالیں (printf '%s' استعمال کریں)
+          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
           # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
           # پرمیشنز کو ایک فائل میں محفوظ کریں
-          echo "${{ github.event.client_payload.permissions }}" > permissions.txt
+          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
 
           # ایپ کا نام محفوظ کریں
-          echo "${{ github.event.client_payload.app_name }}" > app_name.txt
+          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
-      - name: Provide default files (if missing)
+      - name: Verify and fix HTML file
         run: |
-          # اگر assets/index.html موجود نہیں تو ڈیفالٹ بنا دیں
-          if [ ! -f app/src/main/assets/index.html ]; then
-            cat <<EOF > app/src/main/assets/index.html
+          # اگر index.html خالی ہے تو ڈیفالٹ بنا دیں
+          if [ ! -s app/src/main/assets/index.html ]; then
+            echo "Warning: index.html is empty or missing. Using default."
+            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
           <head><meta charset="UTF-8"><title>System Pro</title></head>
-          <body><h1>System Pro</h1><p>یہ ڈیفالٹ HTML ہے۔</p></body>
+          <body><h1>System Pro</h1><p>یہ ڈیفالٹ HTML ہے۔</p><p>اگر آپ یہ دیکھ رہے ہیں تو کلائنٹ سے HTML نہیں بھیجا گیا تھا۔</p></body>
           </html>
-          EOF
+          DEFAULT_HTML
           fi
 
+          echo "HTML file size: $(wc -c < app/src/main/assets/index.html) bytes"
+          echo "First 500 characters of index.html:"
+          head -c 500 app/src/main/assets/index.html
+          echo ""
+
+      - name: Provide default icon and permissions (if missing)
+        run: |
           # اگر آئیکون موجود نہیں تو 1x1 سفید PNG (base64) بنا دیں
           if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
-            # ایک چھوٹا سا 1x1 PNG (بیس 64)
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
@@ -131,7 +142,6 @@ jobs:
 
       - name: Create app build.gradle with dynamic namespace
         run: |
-          # ایپ کا نام پڑھیں، پیکیج نام بنائیں
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
@@ -184,14 +194,12 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
           EOF
 
-          # اضافی پرمیشنز شامل کریں
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
             fi
           done
 
-          # آئیکون شامل کریں (صرف اگر موجود ہو)
           if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
             ICON_ATTR='android:icon="@drawable/ic_launcher"'
           else
