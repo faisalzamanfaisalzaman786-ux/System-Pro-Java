@@ -35,13 +35,23 @@ jobs:
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/menu
 
-      - name: Process client payload (HTML, icon, permissions, app name)
+      # ------------------------------------------------------------------
+      # اصلاح شدہ: پے لوڈ کو Base64 کے ذریعے محفوظ طریقے سے ہینڈل کریں
+      # ------------------------------------------------------------------
+      - name: Process client payload (HTML base64, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
-          jq -r '.client_payload.app_html // ""' "$GITHUB_EVENT_PATH" > app/src/main/assets/index.html
+          # HTML (Base64 decode)
+          HTML_B64=$(jq -r '.client_payload.app_html_base64 // ""' "$GITHUB_EVENT_PATH")
+          if [ -n "$HTML_B64" ] && [ "$HTML_B64" != "null" ]; then
+            echo "$HTML_B64" | base64 --decode > app/src/main/assets/index.html
+            echo "✅ HTML decoded from base64"
+          else
+            echo "❌ No app_html_base64 provided"
+            exit 1
+          fi
 
-          # Icon (Base64 to PNG)
+          # Icon (Base64 to PNG) – پہلے کی طرح
           ICON_B64=$(jq -r '.client_payload.app_icon // ""' "$GITHUB_EVENT_PATH")
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
@@ -57,7 +67,7 @@ jobs:
         run: |
           # Fix HTML if empty
           if [ ! -s app/src/main/assets/index.html ]; then
-            echo "Warning: index.html empty, using default."
+            echo "⚠️ Warning: index.html empty, using default."
             cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
@@ -67,6 +77,8 @@ jobs:
           DEFAULT_HTML
           fi
           echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
+          echo "First 5 lines of HTML for debugging:"
+          head -5 app/src/main/assets/index.html
 
           # Fix icon
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
@@ -77,7 +89,6 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
@@ -307,7 +318,7 @@ jobs:
             fi
           done < final_perms.txt
 
-          # Add application tag with network security config and other settings
+          # Add application tag
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
@@ -335,7 +346,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with WebChromeClient handling permissions
+      - name: Create MainActivity.java with full WebView support (location, camera, etc.)
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
@@ -352,9 +363,6 @@ jobs:
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
-          import android.provider.MediaStore;
-          import android.view.Menu;
-          import android.view.MenuItem;
           import android.webkit.GeolocationPermissions;
           import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
@@ -410,9 +418,13 @@ jobs:
                       settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   }
 
+                  // Enable debugging (optional, helps diagnose issues via chrome://inspect)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                      WebView.setWebContentsDebuggingEnabled(true);
+                  }
+
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
-                      // For file uploads (input type="file")
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                                        FileChooserParams fileChooserParams) {
@@ -424,27 +436,32 @@ jobs:
                           return true;
                       }
 
-                      // For geolocation
                       @Override
                       public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                          // Always allow for this demo; you may want to show a dialog
-                          callback.invoke(origin, true, false);
+                          // Check if location permission already granted
+                          if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION)
+                                  == PackageManager.PERMISSION_GRANTED) {
+                              callback.invoke(origin, true, false);
+                          } else {
+                              // Request permission; we'll reload the page after grant
+                              ActivityCompat.requestPermissions(MainActivity.this,
+                                      new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                                      PERMISSION_REQUEST_CODE);
+                              // Store callback for later? For simplicity, we'll reload page after permission.
+                              // We'll use a flag or store the callback; but here we just request and reload later.
+                          }
                       }
 
-                      // For Android 5.0+ permission requests (camera, microphone)
                       @Override
                       public void onPermissionRequest(final PermissionRequest request) {
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                              // Allow all requested resources
                               request.grant(request.getResources());
                           }
                       }
                   });
 
-                  // Load the HTML from assets
                   webView.loadUrl("file:///android_asset/index.html");
 
-                  // Request runtime permissions on start
                   requestNecessaryPermissions();
               }
 
@@ -467,10 +484,22 @@ jobs:
                                                      @NonNull int[] grantResults) {
                   super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                   if (requestCode == PERMISSION_REQUEST_CODE) {
+                      boolean locationGranted = false;
                       for (int i = 0; i < permissions.length; i++) {
+                          if (permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION) ||
+                                  permissions[i].equals(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                              if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                                  locationGranted = true;
+                              }
+                          }
                           if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
                               Toast.makeText(this, "Permission " + permissions[i] + " denied", Toast.LENGTH_SHORT).show();
                           }
+                      }
+                      // If location permission was just granted, reload the page so JavaScript can access it
+                      if (locationGranted) {
+                          webView.reload();
+                          Toast.makeText(this, "Location permission granted, reloading...", Toast.LENGTH_SHORT).show();
                       }
                   }
               }
@@ -487,21 +516,6 @@ jobs:
                       filePathCallback = null;
                   }
                   super.onActivityResult(requestCode, resultCode, data);
-              }
-
-              @Override
-              public boolean onCreateOptionsMenu(Menu menu) {
-                  getMenuInflater().inflate(R.menu.main_menu, menu);
-                  return true;
-              }
-
-              @Override
-              public boolean onOptionsItemSelected(MenuItem item) {
-                  if (item.getItemId() == R.id.action_settings) {
-                      startActivity(new Intent(this, SettingsActivity.class));
-                      return true;
-                  }
-                  return super.onOptionsItemSelected(item);
               }
           }
           EOF
@@ -546,7 +560,7 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
-          # activity_settings.xml (simple placeholder)
+          # activity_settings.xml
           cat <<'EOF' > app/src/main/res/layout/activity_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -570,7 +584,6 @@ jobs:
 
       - name: Create menu resource
         run: |
-          # Fixed: Added xmlns:app namespace
           cat <<'EOF' > app/src/main/res/menu/main_menu.xml
           <?xml version="1.0" encoding="utf-8"?>
           <menu xmlns:android="http://schemas.android.com/apk/res/android"
