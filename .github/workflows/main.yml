@@ -24,12 +24,31 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Install Android SDK components
+      - name: Install Android SDK Command Line Tools
         run: |
-          # Accept Android SDK licenses
+          # Set up Android SDK location
+          export ANDROID_HOME=$HOME/android-sdk
+          mkdir -p $ANDROID_HOME
+          cd $ANDROID_HOME
+
+          # Download command line tools (latest version)
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-latest.zip
+          unzip -q commandlinetools-linux-latest.zip
+          mv cmdline-tools latest
+          rm commandlinetools-linux-latest.zip
+
+          # Add sdkmanager to PATH
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+
+          # Accept licenses non-interactively
           yes | sdkmanager --licenses
-          # Install platform 34 and build tools
+
+          # Install required platforms and build-tools
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+          # Write environment variables for subsequent steps
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Prepare directories
         run: |
