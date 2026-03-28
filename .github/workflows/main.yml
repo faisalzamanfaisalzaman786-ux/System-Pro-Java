@@ -55,80 +55,79 @@ jobs:
           echo "permissions=${PERMISSIONS}" >> $GITHUB_OUTPUT
           echo "icon_base64=${ICON_BASE64}" >> $GITHUB_OUTPUT
 
-      - name: Prepare HTML file (from repo)
-        run: |
-          if [ ! -f "index.html" ]; then
-            echo "Error: index.html not found in repository root!"
-            exit 1
-          fi
-          # Minify only whitespace, not scripts
-          # We'll just copy as is (but trim)
-          cp index.html index.html.original
-          # Remove trailing spaces and blank lines
-          sed -i 's/[ \t]*$//' index.html
-          echo "HTML file prepared."
-
-      - name: Decode and save icon
+      - name: Decode and save icon (if provided)
         run: |
           ICON_BASE64="${{ steps.details.outputs.icon_base64 }}"
           if [ -n "$ICON_BASE64" ]; then
             echo "$ICON_BASE64" | base64 -d > icon.png
             echo "Icon saved as icon.png"
           else
-            echo "No icon provided, will use default."
+            echo "No icon provided."
           fi
 
       - name: Create Cordova project with custom config
         run: |
           npm install -g cordova
+          
+          # Create project
           cordova create myapp com.example.${{ steps.details.outputs.app_name }} "${{ steps.details.outputs.app_name }}"
           cd myapp
+          
           # Remove default www and copy our HTML
           rm -rf www
-          cp -r ../ .??* !(.git) www/ 2>/dev/null || true
-          # Copy index.html explicitly
+          mkdir -p www
           cp ../index.html www/index.html
+          
+          # Copy icon if provided
+          if [ -f "../icon.png" ]; then
+            cp ../icon.png www/icon.png
+          fi
           
           # Add Android platform
           cordova platform add android
           
-          # ===== CONFIGURE CONFIG.XML =====
+          # ===== Configure config.xml =====
           # Add permissions
           PERMS="${{ steps.details.outputs.permissions }}"
-          IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
-          for perm in "${PERM_ARRAY[@]}"; do
-            if [ -n "$perm" ]; then
-              cordova plugin add cordova-plugin-android-permissions 2>/dev/null || true
-              # Add to config.xml
-              sed -i "/<platform name=\"android\">/a \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"$perm\" />\n        </config-file>" config.xml
-            fi
-          done
-          
-          # Add internet access and navigation allowances
-          sed -i "/<platform name=\"android\">/a \        <access origin=\"*\" />\n        <allow-navigation href=\"*\" />\n        <allow-intent href=\"http://*/*\" />\n        <allow-intent href=\"https://*/*\" />" config.xml
-          
-          # Set custom icon if provided
-          if [ -f "../icon.png" ]; then
-            # Create res folder and copy icon to all densities
-            mkdir -p res
-            cp ../icon.png res/icon.png
-            # Add icon to config.xml (platform android)
-            sed -i "/<platform name=\"android\">/a \        <icon src=\"res/icon.png\" />" config.xml
-            echo "Custom icon configured."
+          if [ -n "$PERMS" ]; then
+            IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
+            for perm in "${PERM_ARRAY[@]}"; do
+              if [ -n "$perm" ]; then
+                # Add permission to AndroidManifest.xml using edit-config
+                sed -i "/<platform name=\"android\">/a \        <edit-config file=\"app/src/main/AndroidManifest.xml\" target=\"/manifest\" mode=\"merge\">\n            <uses-permission android:name=\"$perm\" />\n        </edit-config>" config.xml
+              fi
+            done
           fi
           
-          # Ensure WebView settings: allow file access, etc.
-          cat >> config.xml <<EOF
+          # Add internet access and allow everything (so buttons work)
+          sed -i "/<platform name=\"android\">/a \        <access origin=\"*\" />\n        <allow-navigation href=\"*\" />\n        <allow-intent href=\"http://*/*\" />\n        <allow-intent href=\"https://*/*\" />" config.xml
+          
+          # Add webview preferences to ensure JavaScript works
+          cat >> config.xml <<'EOF'
           <preference name="AndroidInsecureFileModeEnabled" value="true" />
           <preference name="AllowFileAccessFromFileURLs" value="true" />
           <preference name="AllowUniversalAccessFromFileURLs" value="true" />
           <preference name="loadUrlTimeoutValue" value="700000" />
           EOF
           
-          # Build debug APK (signed with debug key)
+          # Set custom icon (Cordova will handle the rest)
+          if [ -f "../icon.png" ]; then
+            # Copy icon to all mipmap folders (manual for safety)
+            TARGET_DIR="platforms/android/app/src/main/res"
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p "$TARGET_DIR/mipmap-$density"
+              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher.png"
+              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher_round.png"
+            done
+            # Also add icon entry in config.xml
+            sed -i "/<platform name=\"android\">/a \        <icon src=\"res/icon.png\" />" config.xml
+            echo "Custom icon applied."
+          fi
+          
+          # Build debug APK
           cordova build android
           
-          # Locate the debug APK
+          # Locate the APK
           APK_PATH=$(find platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "Error: No debug APK found."
