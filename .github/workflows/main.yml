@@ -77,8 +77,6 @@ jobs:
             echo "Icon saved."
           else
             echo "No icon provided, using default."
-            # Optionally provide a default icon
-            # curl -o app/icon.png https://example.com/default.png
           fi
 
       - name: Create AndroidManifest.xml with permissions
@@ -112,13 +110,9 @@ jobs:
           done
           echo "AndroidManifest.xml created with permissions."
 
-      - name: Build APK using PWA Builder or similar
-        # یہاں آپ اپنی پسند کا ٹول استعمال کر سکتے ہیں۔ مثال کے طور پر PWABuilder CLI یا اپنی مرضی کا سکرپٹ۔
-        # ذیل میں ایک سادہ مثال ہے جو webview APK بنانے کے لیے cordova استعمال کرتی ہے۔
+      - name: Install Cordova and build APK/AAB
         run: |
-          # Install Cordova
           npm install -g cordova
-          # Create Cordova project
           cordova create myapp com.example.${{ steps.details.outputs.app_name }} "${{ steps.details.outputs.app_name }}"
           cd myapp
           # Replace www with our app folder
@@ -126,12 +120,26 @@ jobs:
           cp -r ../app www
           # Add Android platform
           cordova platform add android
-          # Add permissions if needed (Cordova automatically adds from manifest)
-          # Build
+          # Build release (will generate AAB)
           cordova build android --release
-          # The APK will be at platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
-          cp platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ../app.apk
           cd ..
+
+      - name: Convert AAB to APK using bundletool
+        run: |
+          # Download bundletool
+          wget -q https://github.com/google/bundletool/releases/download/1.15.6/bundletool-all-1.15.6.jar -O bundletool.jar
+          # Locate AAB file
+          AAB_PATH=$(find . -name "*.aab" | head -n 1)
+          if [ -z "$AAB_PATH" ]; then
+            echo "Error: No AAB file found."
+            exit 1
+          fi
+          echo "Found AAB: $AAB_PATH"
+          # Generate universal APK from AAB
+          java -jar bundletool.jar build-apks --bundle="$AAB_PATH" --output=output.apks --mode=universal
+          # Extract the universal APK
+          unzip -p output.apks universal.apk > app.apk
+          echo "APK generated successfully."
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
