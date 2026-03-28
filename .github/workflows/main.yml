@@ -7,7 +7,7 @@ on:
   repository_dispatch:
     types: [build-apk]
 
-# Concurrency: صرف ایک run چلے گا، نیا آنے پر پچھلا منسوخ
+# Concurrency: ایک وقت میں صرف ایک بلڈ، نیا آنے پر پچھلا منسوخ
 concurrency:
   group: system-pro-apk-builder
   cancel-in-progress: true
@@ -27,7 +27,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Set up Android SDK (with licenses)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
@@ -45,27 +45,28 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Fetch uploaded HTML and icon (if any)
+      - name: Process client payload (if any)
         if: github.event_name == 'repository_dispatch'
-        continue-on-error: true   # اگر فائل نہ ملے تو بھی آگے بڑھے
         run: |
-          if [ -n "${{ github.event.client_payload.html_file }}" ]; then
-            curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                 -H "Accept: application/vnd.github.v3.raw" \
-                 -o index.html \
-                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}" || true
+          # HTML کوڈ کو assets میں ڈالیں
+          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+
+          # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
+          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            echo "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
-          if [ -n "${{ github.event.client_payload.icon_file }}" ]; then
-            curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                 -H "Accept: application/vnd.github.v3.raw" \
-                 -o icon_base64.txt \
-                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}" || true
-          fi
+
+          # پرمیشنز کو JSON array سے صحیح طریقے سے parse کریں
+          echo '${{ toJSON(github.event.client_payload.permissions) }}' | jq -r '.[]' > permissions.txt
+
+          # ایپ کا نام محفوظ کریں
+          echo "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Provide default files (if missing)
         run: |
-          if [ ! -f index.html ]; then
-            cat <<EOF > index.html
+          # اگر assets/index.html موجود نہیں تو ڈیفالٹ بنا دیں
+          if [ ! -f app/src/main/assets/index.html ]; then
+            cat <<EOF > app/src/main/assets/index.html
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>System Pro</title></head>
@@ -73,29 +74,25 @@ jobs:
 </html>
 EOF
           fi
-          if [ ! -f icon_base64.txt ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" > icon_base64.txt
+
+          # اگر آئیکون موجود نہیں تو 1x1 سفید PNG (base64) بنا دیں
+          if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # Permissions: اگر payload میں ہوں تو لکھیں، ورنہ خالی فائل
-          if [ "${{ github.event_name }}" == "repository_dispatch" ] && [ -n "${{ github.event.client_payload.permissions }}" ]; then
-            echo '${{ toJSON(github.event.client_payload.permissions) }}' | jq -r '.[]' > permissions.txt
-          else
+          # اگر پرمیشنز کی فائل نہیں تو خالی بنا دیں
+          if [ ! -f permissions.txt ]; then
             touch permissions.txt
           fi
 
-          # App name: payload سے یا ڈیفالٹ
-          if [ "${{ github.event_name }}" == "repository_dispatch" ] && [ -n "${{ github.event.client_payload.app_name }}" ]; then
-            echo "${{ github.event.client_payload.app_name }}" > app_name.txt
-          else
+          # اگر ایپ کا نام نہیں تو ڈیفالٹ
+          if [ ! -f app_name.txt ]; then
             echo "System Pro" > app_name.txt
           fi
 
-      - name: Copy HTML to assets
-        run: cp index.html app/src/main/assets/index.html
-
-      - name: Decode and copy icon
-        run: base64 -d icon_base64.txt > app/src/main/res/drawable/ic_launcher.png
+      - name: Clean previous builds
+        run: |
+          rm -rf .gradle build app/build gradlew gradlew.bat gradle/
 
       - name: Create gradle.properties
         run: |
@@ -149,11 +146,15 @@ EOF
 
       - name: Create app build.gradle with unique package name
         run: |
+          # ایپ کا نام پڑھیں
           APP_NAME=$(cat app_name.txt)
+          # پیکیج بیس نام بنائیں (صرف حروف تہجی، اعداد اور انڈر سکور)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          # اگر پہلا حرف عدد ہو تو 'a_' لگا دیں
           if [[ "$PACKAGE_BASE" =~ ^[0-9] ]]; then
             PACKAGE_BASE="a_$PACKAGE_BASE"
           fi
+          # ہر بلڈ کے لیے منفرد پیکیج نام: com.systempro.<base>_<run_id>
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}_${{ github.run_id }}"
           echo "Using package name: $PACKAGE_NAME"
 
@@ -201,6 +202,8 @@ EOF
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 EOF
+
+          # پرمیشنز شامل کریں
           if [ -s permissions.txt ]; then
             while IFS= read -r perm; do
               if [ -n "$perm" ]; then
@@ -208,6 +211,7 @@ EOF
               fi
             done < permissions.txt
           fi
+
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
     <application
