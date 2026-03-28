@@ -24,6 +24,13 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Install Android SDK components
+        run: |
+          # Accept Android SDK licenses
+          yes | sdkmanager --licenses
+          # Install platform 34 and build tools
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
       - name: Prepare directories
         run: |
           mkdir -p app/src/main/assets
@@ -259,7 +266,6 @@ jobs:
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          # Use unquoted EOF so that $PACKAGE_NAME expands
           cat << EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
@@ -503,13 +509,13 @@ jobs:
           </resources>
           EOF
 
-      - name: Generate gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type all
-          chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
 
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
