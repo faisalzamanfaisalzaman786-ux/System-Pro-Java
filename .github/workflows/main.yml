@@ -61,92 +61,82 @@ jobs:
             echo "Error: index.html not found in repository root!"
             exit 1
           fi
-          mkdir -p app
-          cp index.html app/index.html
-          echo "HTML file copied."
+          # Minify only whitespace, not scripts
+          # We'll just copy as is (but trim)
+          cp index.html index.html.original
+          # Remove trailing spaces and blank lines
+          sed -i 's/[ \t]*$//' index.html
+          echo "HTML file prepared."
 
-      - name: Decode and save icon (if provided)
+      - name: Decode and save icon
         run: |
           ICON_BASE64="${{ steps.details.outputs.icon_base64 }}"
           if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > app/icon.png
-            echo "Icon saved."
+            echo "$ICON_BASE64" | base64 -d > icon.png
+            echo "Icon saved as icon.png"
           else
-            echo "No icon provided, using default."
+            echo "No icon provided, will use default."
           fi
 
-      - name: Create AndroidManifest.xml with permissions
-        run: |
-          PERMISSIONS="${{ steps.details.outputs.permissions }}"
-          cat > app/AndroidManifest.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.example.${{ steps.details.outputs.app_name }}">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="${{ steps.details.outputs.app_name }}"
-                  android:theme="@style/AppTheme">
-                  <activity android:name=".MainActivity"
-                      android:configChanges="orientation|screenSize"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          EOF
-          IFS=',' read -ra PERM_ARRAY <<< "$PERMISSIONS"
-          for perm in "${PERM_ARRAY[@]}"; do
-            if [ -n "$perm" ]; then
-              sed -i "/<\/application>/i \    <uses-permission android:name=\"$perm\" />" app/AndroidManifest.xml
-            fi
-          done
-          echo "AndroidManifest.xml created."
-
-      - name: Install Cordova and build APK (debug)
+      - name: Create Cordova project with custom config
         run: |
           npm install -g cordova
           cordova create myapp com.example.${{ steps.details.outputs.app_name }} "${{ steps.details.outputs.app_name }}"
           cd myapp
+          # Remove default www and copy our HTML
           rm -rf www
-          cp -r ../app www
+          cp -r ../ .??* !(.git) www/ 2>/dev/null || true
+          # Copy index.html explicitly
+          cp ../index.html www/index.html
+          
+          # Add Android platform
           cordova platform add android
-
-          # Set custom icon if provided
-          if [ -f "../app/icon.png" ]; then
-            # Create mipmap folders and copy icon
-            mkdir -p platforms/android/app/src/main/res/mipmap-hdpi
-            mkdir -p platforms/android/app/src/main/res/mipmap-mdpi
-            mkdir -p platforms/android/app/src/main/res/mipmap-xhdpi
-            mkdir -p platforms/android/app/src/main/res/mipmap-xxhdpi
-            mkdir -p platforms/android/app/src/main/res/mipmap-xxxhdpi
-            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp ../app/icon.png platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            # Update config.xml to use custom icon
-            if ! grep -q '<icon' config.xml; then
-              sed -i '/<platform name="android">/a \        <icon src="res\/mipmap\/ic_launcher.png" />' config.xml
+          
+          # ===== CONFIGURE CONFIG.XML =====
+          # Add permissions
+          PERMS="${{ steps.details.outputs.permissions }}"
+          IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
+          for perm in "${PERM_ARRAY[@]}"; do
+            if [ -n "$perm" ]; then
+              cordova plugin add cordova-plugin-android-permissions 2>/dev/null || true
+              # Add to config.xml
+              sed -i "/<platform name=\"android\">/a \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"$perm\" />\n        </config-file>" config.xml
             fi
-            echo "Custom icon applied."
+          done
+          
+          # Add internet access and navigation allowances
+          sed -i "/<platform name=\"android\">/a \        <access origin=\"*\" />\n        <allow-navigation href=\"*\" />\n        <allow-intent href=\"http://*/*\" />\n        <allow-intent href=\"https://*/*\" />" config.xml
+          
+          # Set custom icon if provided
+          if [ -f "../icon.png" ]; then
+            # Create res folder and copy icon to all densities
+            mkdir -p res
+            cp ../icon.png res/icon.png
+            # Add icon to config.xml (platform android)
+            sed -i "/<platform name=\"android\">/a \        <icon src=\"res/icon.png\" />" config.xml
+            echo "Custom icon configured."
           fi
-
+          
+          # Ensure WebView settings: allow file access, etc.
+          cat >> config.xml <<EOF
+          <preference name="AndroidInsecureFileModeEnabled" value="true" />
+          <preference name="AllowFileAccessFromFileURLs" value="true" />
+          <preference name="AllowUniversalAccessFromFileURLs" value="true" />
+          <preference name="loadUrlTimeoutValue" value="700000" />
+          EOF
+          
           # Build debug APK (signed with debug key)
           cordova build android
-          cd ..
-
+          
           # Locate the debug APK
-          DEBUG_APK=$(find . -path "*/app/build/outputs/apk/debug/*.apk" | head -n 1)
-          if [ -z "$DEBUG_APK" ]; then
+          APK_PATH=$(find platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
             echo "Error: No debug APK found."
             exit 1
           fi
-          echo "Found debug APK: $DEBUG_APK"
-          cp "$DEBUG_APK" app.apk
-
+          cp "$APK_PATH" ../app.apk
+          cd ..
+          
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
