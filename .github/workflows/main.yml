@@ -26,15 +26,11 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 🔧 نیا سٹیپ: Android SDK لائسنس قبول کریں اور ضروری اجزاء انسٹال کریں
       - name: Accept Android SDK licenses and install required components
         run: |
-          # SDK کے لیے متغیر سیٹ کریں (عام طور پر پہلے سے سیٹ ہوتا ہے)
           export ANDROID_HOME=$ANDROID_HOME
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-          # لائسنس قبول کریں
           yes | sdkmanager --licenses
-          # پلیٹ فارم اور بلڈ ٹولز انسٹال کریں (compileSdk 34 کے لیے)
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Prepare directories
@@ -47,8 +43,10 @@ jobs:
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML (heredoc سے محفوظ طریقے سے لکھیں)
+          cat > app/src/main/assets/index.html << 'END_HTML'
+          ${{ github.event.client_payload.app_html }}
+          END_HTML
 
           # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
