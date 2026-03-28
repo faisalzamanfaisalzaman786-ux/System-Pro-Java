@@ -1,6 +1,8 @@
 name: System Pro - Dynamic APK Builder
 
 on:
+  push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
@@ -24,31 +26,16 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Install Android SDK Command Line Tools
+      # 🔧 نیا سٹیپ: Android SDK لائسنس قبول کریں اور ضروری اجزاء انسٹال کریں
+      - name: Accept Android SDK licenses and install required components
         run: |
-          # Set up Android SDK location
-          export ANDROID_HOME=$HOME/android-sdk
-          mkdir -p $ANDROID_HOME
-          cd $ANDROID_HOME
-
-          # Download command line tools (latest version)
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-latest.zip
-          unzip -q commandlinetools-linux-latest.zip
-          mv cmdline-tools latest
-          rm commandlinetools-linux-latest.zip
-
-          # Add sdkmanager to PATH
+          # SDK کے لیے متغیر سیٹ کریں (عام طور پر پہلے سے سیٹ ہوتا ہے)
+          export ANDROID_HOME=$ANDROID_HOME
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-
-          # Accept licenses non-interactively
+          # لائسنس قبول کریں
           yes | sdkmanager --licenses
-
-          # Install required platforms and build-tools
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
-
-          # Write environment variables for subsequent steps
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          # پلیٹ فارم اور بلڈ ٹولز انسٹال کریں (compileSdk 34 کے لیے)
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Prepare directories
         run: |
@@ -59,36 +46,27 @@ jobs:
 
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
-        env:
-          APP_HTML: ${{ github.event.client_payload.app_html }}
-          APP_ICON: ${{ github.event.client_payload.app_icon }}
-          PERMISSIONS: ${{ github.event.client_payload.permissions }}
-          APP_NAME: ${{ github.event.client_payload.app_name }}
         run: |
-          python3 << 'PYTHON_SCRIPT'
-          import os, base64
-          # Write HTML
-          with open('app/src/main/assets/index.html', 'w') as f:
-              f.write(os.environ.get('APP_HTML', ''))
-          # Write icon if provided
-          icon_data = os.environ.get('APP_ICON')
-          if icon_data:
-              with open('app/src/main/res/drawable/ic_launcher.png', 'wb') as f:
-                  f.write(base64.b64decode(icon_data))
-          # Write permissions
-          with open('permissions.txt', 'w') as f:
-              f.write(os.environ.get('PERMISSIONS', ''))
-          # Write app name
-          with open('app_name.txt', 'w') as f:
-              f.write(os.environ.get('APP_NAME', ''))
-          PYTHON_SCRIPT
+          # HTML
+          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+
+          # Icon (Base64 to PNG)
+          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # Permissions
+          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+
+          # App name
+          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Verify and fix HTML & Icon
         run: |
           # ---------- Fix HTML ----------
           if [ ! -s app/src/main/assets/index.html ]; then
             echo "Warning: index.html empty, using default."
-            cat << 'DEFAULT_HTML' > app/src/main/assets/index.html
+            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
           <head><meta charset="UTF-8"><title>System Pro</title></head>
@@ -101,6 +79,7 @@ jobs:
           # ---------- Fix Icon ----------
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
 
+          # Check if existing icon is valid (size > 100 bytes)
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -108,14 +87,19 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
+              # Optional: show PNG header
+              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
+          # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
+            # Try using ImageMagick (available on runners)
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
+              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
               printf '%s' \
                 "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
                 "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -133,16 +117,6 @@ jobs:
             echo "System Pro" > app_name.txt
           fi
 
-      - name: Add background location permission if location is selected
-        run: |
-          # If location permission is selected, add background location (Android 10+)
-          if grep -q "android.permission.ACCESS_FINE_LOCATION" permissions.txt; then
-            if ! grep -q "android.permission.ACCESS_BACKGROUND_LOCATION" permissions.txt; then
-              echo "android.permission.ACCESS_BACKGROUND_LOCATION" >> permissions.txt
-              echo "Added background location permission"
-            fi
-          fi
-
       - name: Clean previous builds
         run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
 
@@ -154,7 +128,7 @@ jobs:
 
       - name: Create project build.gradle
         run: |
-          cat << 'EOF' > build.gradle
+          cat <<'EOF' > build.gradle
           buildscript {
               repositories {
                   google()
@@ -176,7 +150,7 @@ jobs:
 
       - name: Create settings.gradle
         run: |
-          cat << 'EOF' > settings.gradle
+          cat <<'EOF' > settings.gradle
           pluginManagement {
               repositories {
                   google()
@@ -203,7 +177,7 @@ jobs:
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           echo "Using package name: $PACKAGE_NAME"
 
-          cat << EOF > app/build.gradle
+          cat <<EOF > app/build.gradle
           plugins {
               id 'com.android.application'
           }
@@ -242,7 +216,7 @@ jobs:
           APP_NAME=$(cat app_name.txt)
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -256,7 +230,8 @@ jobs:
             fi
           done
 
-          cat << EOF >> app/src/main/AndroidManifest.xml
+          # Icon is always referenced (we ensured it exists)
+          cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
                   android:allowBackup="true"
@@ -277,7 +252,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package and runtime permissions
+      - name: Create MainActivity.java with dynamic package
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
@@ -285,39 +260,22 @@ jobs:
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat << EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
-          import android.Manifest;
-          import android.content.Intent;
-          import android.content.pm.PackageManager;
-          import android.net.Uri;
-          import android.os.Build;
           import android.os.Bundle;
-          import android.webkit.GeolocationPermissions;
-          import android.webkit.PermissionRequest;
-          import android.webkit.ValueCallback;
-          import android.webkit.WebChromeClient;
-          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import android.widget.Toast;
-          import androidx.annotation.NonNull;
+          import android.webkit.WebChromeClient;
+          import android.webkit.ValueCallback;
+          import android.net.Uri;
+          import android.content.Intent;
           import androidx.appcompat.app.AppCompatActivity;
-          import androidx.core.app.ActivityCompat;
-          import androidx.core.content.ContextCompat;
-
-          import java.util.ArrayList;
-          import java.util.List;
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
               private ValueCallback<Uri[]> filePathCallback;
               private static final int FILE_CHOOSER_REQUEST_CODE = 1;
-              private static final int PERMISSION_REQUEST_CODE = 100;
-              private PermissionRequest currentPermissionRequest;
-              private String geoOrigin;
-              private GeolocationPermissions.Callback geoCallback;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -325,165 +283,25 @@ jobs:
                   setContentView(R.layout.activity_main);
 
                   webView = findViewById(R.id.webview);
-                  WebSettings webSettings = webView.getSettings();
-
-                  webSettings.setJavaScriptEnabled(true);
-                  webSettings.setDomStorageEnabled(true);
-                  webSettings.setAllowFileAccess(true);
-                  webSettings.setAllowContentAccess(true);
-                  webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                      WebView.setWebContentsDebuggingEnabled(true);
-                  }
-
-                  webView.setWebViewClient(new WebViewClient() {
-                      @Override
-                      public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                          if (url.startsWith("http") || url.startsWith("file")) {
-                              view.loadUrl(url);
-                              return true;
-                          }
-                          return false;
-                      }
-                  });
-
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
+                  webView.getSettings().setAllowFileAccess(true);
+                  webView.getSettings().setAllowContentAccess(true);
+                  webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
-                      // File chooser
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                                        FileChooserParams fileChooserParams) {
                           MainActivity.this.filePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("*/*");
+                          intent.setType("image/*");
                           startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
                           return true;
-                      }
-
-                      // Geolocation
-                      @Override
-                      public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                          MainActivity.this.geoOrigin = origin;
-                          MainActivity.this.geoCallback = callback;
-                          requestLocationPermissions();
-                      }
-
-                      // Camera / Microphone (WebRTC)
-                      @Override
-                      public void onPermissionRequest(PermissionRequest request) {
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                              String[] resources = request.getResources();
-                              List<String> neededPermissions = new ArrayList<>();
-                              for (String resource : resources) {
-                                  switch (resource) {
-                                      case PermissionRequest.RESOURCE_VIDEO_CAPTURE:
-                                          neededPermissions.add(Manifest.permission.CAMERA);
-                                          break;
-                                      case PermissionRequest.RESOURCE_AUDIO_CAPTURE:
-                                          neededPermissions.add(Manifest.permission.RECORD_AUDIO);
-                                          break;
-                                  }
-                              }
-                              if (neededPermissions.isEmpty()) {
-                                  request.grant(request.getResources());
-                                  return;
-                              }
-                              currentPermissionRequest = request;
-                              ActivityCompat.requestPermissions(MainActivity.this,
-                                      neededPermissions.toArray(new String[0]),
-                                      PERMISSION_REQUEST_CODE);
-                          } else {
-                              request.grant(request.getResources());
-                          }
                       }
                   });
 
                   webView.loadUrl("file:///android_asset/index.html");
-              }
-
-              private void requestLocationPermissions() {
-                  List<String> perms = new ArrayList<>();
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                          != PackageManager.PERMISSION_GRANTED) {
-                      perms.add(Manifest.permission.ACCESS_FINE_LOCATION);
-                  }
-                  // For Android 10+, background location permission is separate
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                              != PackageManager.PERMISSION_GRANTED) {
-                          perms.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
-                      }
-                  }
-                  if (!perms.isEmpty()) {
-                      ActivityCompat.requestPermissions(this,
-                              perms.toArray(new String[0]),
-                              PERMISSION_REQUEST_CODE);
-                  } else {
-                      // Already granted
-                      if (geoCallback != null && geoOrigin != null) {
-                          geoCallback.invoke(geoOrigin, true, false);
-                          geoCallback = null;
-                          geoOrigin = null;
-                      }
-                  }
-              }
-
-              @Override
-              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                                     @NonNull int[] grantResults) {
-                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-                  if (requestCode == PERMISSION_REQUEST_CODE) {
-                      // Handle geolocation
-                      if (geoCallback != null && geoOrigin != null) {
-                          boolean granted = true;
-                          // Check if any required location permission was denied
-                          for (int i = 0; i < permissions.length; i++) {
-                              if (permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION) ||
-                                      permissions[i].equals(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
-                                  if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                                      granted = false;
-                                      break;
-                                  }
-                              }
-                          }
-                          geoCallback.invoke(geoOrigin, granted, false);
-                          geoCallback = null;
-                          geoOrigin = null;
-                      }
-
-                      // Handle WebRTC (camera/microphone)
-                      if (currentPermissionRequest != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                          boolean allGranted = true;
-                          for (int result : grantResults) {
-                              if (result != PackageManager.PERMISSION_GRANTED) {
-                                  allGranted = false;
-                                  break;
-                              }
-                          }
-                          if (allGranted) {
-                              currentPermissionRequest.grant(currentPermissionRequest.getResources());
-                          } else {
-                              currentPermissionRequest.deny();
-                          }
-                          currentPermissionRequest = null;
-                      }
-
-                      // Optionally show toast for missing permissions
-                      if (!allPermissionsGranted(permissions, grantResults)) {
-                          Toast.makeText(this, "کچھ پرمیشنز نہیں دی گئیں۔ کچھ فیچرز کام نہیں کریں گے۔", Toast.LENGTH_LONG).show();
-                      }
-                  }
-              }
-
-              private boolean allPermissionsGranted(String[] permissions, int[] grantResults) {
-                  for (int i = 0; i < permissions.length; i++) {
-                      if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                          return false;
-                      }
-                  }
-                  return true;
               }
 
               @Override
@@ -491,13 +309,9 @@ jobs:
                   if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
                       if (resultCode == RESULT_OK && data != null) {
                           Uri[] uris = new Uri[]{data.getData()};
-                          if (filePathCallback != null) {
-                              filePathCallback.onReceiveValue(uris);
-                          }
+                          filePathCallback.onReceiveValue(uris);
                       } else {
-                          if (filePathCallback != null) {
-                              filePathCallback.onReceiveValue(null);
-                          }
+                          filePathCallback.onReceiveValue(null);
                       }
                       filePathCallback = null;
                   }
@@ -508,7 +322,7 @@ jobs:
 
       - name: Create activity_main.xml
         run: |
-          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
@@ -518,7 +332,7 @@ jobs:
 
       - name: Create minimal styles.xml
         run: |
-          cat << 'EOF' > app/src/main/res/values/styles.xml
+          cat <<'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
@@ -528,13 +342,13 @@ jobs:
           </resources>
           EOF
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.5
+      - name: Generate gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5 --distribution-type all
+          chmod +x gradlew
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
