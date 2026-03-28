@@ -6,7 +6,7 @@ on:
 
 concurrency:
   group: build-apk-single
-  cancel-in-progress: false   # پہلے رن کو ختم ہونے دیں، پھر نیا شروع ہو
+  cancel-in-progress: false   # پہلے والا ختم ہونے دے، پھر نیا شروع ہو
 
 jobs:
   build:
@@ -32,10 +32,8 @@ jobs:
 
       - name: Process client payload (HTML, icon, permissions, app name)
         run: |
-          # HTML کو محفوظ طریقے سے assets میں ڈالیں (here-doc)
-          cat <<'HTML_EOF' > app/src/main/assets/index.html
-          ${{ github.event.client_payload.app_html }}
-          HTML_EOF
+          # HTML کو محفوظ طریقے سے assets میں ڈالیں (echo سے variable expand ہو گا)
+          echo "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
 
           # اگر آئیکون بھیجا گیا ہو تو ڈی کوڈ کریں
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
@@ -134,12 +132,13 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic namespace + timestamp
+      - name: Create app build.gradle with dynamic namespace + timestamp (valid)
         run: |
           APP_NAME=$(cat app_name.txt)
-          TIMESTAMP=$(date +%s)   # یونکس ٹائم سٹیمپ
+          TIMESTAMP=$(date +%s)
+          # پیکیج کے آخری سیگمنٹ کو حرف سے شروع کریں تاکہ درست ہو
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.${TIMESTAMP}"
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.ts${TIMESTAMP}"
           echo "Using package name: $PACKAGE_NAME"
 
           cat <<EOF > app/build.gradle
@@ -227,7 +226,7 @@ jobs:
           APP_NAME=$(cat app_name.txt)
           TIMESTAMP=$(date +%s)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.${TIMESTAMP}"
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}.ts${TIMESTAMP}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
@@ -291,7 +290,7 @@ jobs:
           }
           EOF
 
-          # متغیر کو replace کریں
+          # اب پیکیج نام کو اصل میں بدلیں
           sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
