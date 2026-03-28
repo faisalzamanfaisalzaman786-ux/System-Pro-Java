@@ -30,27 +30,29 @@ jobs:
                  "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}"
           fi
 
-      - name: Set up Java
+      - name: Set up Java (if needed for Android build)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (if needed)
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-33 build-tools;30.0.3'
 
-      # یہاں آپ کا اصل APK بنانے کا اسکرپٹ چلے گا
-      - name: Build APK
+      - name: Build APK using custom script
         run: |
-          # مثال: اگر آپ کے پاس Python اسکرپٹ ہے جو index.html اور icon_base64.txt سے APK بناتا ہے
-          # python build.py --html index.html --icon icon_base64.txt --permissions "${{ join(github.event.client_payload.permissions, ',') }}" --name "${{ github.event.client_payload.app_name }}"
-          echo "Building APK for ${{ github.event.client_payload.app_name }}"
-          # یہاں اپنے بلڈ کمانڈ لگائیں
-          # اگر بلڈ کے بعد output.apk فائل بنتی ہے تو اسے output/ فولڈر میں رکھیں
-
-          # ڈیمو کے طور پر صرف ایک ڈمی فائل بناتے ہیں
+          # یہاں آپ کا اصل بلڈ اسکرپٹ لگائیں
+          # فرض کریں کہ آپ کے پاس build.py ہے جو index.html اور icon_base64.txt سے APK بناتا ہے
+          # مثال:
+          python build.py --html index.html --icon icon_base64.txt \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --permissions "${{ join(github.event.client_payload.permissions, ',') }}"
+          
+          # اگر آپ کا اسکرپٹ APK کو کسی مخصوص مقام پر رکھتا ہے، تو اسے output/ میں کاپی کریں
           mkdir -p output
-          echo "APK content would be here" > output/app.apk
+          cp /path/to/your/app.apk output/app.apk   # اپنا اصلی پاتھ لگائیں
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -58,7 +60,7 @@ jobs:
           name: app-${{ github.run_id }}
           path: output/*.apk
 
-      - name: Cleanup temp files (optional)
+      - name: Cleanup temp files
         if: always()
         run: |
           # HTML فائل حذف کریں
