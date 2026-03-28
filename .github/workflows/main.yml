@@ -66,6 +66,25 @@ jobs:
             echo "Icon saved."
           fi
 
+      - name: Prepare HTML with permissive CSP
+        run: |
+          # Add meta CSP to allow everything (for WebView)
+          # Also ensure viewport is set
+          cat > index_with_csp.html <<EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+            <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src *; img-src * data:; style-src * 'unsafe-inline';">
+          </head>
+          <body>
+          $(cat index.html)
+          </body>
+          </html>
+          EOF
+          mv index_with_csp.html index.html
+
       - name: Build APK with Cordova
         run: |
           set -e
@@ -86,7 +105,7 @@ jobs:
           # Add Android platform
           cordova platform add android
 
-          # ========== Add preferences and access rules ==========
+          # ========== Add all necessary preferences to config.xml ==========
           # Insert before </widget>
           sed -i '/<\/widget>/i \
           <access origin="*" />\
@@ -96,9 +115,13 @@ jobs:
           <preference name="AndroidInsecureFileModeEnabled" value="true" />\
           <preference name="AllowFileAccessFromFileURLs" value="true" />\
           <preference name="AllowUniversalAccessFromFileURLs" value="true" />\
-          <preference name="loadUrlTimeoutValue" value="700000" />' config.xml
+          <preference name="loadUrlTimeoutValue" value="700000" />\
+          <preference name="JavaScriptEnabled" value="true" />\
+          <preference name="MixedContentMode" value="2" />\
+          <preference name="OverrideUserAgent" value="Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36" />\
+          <preference name="AllowInlineMediaPlayback" value="true" />' config.xml
 
-          # ========== Add permissions ==========
+          # ========== Add permissions using config-file ==========
           PERMS="${{ steps.details.outputs.permissions }}"
           if [ -n "$PERMS" ]; then
             IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
@@ -109,6 +132,14 @@ jobs:
               fi
             done
           fi
+
+          # ========== Enable cleartext traffic and add internet permission ==========
+          # Add INTERNET permission if not already
+          if ! grep -q "android.permission.INTERNET" config.xml; then
+            sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"android.permission.INTERNET\" />\n        </config-file>" config.xml
+          fi
+          # Add android:usesCleartextTraffic="true" to application tag
+          sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest/application\">\n            <android:usesCleartextTraffic=\"true\" />\n        </config-file>" config.xml
 
           # ========== Set icon if provided ==========
           if [ -f "../icon.png" ]; then
