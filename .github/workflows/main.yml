@@ -1,181 +1,346 @@
-name: Build APK from HTML
+name: System Pro - Dynamic APK Builder
 
 on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'MyApp'
-      permissions:
-        description: 'Permissions (comma separated)'
-        required: false
-      app_icon:
-        description: 'Icon base64 (optional)'
-        required: false
+
+concurrency:
+  group: build-apk-single
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          fetch-depth: 0
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Set up environment
+      - name: Prepare directories
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip curl
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Get app details
-        id: details
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            APP_NAME="${{ github.event.inputs.app_name }}"
-            PERMISSIONS="${{ github.event.inputs.permissions }}"
-            ICON_BASE64="${{ github.event.inputs.app_icon }}"
-          else
-            APP_NAME="${{ github.event.client_payload.app_name }}"
-            PERMISSIONS="${{ github.event.client_payload.permissions }}"
-            ICON_BASE64="${{ github.event.client_payload.app_icon }}"
-          fi
-          # Package name: only lowercase letters, numbers, underscores
-          PKG_NAME=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:upper:]' '[:lower:]')
-          if [ -z "$PKG_NAME" ]; then PKG_NAME="myapp"; fi
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "package_name=$PKG_NAME" >> $GITHUB_OUTPUT
-          echo "permissions=$PERMISSIONS" >> $GITHUB_OUTPUT
-          echo "icon_base64=$ICON_BASE64" >> $GITHUB_OUTPUT
-
-      - name: Decode icon if provided
-        run: |
-          if [ -n "${{ steps.details.outputs.icon_base64 }}" ]; then
-            echo "${{ steps.details.outputs.icon_base64 }}" | base64 -d > icon.png
-            echo "Icon saved."
-          fi
-
-      - name: Prepare HTML with permissive CSP
-        run: |
-          # Add meta CSP to allow everything (for WebView)
-          # Also ensure viewport is set
-          cat > index_with_csp.html <<EOF
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-            <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src *; img-src * data:; style-src * 'unsafe-inline';">
-          </head>
-          <body>
-          $(cat index.html)
-          </body>
-          </html>
-          EOF
-          mv index_with_csp.html index.html
-
-      - name: Build APK with Cordova
-        run: |
-          set -e
-          npm install -g cordova
-
-          APP_NAME="${{ steps.details.outputs.app_name }}"
-          PKG_NAME="${{ steps.details.outputs.package_name }}"
-
-          # Create project
-          cordova create myapp "com.example.$PKG_NAME" "$APP_NAME"
-          cd myapp
-
-          # Copy HTML
-          rm -rf www
-          mkdir -p www
-          cp ../index.html www/index.html
-
-          # Add Android platform
-          cordova platform add android
-
-          # ========== Add all necessary preferences to config.xml ==========
-          # Insert before </widget>
-          sed -i '/<\/widget>/i \
-          <access origin="*" />\
-          <allow-navigation href="*" />\
-          <allow-intent href="http://*/*" />\
-          <allow-intent href="https://*/*" />\
-          <preference name="AndroidInsecureFileModeEnabled" value="true" />\
-          <preference name="AllowFileAccessFromFileURLs" value="true" />\
-          <preference name="AllowUniversalAccessFromFileURLs" value="true" />\
-          <preference name="loadUrlTimeoutValue" value="700000" />\
-          <preference name="JavaScriptEnabled" value="true" />\
-          <preference name="MixedContentMode" value="2" />\
-          <preference name="OverrideUserAgent" value="Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36" />\
-          <preference name="AllowInlineMediaPlayback" value="true" />' config.xml
-
-          # ========== Add permissions using config-file ==========
-          PERMS="${{ steps.details.outputs.permissions }}"
-          if [ -n "$PERMS" ]; then
-            IFS=',' read -ra PERM_ARRAY <<< "$PERMS"
-            for perm in "${PERM_ARRAY[@]}"; do
-              if [ -n "$perm" ]; then
-                # Insert before </platform> inside platform android
-                sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"$perm\" />\n        </config-file>" config.xml
-              fi
-            done
-          fi
-
-          # ========== Enable cleartext traffic and add internet permission ==========
-          # Add INTERNET permission if not already
-          if ! grep -q "android.permission.INTERNET" config.xml; then
-            sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest\">\n            <uses-permission android:name=\"android.permission.INTERNET\" />\n        </config-file>" config.xml
-          fi
-          # Add android:usesCleartextTraffic="true" to application tag
-          sed -i "/<\/platform>/i \        <config-file target=\"AndroidManifest.xml\" parent=\"/manifest/application\">\n            <android:usesCleartextTraffic=\"true\" />\n        </config-file>" config.xml
-
-          # ========== Set icon if provided ==========
-          if [ -f "../icon.png" ]; then
-            # Copy icon to all mipmap folders
-            TARGET_DIR="platforms/android/app/src/main/res"
-            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p "$TARGET_DIR/mipmap-$density"
-              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher.png"
-              cp ../icon.png "$TARGET_DIR/mipmap-$density/ic_launcher_round.png"
-            done
-            # Add icon reference in config.xml inside platform android
-            sed -i "/<platform name=\"android\">/a \        <icon src=\"res/icon.png\" />" config.xml
-          fi
-
-          # Build debug APK
-          cordova build android
-
-          # Locate APK
-          APK_PATH=$(find platforms/android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "Error: APK not found"
-            exit 1
-          fi
-          cp "$APK_PATH" ../app.apk
-          cd ..
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-${{ steps.details.outputs.package_name }}
-          path: app.apk
-
-      - name: Create Release
+      - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          RUN_ID=${{ github.run_id }}
-          gh release create "run-${RUN_ID}" app.apk --title "APK Build ${{ steps.details.outputs.app_name }}" --notes "Generated from workflow run ${{ github.run_id }}" --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # HTML
+          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+
+          # Icon (Base64 to PNG)
+          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # Permissions
+          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+
+          # App name
+          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
+
+      - name: Verify and fix HTML & Icon
+        run: |
+          # ---------- Fix HTML ----------
+          if [ ! -s app/src/main/assets/index.html ]; then
+            echo "Warning: index.html empty, using default."
+            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="UTF-8"><title>System Pro</title></head>
+          <body><h1>System Pro</h1><p>Default content</p></body>
+          </html>
+          DEFAULT_HTML
+          fi
+          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
+
+          # ---------- Fix Icon ----------
+          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
+
+          # Check if existing icon is valid (size > 100 bytes)
+          if [ -f "$ICON_PATH" ]; then
+            SIZE=$(wc -c < "$ICON_PATH")
+            if [ "$SIZE" -lt 100 ]; then
+              echo "Icon too small ($SIZE bytes), replacing with default."
+              rm -f "$ICON_PATH"
+            else
+              echo "Icon file size: $SIZE bytes"
+              # Optional: show PNG header
+              head -c 20 "$ICON_PATH" | xxd
+            fi
+          fi
+
+          # Create default icon if missing
+          if [ ! -f "$ICON_PATH" ]; then
+            echo "Creating default blue icon (48x48)."
+            # Try using ImageMagick (available on runners)
+            if command -v convert >/dev/null 2>&1; then
+              convert -size 48x48 xc:blue "$ICON_PATH"
+            else
+              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
+              printf '%s' \
+                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
+                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
+                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
+            fi
+            echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
+          fi
+
+      - name: Provide default permissions and app name
+        run: |
+          if [ ! -f permissions.txt ]; then
+            touch permissions.txt
+          fi
+          if [ ! -f app_name.txt ]; then
+            echo "System Pro" > app_name.txt
+          fi
+
+      - name: Clean previous builds
+        run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
+
+      - name: Create gradle.properties
+        run: |
+          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
+      - name: Create project build.gradle
+        run: |
+          cat <<'EOF' > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url "https://plugins.gradle.org/m2/" }
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url "https://jitpack.io" }
+              }
+          }
+          EOF
+
+      - name: Create settings.gradle
+        run: |
+          cat <<'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url "https://jitpack.io" }
+              }
+          }
+          rootProject.name = "System Pro"
+          include ':app'
+          EOF
+
+      - name: Create app build.gradle with dynamic namespace
+        run: |
+          APP_NAME=$(cat app_name.txt)
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          echo "Using package name: $PACKAGE_NAME"
+
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "$PACKAGE_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: Create AndroidManifest.xml with dynamic permissions and icon
+        run: |
+          APP_NAME=$(cat app_name.txt)
+          PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
+
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          EOF
+
+          for perm in $PERMISSIONS; do
+            if [ -n "$perm" ]; then
+              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
+            fi
+          done
+
+          # Icon is always referenced (we ensured it exists)
+          cat <<EOF >> app/src/main/AndroidManifest.xml
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="$APP_NAME"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+
+          </manifest>
+          EOF
+
+      - name: Create MainActivity.java with dynamic package
+        run: |
+          APP_NAME=$(cat app_name.txt)
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PACKAGE_PATH"
+
+          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          package $PACKAGE_NAME;
+
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.webkit.WebChromeClient;
+          import android.webkit.ValueCallback;
+          import android.net.Uri;
+          import android.content.Intent;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+              private ValueCallback<Uri[]> filePathCallback;
+              private static final int FILE_CHOOSER_REQUEST_CODE = 1;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  webView = findViewById(R.id.webview);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
+                  webView.getSettings().setAllowFileAccess(true);
+                  webView.getSettings().setAllowContentAccess(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                                                       FileChooserParams fileChooserParams) {
+                          MainActivity.this.filePathCallback = filePathCallback;
+                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                          intent.addCategory(Intent.CATEGORY_OPENABLE);
+                          intent.setType("image/*");
+                          startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                          return true;
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+                      if (resultCode == RESULT_OK && data != null) {
+                          Uri[] uris = new Uri[]{data.getData()};
+                          filePathCallback.onReceiveValue(uris);
+                      } else {
+                          filePathCallback.onReceiveValue(null);
+                      }
+                      filePathCallback = null;
+                  }
+                  super.onActivityResult(requestCode, resultCode, data);
+              }
+          }
+          EOF
+
+      - name: Create activity_main.xml
+        run: |
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/webview"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent" />
+          EOF
+
+      - name: Create minimal styles.xml
+        run: |
+          cat <<'EOF' > app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
+                  <item name="windowActionBar">false</item>
+                  <item name="windowNoTitle">true</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Generate gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5 --distribution-type all
+          chmod +x gradlew
+
+      - name: Build APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-App
+          path: app/build/outputs/apk/debug/*.apk
