@@ -32,14 +32,15 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
 
       # ------------------------------------------------------------
-      # اصلاح شدہ سٹیپ: پے لوڈ کو محفوظ طریقے سے ہینڈل کرنے کے لیے jq کا استعمال
+      # Process client payload (HTML, icon, permissions, app name)
       # ------------------------------------------------------------
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کو فائل میں لکھیں
+          # HTML
           jq -r '.client_payload.app_html // ""' "$GITHUB_EVENT_PATH" > app/src/main/assets/index.html
 
           # Icon (Base64 to PNG)
@@ -56,7 +57,7 @@ jobs:
 
       - name: Verify and fix HTML & Icon
         run: |
-          # ---------- Fix HTML ----------
+          # Fix HTML if empty
           if [ ! -s app/src/main/assets/index.html ]; then
             echo "Warning: index.html empty, using default."
             cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
@@ -69,10 +70,8 @@ jobs:
           fi
           echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
-          # ---------- Fix Icon ----------
+          # Fix icon
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-
-          # Check if existing icon is valid (size > 100 bytes)
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -80,19 +79,15 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              # Optional: show PNG header
               head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
-          # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
-            # Try using ImageMagick (available on runners)
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
-              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
               printf '%s' \
                 "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
                 "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -112,12 +107,11 @@ jobs:
 
       - name: Payload size control (HTML & Icon)
         run: |
-          # Check HTML size
+          # HTML size limit 1 MB
           HTML_SIZE=$(wc -c < app/src/main/assets/index.html)
-          MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
+          MAX_HTML_SIZE=$((1 * 1024 * 1024))
           if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
             echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
-            # Truncate to 1 MB
             head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
             mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
             echo "HTML truncated to 1 MB."
@@ -125,15 +119,14 @@ jobs:
             echo "✅ HTML size is within limit."
           fi
 
-          # Check icon size
+          # Icon size limit 100 KB
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
           if [ -f "$ICON_PATH" ]; then
             ICON_SIZE=$(wc -c < "$ICON_PATH")
-            MAX_ICON_SIZE=$((100 * 1024))  # 100 KB
+            MAX_ICON_SIZE=$((100 * 1024))
             if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
-              echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing with ImageMagick."
+              echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing."
               if command -v convert >/dev/null 2>&1; then
-                # Resize to 128x128 and compress
                 convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
                 echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
               else
@@ -238,26 +231,86 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml with dynamic permissions and icon
+      - name: Create network security config (allow cleartext traffic)
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          cat <<'EOF' > app/src/main/res/xml/network_security_config.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
           EOF
 
-          for perm in $PERMISSIONS; do
+      - name: Create AndroidManifest.xml with all permissions and icon
+        run: |
+          APP_NAME=$(cat app_name.txt)
+          # Combine client-provided permissions with a comprehensive set of common permissions
+          CLIENT_PERMS=$(cat permissions.txt | tr ',' '\n' | grep -v '^$' || true)
+
+          # Define comprehensive list of permissions to include by default
+          cat <<'EOF_PERMS' > all_perms.txt
+          android.permission.INTERNET
+          android.permission.ACCESS_NETWORK_STATE
+          android.permission.ACCESS_WIFI_STATE
+          android.permission.CAMERA
+          android.permission.RECORD_AUDIO
+          android.permission.MODIFY_AUDIO_SETTINGS
+          android.permission.ACCESS_FINE_LOCATION
+          android.permission.ACCESS_COARSE_LOCATION
+          android.permission.READ_EXTERNAL_STORAGE
+          android.permission.WRITE_EXTERNAL_STORAGE
+          android.permission.READ_CONTACTS
+          android.permission.WRITE_CONTACTS
+          android.permission.READ_CALENDAR
+          android.permission.WRITE_CALENDAR
+          android.permission.CALL_PHONE
+          android.permission.READ_PHONE_STATE
+          android.permission.READ_SMS
+          android.permission.RECEIVE_SMS
+          android.permission.SEND_SMS
+          android.permission.VIBRATE
+          android.permission.WAKE_LOCK
+          android.permission.FOREGROUND_SERVICE
+          android.permission.POST_NOTIFICATIONS
+          android.permission.BLUETOOTH
+          android.permission.BLUETOOTH_ADMIN
+          android.permission.BLUETOOTH_CONNECT
+          android.permission.BLUETOOTH_SCAN
+          android.permission.NFC
+          android.permission.USE_BIOMETRIC
+          android.permission.USE_FINGERPRINT
+          android.permission.ACCESS_BACKGROUND_LOCATION
+          android.permission.ACTIVITY_RECOGNITION
+          android.permission.BODY_SENSORS
+          android.permission.GET_ACCOUNTS
+          EOF_PERMS
+
+          # Merge client permissions with default list, removing duplicates
+          cat all_perms.txt > merged_perms.txt
+          if [ -n "$CLIENT_PERMS" ]; then
+            echo "$CLIENT_PERMS" >> merged_perms.txt
+          fi
+          sort -u merged_perms.txt > final_perms.txt
+
+          # Start manifest
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
+          EOF
+
+          # Add permissions
+          while read -r perm; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
             fi
-          done
+          done < final_perms.txt
 
-          # Icon is always referenced (we ensured it exists)
+          # Add application tag with network security config and other settings
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
@@ -265,7 +318,9 @@ jobs:
                   android:icon="@drawable/ic_launcher"
                   android:label="$APP_NAME"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-                  android:usesCleartextTraffic="true">
+                  android:usesCleartextTraffic="true"
+                  android:networkSecurityConfig="@xml/network_security_config"
+                  tools:targetApi="n">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -274,12 +329,16 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+                  <activity
+                      android:name=".SettingsActivity"
+                      android:label="Settings"
+                      android:parentActivityName=".MainActivity" />
               </application>
 
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package
+      - name: Create MainActivity.java with WebChromeClient handling permissions
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
@@ -290,19 +349,50 @@ jobs:
           cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
+          import android.Manifest;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
+          import android.provider.MediaStore;
+          import android.view.Menu;
+          import android.view.MenuItem;
+          import android.webkit.GeolocationPermissions;
+          import android.webkit.PermissionRequest;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import android.webkit.WebChromeClient;
-          import android.webkit.ValueCallback;
-          import android.net.Uri;
-          import android.content.Intent;
+          import android.widget.Toast;
+
+          import androidx.annotation.NonNull;
           import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+
+          import java.util.ArrayList;
+          import java.util.List;
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
               private ValueCallback<Uri[]> filePathCallback;
               private static final int FILE_CHOOSER_REQUEST_CODE = 1;
+              private static final int PERMISSION_REQUEST_CODE = 100;
+
+              // Permissions to request at runtime (dangerous ones)
+              private static final String[] REQUIRED_PERMISSIONS = {
+                      Manifest.permission.CAMERA,
+                      Manifest.permission.RECORD_AUDIO,
+                      Manifest.permission.ACCESS_FINE_LOCATION,
+                      Manifest.permission.ACCESS_COARSE_LOCATION,
+                      Manifest.permission.READ_EXTERNAL_STORAGE,
+                      Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                      Manifest.permission.POST_NOTIFICATIONS,
+                      Manifest.permission.BLUETOOTH_CONNECT,
+                      Manifest.permission.BLUETOOTH_SCAN
+              };
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -310,25 +400,82 @@ jobs:
                   setContentView(R.layout.activity_main);
 
                   webView = findViewById(R.id.webview);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.getSettings().setAllowFileAccess(true);
-                  webView.getSettings().setAllowContentAccess(true);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
+                  settings.setGeolocationEnabled(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                      settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  }
+
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
+                      // For file uploads (input type="file")
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                                        FileChooserParams fileChooserParams) {
                           MainActivity.this.filePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("image/*");
+                          intent.setType("*/*");
                           startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
                           return true;
                       }
+
+                      // For geolocation
+                      @Override
+                      public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                          // Always allow for this demo; you may want to show a dialog
+                          callback.invoke(origin, true, false);
+                      }
+
+                      // For Android 5.0+ permission requests (camera, microphone)
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                              // Allow all requested resources
+                              request.grant(request.getResources());
+                          }
+                      }
                   });
 
+                  // Load the HTML from assets
                   webView.loadUrl("file:///android_asset/index.html");
+
+                  // Request runtime permissions on start
+                  requestNecessaryPermissions();
+              }
+
+              private void requestNecessaryPermissions() {
+                  List<String> missingPermissions = new ArrayList<>();
+                  for (String perm : REQUIRED_PERMISSIONS) {
+                      if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                          missingPermissions.add(perm);
+                      }
+                  }
+                  if (!missingPermissions.isEmpty()) {
+                      ActivityCompat.requestPermissions(this,
+                              missingPermissions.toArray(new String[0]),
+                              PERMISSION_REQUEST_CODE);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                                     @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQUEST_CODE) {
+                      for (int i = 0; i < permissions.length; i++) {
+                          if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                              Toast.makeText(this, "Permission " + permissions[i] + " denied", Toast.LENGTH_SHORT).show();
+                          }
+                      }
+                  }
               }
 
               @Override
@@ -344,17 +491,98 @@ jobs:
                   }
                   super.onActivityResult(requestCode, resultCode, data);
               }
+
+              @Override
+              public boolean onCreateOptionsMenu(Menu menu) {
+                  getMenuInflater().inflate(R.menu.main_menu, menu);
+                  return true;
+              }
+
+              @Override
+              public boolean onOptionsItemSelected(MenuItem item) {
+                  if (item.getItemId() == R.id.action_settings) {
+                      startActivity(new Intent(this, SettingsActivity.class));
+                      return true;
+                  }
+                  return super.onOptionsItemSelected(item);
+              }
           }
           EOF
 
-      - name: Create activity_main.xml
+      - name: Create SettingsActivity.java
         run: |
+          PACKAGE_BASE=$(cat app_name.txt | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PACKAGE_PATH"
+
+          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/SettingsActivity.java"
+          package $PACKAGE_NAME;
+
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class SettingsActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_settings);
+                  getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+              }
+
+              @Override
+              public boolean onSupportNavigateUp() {
+                  finish();
+                  return true;
+              }
+          }
+          EOF
+
+      - name: Create layout files
+        run: |
+          # activity_main.xml
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
               android:layout_width="match_parent"
               android:layout_height="match_parent" />
+          EOF
+
+          # activity_settings.xml (simple placeholder)
+          cat <<'EOF' > app/src/main/res/layout/activity_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Settings"
+                  android:textSize="24sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="16dp"/>
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="All necessary permissions are declared in the manifest. If some features are not working, please check runtime permissions in system settings." />
+          </LinearLayout>
+          EOF
+
+      - name: Create menu resource
+        run: |
+          mkdir -p app/src/main/res/menu
+          cat <<'EOF' > app/src/main/res/menu/main_menu.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <menu xmlns:android="http://schemas.android.com/apk/res/android">
+              <item
+                  android:id="@+id/action_settings"
+                  android:title="Settings"
+                  android:orderInCategory="100"
+                  app:showAsAction="never" />
+          </menu>
           EOF
 
       - name: Create minimal styles.xml
