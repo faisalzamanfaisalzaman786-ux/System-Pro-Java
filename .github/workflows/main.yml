@@ -7,10 +7,10 @@ on:
   repository_dispatch:
     types: [build-apk]
 
-# Concurrency: ایک وقت میں صرف ایک run چلے گا۔ نیا آنے پر پچھلا فوری منسوخ ہو جائے گا۔
+# Concurrency: صرف ایک run چلے گا، نیا آنے پر پچھلا منسوخ
 concurrency:
   group: system-pro-apk-builder
-  cancel-in-progress: true   # true = نیا run پچھلے کو منسوخ کر کے خود شروع ہو جائے گا
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -47,17 +47,19 @@ jobs:
 
       - name: Fetch uploaded HTML and icon (if any)
         if: github.event_name == 'repository_dispatch'
+        continue-on-error: true   # اگر فائل نہ ملے تو بھی آگے بڑھے
         run: |
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               -H "Accept: application/vnd.github.v3.raw" \
-               -o index.html \
-               "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}"
-
+          if [ -n "${{ github.event.client_payload.html_file }}" ]; then
+            curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                 -H "Accept: application/vnd.github.v3.raw" \
+                 -o index.html \
+                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}" || true
+          fi
           if [ -n "${{ github.event.client_payload.icon_file }}" ]; then
-            curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  -H "Accept: application/vnd.github.v3.raw" \
                  -o icon_base64.txt \
-                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}"
+                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}" || true
           fi
 
       - name: Provide default files (if missing)
@@ -71,18 +73,19 @@ jobs:
 </html>
 EOF
           fi
-
           if [ ! -f icon_base64.txt ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" > icon_base64.txt
           fi
 
-          if [ -n "${{ github.event.client_payload.permissions }}" ]; then
-            echo "${{ join(github.event.client_payload.permissions, '\n') }}" > permissions.txt
+          # Permissions: اگر payload میں ہوں تو لکھیں، ورنہ خالی فائل
+          if [ "${{ github.event_name }}" == "repository_dispatch" ] && [ -n "${{ github.event.client_payload.permissions }}" ]; then
+            echo '${{ toJSON(github.event.client_payload.permissions) }}' | jq -r '.[]' > permissions.txt
           else
             touch permissions.txt
           fi
 
-          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+          # App name: payload سے یا ڈیفالٹ
+          if [ "${{ github.event_name }}" == "repository_dispatch" ] && [ -n "${{ github.event.client_payload.app_name }}" ]; then
             echo "${{ github.event.client_payload.app_name }}" > app_name.txt
           else
             echo "System Pro" > app_name.txt
@@ -198,7 +201,6 @@ EOF
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 EOF
-
           if [ -s permissions.txt ]; then
             while IFS= read -r perm; do
               if [ -n "$perm" ]; then
@@ -206,7 +208,6 @@ EOF
               fi
             done < permissions.txt
           fi
-
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
     <application
@@ -334,15 +335,3 @@ EOF
         with:
           name: System-Pro-App-${{ github.run_id }}
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: Cleanup temp files (if from dispatch)
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          if [ -n "${{ github.event.client_payload.html_file }}" ] && [ -n "${{ github.event.client_payload.html_sha }}" ]; then
-            curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.html_file }}?message=Cleanup&sha=${{ github.event.client_payload.html_sha }}"
-          fi
-          if [ -n "${{ github.event.client_payload.icon_file }}" ] && [ -n "${{ github.event.client_payload.icon_sha }}" ]; then
-            curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                 "https://api.github.com/repos/${{ github.repository }}/contents/${{ github.event.client_payload.icon_file }}?message=Cleanup&sha=${{ github.event.client_payload.icon_sha }}"
-          fi
