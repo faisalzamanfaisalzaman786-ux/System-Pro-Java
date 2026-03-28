@@ -106,6 +106,40 @@ jobs:
             echo "System Pro" > app_name.txt
           fi
 
+      - name: Payload size control (HTML & Icon)
+        run: |
+          # Check HTML size
+          HTML_SIZE=$(wc -c < app/src/main/assets/index.html)
+          MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
+          if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
+            echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
+            # Truncate to 1 MB
+            head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
+            mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
+            echo "HTML truncated to 1 MB."
+          else
+            echo "✅ HTML size is within limit."
+          fi
+
+          # Check icon size
+          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
+          if [ -f "$ICON_PATH" ]; then
+            ICON_SIZE=$(wc -c < "$ICON_PATH")
+            MAX_ICON_SIZE=$((100 * 1024))  # 100 KB
+            if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
+              echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing with ImageMagick."
+              if command -v convert >/dev/null 2>&1; then
+                # Resize to 128x128 and compress
+                convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
+                echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
+              else
+                echo "ImageMagick not available, icon size remains large."
+              fi
+            else
+              echo "✅ Icon size is within limit."
+            fi
+          fi
+
       - name: Clean previous builds
         run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
 
@@ -338,6 +372,16 @@ jobs:
 
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Get APK size
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -f "$APK_PATH" ]; then
+            APK_SIZE=$(stat -c%s "$APK_PATH")
+            echo "APK size: $APK_SIZE bytes ($(($APK_SIZE / 1024)) KB)"
+          else
+            echo "APK not found!"
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
