@@ -34,16 +34,17 @@ jobs:
       - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          if [ -n "${{ github.event.client_payload.app_html }}" ]; then
-            cat << 'EOF' > app/src/main/assets/index.html
-${{ github.event.client_payload.app_html }}
-EOF
-            echo "✅ HTML received, size: $(wc -c < app/src/main/assets/index.html) bytes"
+          # HTML (Base64 encoded from client)
+          if [ -n "${{ github.event.client_payload.app_html_base64 }}" ]; then
+            echo "${{ github.event.client_payload.app_html_base64 }}" | base64 --decode > app/src/main/assets/index.html
+            echo "✅ HTML decoded from Base64, size: $(wc -c < app/src/main/assets/index.html) bytes"
           fi
+          # Icon (Base64)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
             echo "✅ Icon received and decoded"
           fi
+          # Permissions
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
             printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
             echo "✅ Permissions saved"
