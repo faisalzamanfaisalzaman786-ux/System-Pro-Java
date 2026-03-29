@@ -1,8 +1,6 @@
 name: System Pro - Dynamic APK Builder
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
