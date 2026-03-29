@@ -31,42 +31,44 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Process client payload
+      - name: Process HTML from client payload or repo file
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo "=== Processing HTML source ==="
+          
+          # 1. Try client_payload raw HTML
+          if [ -n "${{ github.event.client_payload.app_html }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+            echo "✅ Using HTML from client_payload (raw)"
+          elif [ -f "index.html" ]; then
+            # 2. If no HTML in payload, use index.html from repo root
+            cp index.html app/src/main/assets/index.html
+            echo "✅ Using HTML from repo root (index.html)"
+          else
+            echo "⚠️ No HTML source found"
+          fi
+          
+          # Show size for debug
+          if [ -f app/src/main/assets/index.html ]; then
+            echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
+            echo "=== First 200 chars ==="
+            head -c 200 app/src/main/assets/index.html
+            echo ""
+          fi
+
+      - name: Process icon and permissions from client payload
         if: github.event_name == 'repository_dispatch'
         env:
-          APP_HTML: ${{ github.event.client_payload.app_html }}
-          APP_HTML_BASE64: ${{ github.event.client_payload.app_html_base64 }}
           APP_ICON: ${{ github.event.client_payload.app_icon }}
           PERMISSIONS: ${{ github.event.client_payload.permissions }}
         run: |
-          # HTML handling
-          if [ -n "$APP_HTML" ]; then
-            printf '%s' "$APP_HTML" > app/src/main/assets/index.html
-            echo "✅ Raw HTML saved, size: $(wc -c < app/src/main/assets/index.html) bytes"
-          elif [ -n "$APP_HTML_BASE64" ]; then
-            echo "$APP_HTML_BASE64" | base64 --decode > app/src/main/assets/index.html
-            echo "✅ Base64 HTML decoded, size: $(wc -c < app/src/main/assets/index.html) bytes"
-          else
-            echo "⚠️ No HTML provided"
-          fi
-
-          # Icon
           if [ -n "$APP_ICON" ]; then
             printf '%s' "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
             echo "✅ Icon decoded"
           fi
-
-          # Permissions
           if [ -n "$PERMISSIONS" ]; then
             printf '%s' "$PERMISSIONS" > permissions.txt
             echo "✅ Permissions saved"
-          fi
-
-          # Debug: show first 200 chars of HTML if exists
-          if [ -f app/src/main/assets/index.html ]; then
-            echo "=== First 200 chars of index.html ==="
-            head -c 200 app/src/main/assets/index.html
-            echo ""
           fi
 
       - name: Provide default HTML, icon, permissions if missing
@@ -91,9 +93,11 @@ jobs:
 
       - name: Create gradle.properties
         run: |
-          printf '%s\n' "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
-          printf '%s\n' "android.useAndroidX=true" >> gradle.properties
-          printf '%s\n' "android.enableJetifier=true" >> gradle.properties
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
 
       - name: Create project build.gradle
         run: |
@@ -242,8 +246,8 @@ jobs:
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
-          package $PACKAGE_NAME;
+          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
+          package ${PACKAGE_NAME};
 
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -310,8 +314,6 @@ jobs:
               }
           }
           EOF
-          # Replace the placeholder with actual package name
-          sed -i "s/\\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
         run: |
