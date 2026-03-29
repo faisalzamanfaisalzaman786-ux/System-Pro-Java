@@ -31,40 +31,52 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+      - name: Debug: Print entire client_payload
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo "=== Full client_payload (raw) ==="
+          echo '${{ toJSON(github.event.client_payload) }}'
+          echo "================================="
+
       - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          echo "=== DEBUG: Checking client_payload ==="
+          echo "=== Processing client payload ==="
           
-          # Handle raw HTML (preferred)
+          # Try multiple possible field names for HTML
+          HTML_CONTENT=""
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
-            echo "Raw HTML provided, length: ${#RAW_HTML}"
-            # Use a temporary variable to avoid expansion issues
-            RAW_HTML="${{ github.event.client_payload.app_html }}"
-            cat <<< "$RAW_HTML" > app/src/main/assets/index.html
-            echo "✅ Raw HTML saved, size: $(wc -c < app/src/main/assets/index.html) bytes"
-          # Handle Base64 HTML (fallback)
+            HTML_CONTENT="${{ github.event.client_payload.app_html }}"
+            echo "Found app_html"
+          elif [ -n "${{ github.event.client_payload.html }}" ]; then
+            HTML_CONTENT="${{ github.event.client_payload.html }}"
+            echo "Found html"
+          elif [ -n "${{ github.event.client_payload.content }}" ]; then
+            HTML_CONTENT="${{ github.event.client_payload.content }}"
+            echo "Found content"
           elif [ -n "${{ github.event.client_payload.app_html_base64 }}" ]; then
-            echo "Base64 HTML provided"
             echo "${{ github.event.client_payload.app_html_base64 }}" | base64 --decode > app/src/main/assets/index.html
-            echo "✅ Base64 HTML decoded, size: $(wc -c < app/src/main/assets/index.html) bytes"
-          else
-            echo "⚠️ No HTML provided (neither raw nor base64)"
+            echo "✅ Base64 HTML decoded"
           fi
-
-          # Icon (Base64 always)
+          
+          if [ -n "$HTML_CONTENT" ]; then
+            # Use printf with %s to preserve content, but avoid expansion issues
+            printf '%s' "$HTML_CONTENT" > app/src/main/assets/index.html
+            echo "✅ Raw HTML saved, size: $(wc -c < app/src/main/assets/index.html) bytes"
+          fi
+          
+          # Icon (Base64)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            echo "Icon provided"
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
             echo "✅ Icon decoded"
           fi
-
+          
           # Permissions
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
-            echo "Permissions: ${{ github.event.client_payload.permissions }}"
             printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+            echo "✅ Permissions saved"
           fi
-
+          
           # Debug: show first 200 chars of index.html if exists
           if [ -f app/src/main/assets/index.html ]; then
             echo "=== First 200 chars of index.html ==="
