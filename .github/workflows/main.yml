@@ -36,21 +36,14 @@ jobs:
       - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
             echo "✅ HTML received, size: $(wc -c < app/src/main/assets/index.html) bytes"
-          else
-            echo "⚠️ No HTML provided"
           fi
-
-          # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
             echo "✅ Icon received and decoded"
           fi
-
-          # Permissions
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
             printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
             echo "✅ Permissions saved"
@@ -58,41 +51,17 @@ jobs:
 
       - name: Provide default HTML, icon, permissions if missing
         run: |
-          # Default HTML
+          # Default HTML (as Base64 to avoid heredoc issues)
           if [ ! -s app/src/main/assets/index.html ]; then
-            cat > app/src/main/assets/index.html << 'EOF'
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>System Pro</title>
-                <style>
-                    body { font-family: sans-serif; text-align: center; padding: 2rem; }
-                    button { padding: 1rem; font-size: 1.2rem; margin-top: 2rem; }
-                </style>
-            </head>
-            <body>
-                <h1>System Pro</h1>
-                <p>Default content – replace this HTML as needed.</p>
-                <button onclick="alert('Hello from WebView!')">Click Me</button>
-            </body>
-            </html>
-            EOF
+            echo "Creating default HTML from Base64..."
+            printf '%s' "PCFET0NUWVBFIGh0bWw+CjxodG1sPgo8aGVhZD4KICAgIDxtZXRhIGNoYXJzZXQ9IlVURi04Ij4KICAgIDxtZXRhIG5hbWU9InZpZXdwb3J0IiBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsIGluaXRpYWwtc2NhbGU9MS4wIj4KICAgIDx0aXRsZT5TeXN0ZW0gUHJvPC90aXRsZT4KICAgIDxzdHlsZT4KICAgICAgICBib2R5IHsgZm9udC1mYW1pbHk6IHNhbnMtc2VyaWY7IHRleHQtYWxpZ246IGNlbnRlcjsgcGFkZGluZzogMnJlbTsgfQogICAgICAgIGJ1dHRvbiB7IHBhZGRpbmc6IDFyZW07IGZvbnQtc2l6ZTogMS4ycmVtOyBtYXJnaW4tdG9wOiAycmVtOyB9CiAgICA8L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgogICAgPGgxPlN5c3RlbSBQcm88L2gxPgogICAgPHA+RGVmYXVsdCBjb250ZW50IC0gcmVwbGFjZSB0aGlzIEhUTUwgYXMgbmVlZGVkLjwvcD4KICAgIDxidXR0b24gb25jbGljaz0iYWxlcnQoJ0hlbGxvIGZyb20gV2ViVmlldyEnKSI+Q2xpY2sgTWU8L2J1dHRvbj4KPC9ib2R5Pgo8L2h0bWw+" | base64 --decode > app/src/main/assets/index.html
             echo "Default HTML created"
           fi
 
-          # Default icon
+          # Default icon (48x48 blue PNG as Base64)
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
           if [ ! -f "$ICON_PATH" ] || [ $(wc -c < "$ICON_PATH") -lt 100 ]; then
-            if command -v convert >/dev/null 2>&1; then
-              convert -size 48x48 xc:blue "$ICON_PATH"
-            else
-              printf '%s' \
-                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
-                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
-                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
-            fi
+            printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
             echo "Default icon created"
           fi
 
@@ -106,54 +75,49 @@ jobs:
 
       - name: Create gradle.properties
         run: |
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
+          printf '%s\n' "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
+          printf '%s\n' "android.useAndroidX=true" >> gradle.properties
+          printf '%s\n' "android.enableJetifier=true" >> gradle.properties
 
       - name: Create project build.gradle
         run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+          printf '%s\n' "buildscript {" > build.gradle
+          printf '%s\n' "    repositories {" >> build.gradle
+          printf '%s\n' "        google()" >> build.gradle
+          printf '%s\n' "        mavenCentral()" >> build.gradle
+          printf '%s\n' "    }" >> build.gradle
+          printf '%s\n' "    dependencies {" >> build.gradle
+          printf '%s\n' "        classpath 'com.android.tools.build:gradle:8.2.2'" >> build.gradle
+          printf '%s\n' "    }" >> build.gradle
+          printf '%s\n' "}" >> build.gradle
+          printf '%s\n' "allprojects {" >> build.gradle
+          printf '%s\n' "    repositories {" >> build.gradle
+          printf '%s\n' "        google()" >> build.gradle
+          printf '%s\n' "        mavenCentral()" >> build.gradle
+          printf '%s\n' "    }" >> build.gradle
+          printf '%s\n' "}" >> build.gradle
 
       - name: Create settings.gradle
         run: |
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "System Pro"
-          include ':app'
-          EOF
+          printf '%s\n' "pluginManagement {" > settings.gradle
+          printf '%s\n' "    repositories {" >> settings.gradle
+          printf '%s\n' "        google()" >> settings.gradle
+          printf '%s\n' "        mavenCentral()" >> settings.gradle
+          printf '%s\n' "        gradlePluginPortal()" >> settings.gradle
+          printf '%s\n' "    }" >> settings.gradle
+          printf '%s\n' "}" >> settings.gradle
+          printf '%s\n' "dependencyResolutionManagement {" >> settings.gradle
+          printf '%s\n' "    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)" >> settings.gradle
+          printf '%s\n' "    repositories {" >> settings.gradle
+          printf '%s\n' "        google()" >> settings.gradle
+          printf '%s\n' "        mavenCentral()" >> settings.gradle
+          printf '%s\n' "    }" >> settings.gradle
+          printf '%s\n' "}" >> settings.gradle
+          printf '%s\n' "rootProject.name = \"System Pro\"" >> settings.gradle
+          printf '%s\n' "include ':app'" >> settings.gradle
 
       - name: Create app build.gradle with dynamic namespace
         run: |
-          # Read app name from payload (if any) or use default
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             APP_NAME="${{ github.event.client_payload.app_name }}"
           else
@@ -199,25 +163,21 @@ jobs:
 
       - name: Create AndroidManifest.xml with dynamic permissions
         run: |
-          APP_NAME=$(cat app_name.txt 2>/dev/null || echo "System Pro")
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             APP_NAME="${{ github.event.client_payload.app_name }}"
+          else
+            APP_NAME="System Pro"
           fi
           PERMISSIONS=$(cat permissions.txt 2>/dev/null | tr ',' '\n' || echo "")
 
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-          EOF
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
+          printf '%s\n' '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' >> app/src/main/AndroidManifest.xml
+          printf '%s\n' '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
+          printf '%s\n' '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
 
-          # Add INTERNET and ACCESS_NETWORK_STATE always
-          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
-
-          # Add custom permissions from payload
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
-              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
+              printf '    <uses-permission android:name="%s" />\n' "$perm" >> app/src/main/AndroidManifest.xml
             fi
           done
 
@@ -254,8 +214,8 @@ jobs:
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
-          package PACKAGE_NAME_PLACEHOLDER;
+          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
+          package $PACKAGE_NAME;
 
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -322,30 +282,24 @@ jobs:
               }
           }
           EOF
-          # Replace placeholder with actual package name
-          sed -i "s/PACKAGE_NAME_PLACEHOLDER/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
         run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/webview"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
-          EOF
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+          printf '%s\n' '<WebView xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
+          printf '%s\n' '    android:id="@+id/webview"' >> app/src/main/res/layout/activity_main.xml
+          printf '%s\n' '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
+          printf '%s\n' '    android:layout_height="match_parent" />' >> app/src/main/res/layout/activity_main.xml
 
       - name: Create minimal styles.xml
         run: |
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
-                  <item name="windowActionBar">false</item>
-                  <item name="windowNoTitle">true</item>
-              </style>
-          </resources>
-          EOF
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/styles.xml
+          printf '%s\n' '<resources>' >> app/src/main/res/values/styles.xml
+          printf '%s\n' '    <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">' >> app/src/main/res/values/styles.xml
+          printf '%s\n' '        <item name="windowActionBar">false</item>' >> app/src/main/res/values/styles.xml
+          printf '%s\n' '        <item name="windowNoTitle">true</item>' >> app/src/main/res/values/styles.xml
+          printf '%s\n' '    </style>' >> app/src/main/res/values/styles.xml
+          printf '%s\n' '</resources>' >> app/src/main/res/values/styles.xml
 
       - name: Generate gradle wrapper
         run: |
