@@ -34,20 +34,44 @@ jobs:
       - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML (Base64)
-          if [ -n "${{ github.event.client_payload.app_html_base64 }}" ]; then
+          echo "=== DEBUG: Checking client_payload ==="
+          
+          # Handle raw HTML (preferred)
+          if [ -n "${{ github.event.client_payload.app_html }}" ]; then
+            echo "Raw HTML provided, length: ${#RAW_HTML}"
+            # Use a temporary variable to avoid expansion issues
+            RAW_HTML="${{ github.event.client_payload.app_html }}"
+            cat <<< "$RAW_HTML" > app/src/main/assets/index.html
+            echo "✅ Raw HTML saved, size: $(wc -c < app/src/main/assets/index.html) bytes"
+          # Handle Base64 HTML (fallback)
+          elif [ -n "${{ github.event.client_payload.app_html_base64 }}" ]; then
+            echo "Base64 HTML provided"
             echo "${{ github.event.client_payload.app_html_base64 }}" | base64 --decode > app/src/main/assets/index.html
-            echo "✅ HTML decoded, size: $(wc -c < app/src/main/assets/index.html) bytes"
+            echo "✅ Base64 HTML decoded, size: $(wc -c < app/src/main/assets/index.html) bytes"
+          else
+            echo "⚠️ No HTML provided (neither raw nor base64)"
           fi
-          # Icon (Base64)
+
+          # Icon (Base64 always)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            echo "Icon provided"
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
             echo "✅ Icon decoded"
           fi
+
           # Permissions
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
+            echo "Permissions: ${{ github.event.client_payload.permissions }}"
             printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-            echo "✅ Permissions saved"
+          fi
+
+          # Debug: show first 200 chars of index.html if exists
+          if [ -f app/src/main/assets/index.html ]; then
+            echo "=== First 200 chars of index.html ==="
+            head -c 200 app/src/main/assets/index.html
+            echo ""
+          else
+            echo "⚠️ index.html not created yet"
           fi
 
       - name: Provide default HTML, icon, permissions if missing (always, but never overwrite)
