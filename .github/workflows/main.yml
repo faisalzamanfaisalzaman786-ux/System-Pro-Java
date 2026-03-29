@@ -33,25 +33,34 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Process HTML from client payload (if any)
+      - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # اگر client_payload میں app_html موجود ہے تو اسے index.html میں ڈالیں
+          # HTML
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-            echo "✅ Received HTML from client_payload, size: $(wc -c < app/src/main/assets/index.html) bytes"
-            # پہلی 10 لائنیں لاگ میں دکھائیں (ڈیبگنگ کے لیے)
-            echo "--- First 10 lines of received HTML ---"
-            head -n 10 app/src/main/assets/index.html
-            echo "----------------------------------------"
+            echo "✅ HTML received, size: $(wc -c < app/src/main/assets/index.html) bytes"
           else
-            echo "⚠️ No app_html in payload, will use default HTML."
+            echo "⚠️ No HTML provided"
           fi
 
-      - name: Create default index.html (if not provided by payload)
+          # Icon (Base64 to PNG)
+          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            echo "✅ Icon received and decoded"
+          fi
+
+          # Permissions
+          if [ -n "${{ github.event.client_payload.permissions }}" ]; then
+            printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+            echo "✅ Permissions saved"
+          fi
+
+      - name: Provide default HTML, icon, permissions if missing
         run: |
+          # Default HTML
           if [ ! -s app/src/main/assets/index.html ]; then
-            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
+            cat > app/src/main/assets/index.html << 'EOF'
             <!DOCTYPE html>
             <html>
             <head>
@@ -69,22 +78,28 @@ jobs:
                 <button onclick="alert('Hello from WebView!')">Click Me</button>
             </body>
             </html>
-            DEFAULT_HTML
-            echo "Default HTML created (no payload or empty payload)."
+            EOF
+            echo "Default HTML created"
           fi
 
-      - name: Create default icon (fixed, not from payload)
-        run: |
+          # Default icon
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if command -v convert >/dev/null 2>&1; then
-            convert -size 48x48 xc:blue "$ICON_PATH"
-          else
-            printf '%s' \
-              "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
-              "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
-              "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
+          if [ ! -f "$ICON_PATH" ] || [ $(wc -c < "$ICON_PATH") -lt 100 ]; then
+            if command -v convert >/dev/null 2>&1; then
+              convert -size 48x48 xc:blue "$ICON_PATH"
+            else
+              printf '%s' \
+                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
+                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
+                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
+            fi
+            echo "Default icon created"
           fi
-          echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
+
+          # Default permissions (Internet + Network)
+          if [ ! -f permissions.txt ]; then
+            echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
+          fi
 
       - name: Clean previous builds
         run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
@@ -97,7 +112,7 @@ jobs:
 
       - name: Create project build.gradle
         run: |
-          cat <<'EOF' > build.gradle
+          cat > build.gradle << 'EOF'
           buildscript {
               repositories {
                   google()
@@ -117,7 +132,7 @@ jobs:
 
       - name: Create settings.gradle
         run: |
-          cat <<'EOF' > settings.gradle
+          cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -136,19 +151,29 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create app build.gradle
+      - name: Create app build.gradle with dynamic namespace
         run: |
-          cat <<'EOF' > app/build.gradle
+          # Read app name from payload (if any) or use default
+          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+          else
+            APP_NAME="System Pro"
+          fi
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          echo "Using package name: $PACKAGE_NAME"
+
+          cat > app/build.gradle << EOF
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace 'com.systempro.app'
+              namespace '$PACKAGE_NAME'
               compileSdk 34
 
               defaultConfig {
-                  applicationId "com.systempro.app"
+                  applicationId "$PACKAGE_NAME"
                   minSdk 24
                   targetSdk 34
                   versionCode 1
@@ -172,19 +197,36 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml (fixed permissions)
+      - name: Create AndroidManifest.xml with dynamic permissions
         run: |
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          APP_NAME=$(cat app_name.txt 2>/dev/null || echo "System Pro")
+          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+          fi
+          PERMISSIONS=$(cat permissions.txt 2>/dev/null | tr ',' '\n' || echo "")
+
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          EOF
 
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          # Add INTERNET and ACCESS_NETWORK_STATE always
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
+
+          # Add custom permissions from payload
+          for perm in $PERMISSIONS; do
+            if [ -n "$perm" ]; then
+              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
+            fi
+          done
+
+          cat >> app/src/main/AndroidManifest.xml << EOF
 
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="System Pro"
+                  android:label="$APP_NAME"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
                   <activity
@@ -200,14 +242,20 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java (with fixed WebView settings)
+      - name: Create MainActivity.java with dynamic package
         run: |
-          PACKAGE_NAME="com.systempro.app"
+          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+          else
+            APP_NAME="System Pro"
+          fi
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat <<'EOF' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
-          package com.systempro.app;
+          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
+          package PACKAGE_NAME_PLACEHOLDER;
 
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -274,10 +322,12 @@ jobs:
               }
           }
           EOF
+          # Replace placeholder with actual package name
+          sed -i "s/PACKAGE_NAME_PLACEHOLDER/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
         run: |
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
@@ -287,7 +337,7 @@ jobs:
 
       - name: Create minimal styles.xml
         run: |
-          cat <<'EOF' > app/src/main/res/values/styles.xml
+          cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
