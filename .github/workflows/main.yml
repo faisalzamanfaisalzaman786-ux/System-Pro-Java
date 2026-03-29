@@ -1,11 +1,9 @@
-name: System Pro  - Dynamic APK Builder
+name: System Pro - Dynamic APK Builder
 
 on:
   push:
     branches: [ "main", "master" ]
   workflow_dispatch:
-  repository_dispatch:
-    types: [build-apk]
 
 concurrency:
   group: build-apk-single
@@ -33,112 +31,42 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Process client payload (HTML, icon, permissions, app name)
-        if: github.event_name == 'repository_dispatch'
+      - name: Create default index.html
         run: |
-          # HTML
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
-          # Icon (Base64 to PNG)
-          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          fi
-
-          # Permissions
-          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-
-          # App name
-          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
-
-      - name: Verify and fix HTML & Icon
-        run: |
-          # ---------- Fix HTML ----------
-          if [ ! -s app/src/main/assets/index.html ]; then
-            echo "Warning: index.html empty, using default."
-            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
+          cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
-          <head><meta charset="UTF-8"><title>System Pro</title></head>
-          <body><h1>System Pro</h1><p>Default content</p></body>
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>System Pro</title>
+              <style>
+                  body { font-family: sans-serif; text-align: center; padding: 2rem; }
+                  button { padding: 1rem; font-size: 1.2rem; margin-top: 2rem; }
+              </style>
+          </head>
+          <body>
+              <h1>System Pro</h1>
+              <p>Default content – replace this HTML as needed.</p>
+              <button onclick="alert('Hello from WebView!')">Click Me</button>
+          </body>
           </html>
           DEFAULT_HTML
-          fi
-          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
-          # ---------- Fix Icon ----------
+      - name: Create default icon
+        run: |
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-
-          # Check if existing icon is valid (size > 100 bytes)
-          if [ -f "$ICON_PATH" ]; then
-            SIZE=$(wc -c < "$ICON_PATH")
-            if [ "$SIZE" -lt 100 ]; then
-              echo "Icon too small ($SIZE bytes), replacing with default."
-              rm -f "$ICON_PATH"
-            else
-              echo "Icon file size: $SIZE bytes"
-              # Optional: show PNG header
-              head -c 20 "$ICON_PATH" | xxd
-            fi
-          fi
-
-          # Create default icon if missing
-          if [ ! -f "$ICON_PATH" ]; then
-            echo "Creating default blue icon (48x48)."
-            # Try using ImageMagick (available on runners)
-            if command -v convert >/dev/null 2>&1; then
-              convert -size 48x48 xc:blue "$ICON_PATH"
-            else
-              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
-              printf '%s' \
-                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
-                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
-                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
-            fi
-            echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
-          fi
-
-      - name: Provide default permissions and app name
-        run: |
-          if [ ! -f permissions.txt ]; then
-            touch permissions.txt
-          fi
-          if [ ! -f app_name.txt ]; then
-            echo "System Pro" > app_name.txt
-          fi
-
-      - name: Payload size control (HTML & Icon)
-        run: |
-          # Check HTML size
-          HTML_SIZE=$(wc -c < app/src/main/assets/index.html)
-          MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
-          if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
-            echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
-            # Truncate to 1 MB
-            head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
-            mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
-            echo "HTML truncated to 1 MB."
+          # Create a simple blue square 48x48 PNG using ImageMagick (if available)
+          if command -v convert >/dev/null 2>&1; then
+            convert -size 48x48 xc:blue "$ICON_PATH"
           else
-            echo "✅ HTML size is within limit."
+            # Fallback: embed a tiny valid PNG (48x48 blue) as Base64
+            printf '%s' \
+              "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
+              "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
+              "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
           fi
-
-          # Check icon size
-          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if [ -f "$ICON_PATH" ]; then
-            ICON_SIZE=$(wc -c < "$ICON_PATH")
-            MAX_ICON_SIZE=$((100 * 1024))  # 100 KB
-            if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
-              echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing with ImageMagick."
-              if command -v convert >/dev/null 2>&1; then
-                # Resize to 128x128 and compress
-                convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
-                echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
-              else
-                echo "ImageMagick not available, icon size remains large."
-              fi
-            else
-              echo "✅ Icon size is within limit."
-            fi
-          fi
+          echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
 
       - name: Clean previous builds
         run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
@@ -156,7 +84,6 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-                  maven { url "https://plugins.gradle.org/m2/" }
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.2'
@@ -166,7 +93,6 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-                  maven { url "https://jitpack.io" }
               }
           }
           EOF
@@ -186,31 +112,25 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-                  maven { url "https://jitpack.io" }
               }
           }
           rootProject.name = "System Pro"
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic namespace
+      - name: Create app build.gradle
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Using package name: $PACKAGE_NAME"
-
-          cat <<EOF > app/build.gradle
+          cat <<'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace '$PACKAGE_NAME'
+              namespace 'com.systempro.app'
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PACKAGE_NAME"
+                  applicationId "com.systempro.app"
                   minSdk 24
                   targetSdk 34
                   versionCode 1
@@ -234,32 +154,19 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml with dynamic permissions and icon
+      - name: Create AndroidManifest.xml
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
-
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-          EOF
-
-          for perm in $PERMISSIONS; do
-            if [ -n "$perm" ]; then
-              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
-            fi
-          done
-
-          # Icon is always referenced (we ensured it exists)
-          cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="$APP_NAME"
+                  android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
                   <activity
@@ -275,21 +182,20 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package
+      - name: Create MainActivity.java
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          PACKAGE_NAME="com.systempro.app"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
-          package $PACKAGE_NAME;
+          cat <<'EOF' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          package com.systempro.app;
 
           import android.os.Bundle;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.webkit.WebChromeClient;
+          import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
           import android.net.Uri;
           import android.content.Intent;
@@ -310,6 +216,10 @@ jobs:
                   webView.getSettings().setDomStorageEnabled(true);
                   webView.getSettings().setAllowFileAccess(true);
                   webView.getSettings().setAllowContentAccess(true);
+                  // Enable cross-origin and file access for local HTML
+                  webView.getSettings().setAllowFileAccessFromFileURLs(true);
+                  webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
@@ -318,9 +228,16 @@ jobs:
                           MainActivity.this.filePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("image/*");
+                          intent.setType("*/*");
                           startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
                           return true;
+                      }
+
+                      @Override
+                      public void onPermissionRequest(PermissionRequest request) {
+                          // Grant all requested permissions automatically for simplicity
+                          // (For production, you should show a dialog)
+                          request.grant(request.getResources());
                       }
                   });
 
