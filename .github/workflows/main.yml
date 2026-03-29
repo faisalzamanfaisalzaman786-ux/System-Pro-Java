@@ -34,20 +34,40 @@ jobs:
       - name: Process client payload (HTML, icon, permissions)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML (Base64 encoded from client)
+          # Debug: Show what we received
+          echo "=== DEBUG: Checking client_payload ==="
           if [ -n "${{ github.event.client_payload.app_html_base64 }}" ]; then
-            echo "${{ github.event.client_payload.app_html_base64 }}" | base64 --decode > app/src/main/assets/index.html
-            echo "✅ HTML decoded from Base64, size: $(wc -c < app/src/main/assets/index.html) bytes"
+            echo "app_html_base64 length: ${#app_html_base64}"
+            # Save raw base64 to file for inspection
+            echo "${{ github.event.client_payload.app_html_base64 }}" > /tmp/raw_base64.txt
+            # Decode
+            cat /tmp/raw_base64.txt | base64 --decode > app/src/main/assets/index.html
+            if [ $? -eq 0 ]; then
+              echo "✅ HTML decoded successfully, size: $(wc -c < app/src/main/assets/index.html) bytes"
+            else
+              echo "❌ Failed to decode Base64"
+              exit 1
+            fi
+          else
+            echo "⚠️ No app_html_base64 provided"
           fi
-          # Icon (Base64)
+
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            echo "app_icon length: ${#app_icon}"
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Icon received and decoded"
+            echo "✅ Icon decoded"
           fi
-          # Permissions
+
           if [ -n "${{ github.event.client_payload.permissions }}" ]; then
+            echo "Permissions: ${{ github.event.client_payload.permissions }}"
             printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-            echo "✅ Permissions saved"
+          fi
+
+          # Debug: Show first 200 chars of decoded HTML
+          if [ -f app/src/main/assets/index.html ]; then
+            echo "=== First 200 chars of index.html ==="
+            head -c 200 app/src/main/assets/index.html
+            echo ""
           fi
 
       - name: Provide default HTML, icon, permissions if missing (only for non-dispatch triggers)
