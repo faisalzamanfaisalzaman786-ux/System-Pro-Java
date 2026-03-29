@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main", "master" ]
   workflow_dispatch:
+  repository_dispatch:
+    types: [build-apk]
 
 concurrency:
   group: build-apk-single
@@ -31,36 +33,52 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Create default index.html
+      - name: Process HTML from client payload (if any)
+        if: github.event_name == 'repository_dispatch'
         run: |
-          cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>System Pro</title>
-              <style>
-                  body { font-family: sans-serif; text-align: center; padding: 2rem; }
-                  button { padding: 1rem; font-size: 1.2rem; margin-top: 2rem; }
-              </style>
-          </head>
-          <body>
-              <h1>System Pro</h1>
-              <p>Default content – replace this HTML as needed.</p>
-              <button onclick="alert('Hello from WebView!')">Click Me</button>
-          </body>
-          </html>
-          DEFAULT_HTML
+          # اگر client_payload میں app_html موجود ہے تو اسے index.html میں ڈالیں
+          if [ -n "${{ github.event.client_payload.app_html }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+            echo "✅ Received HTML from client_payload, size: $(wc -c < app/src/main/assets/index.html) bytes"
+            # پہلی 10 لائنیں لاگ میں دکھائیں (ڈیبگنگ کے لیے)
+            echo "--- First 10 lines of received HTML ---"
+            head -n 10 app/src/main/assets/index.html
+            echo "----------------------------------------"
+          else
+            echo "⚠️ No app_html in payload, will use default HTML."
+          fi
 
-      - name: Create default icon
+      - name: Create default index.html (if not provided by payload)
+        run: |
+          if [ ! -s app/src/main/assets/index.html ]; then
+            cat <<'DEFAULT_HTML' > app/src/main/assets/index.html
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>System Pro</title>
+                <style>
+                    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+                    button { padding: 1rem; font-size: 1.2rem; margin-top: 2rem; }
+                </style>
+            </head>
+            <body>
+                <h1>System Pro</h1>
+                <p>Default content – replace this HTML as needed.</p>
+                <button onclick="alert('Hello from WebView!')">Click Me</button>
+            </body>
+            </html>
+            DEFAULT_HTML
+            echo "Default HTML created (no payload or empty payload)."
+          fi
+
+      - name: Create default icon (fixed, not from payload)
         run: |
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          # Create a simple blue square 48x48 PNG using ImageMagick (if available)
           if command -v convert >/dev/null 2>&1; then
             convert -size 48x48 xc:blue "$ICON_PATH"
           else
-            # Fallback: embed a tiny valid PNG (48x48 blue) as Base64
             printf '%s' \
               "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
               "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -154,7 +172,7 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml
+      - name: Create AndroidManifest.xml (fixed permissions)
         run: |
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -182,7 +200,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java
+      - name: Create MainActivity.java (with fixed WebView settings)
         run: |
           PACKAGE_NAME="com.systempro.app"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
@@ -216,7 +234,6 @@ jobs:
                   webView.getSettings().setDomStorageEnabled(true);
                   webView.getSettings().setAllowFileAccess(true);
                   webView.getSettings().setAllowContentAccess(true);
-                  // Enable cross-origin and file access for local HTML
                   webView.getSettings().setAllowFileAccessFromFileURLs(true);
                   webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
 
@@ -235,8 +252,6 @@ jobs:
 
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
-                          // Grant all requested permissions automatically for simplicity
-                          // (For production, you should show a dialog)
                           request.grant(request.getResources());
                       }
                   });
