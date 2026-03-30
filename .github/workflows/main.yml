@@ -1,280 +1,164 @@
-name: System Pro - Dynamic APK Builder
+name: System Pro APK Builder
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main ]
   workflow_dispatch:
   repository_dispatch:
-    types:
-      - build-apk
-
-concurrency:
-  group: build-apk-single
-  cancel-in-progress: false
+    types: [build-apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Prepare folders
-        run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/java
-
-      - name: Read payload or defaults
-        run: |
-          echo '${{ github.event.client_payload.app_name }}' > app_name.txt
-          echo '${{ github.event.client_payload.permissions }}' > permissions.txt
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            printf '%s' '${{ github.event.client_payload.app_html }}' > app/src/main/assets/index.html
-            if [ -n '${{ github.event.client_payload.app_icon }}' ]; then
-              printf '%s' '${{ github.event.client_payload.app_icon }}' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            fi
-          fi
-
-      - name: Set defaults if empty
-        run: |
-          if [ ! -s app_name.txt ]; then
-            echo "System Pro" > app_name.txt
-          fi
-
-          if [ ! -s permissions.txt ]; then
-            touch permissions.txt
-          fi
-
-          if [ ! -s app/src/main/assets/index.html ]; then
-            cat > app/src/main/assets/index.html <<'EOF'
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="UTF-8">
-              <title>System Pro</title>
-            </head>
-            <body>
-              <h1>System Pro</h1>
-            </body>
-            </html>
-            EOF
-          fi
-
-      - name: Ensure icon exists
-        run: |
-          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if [ ! -f "$ICON_PATH" ]; then
-            if command -v convert >/dev/null 2>&1; then
-              convert -size 48x48 xc:blue "$ICON_PATH"
-            else
-              python3 - <<'PY'
-from PIL import Image
-img = Image.new("RGBA", (48, 48), (0, 0, 255, 255))
-img.save("app/src/main/res/drawable/ic_launcher.png")
-PY
-            fi
-          fi
-
-      - name: Create gradle files
-        run: |
-          cat > gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-          cat > build.gradle <<'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+        cache: gradle
+        
+    - name: Setup project
+      run: |
+        mkdir -p app/src/main/{assets,res/{drawable,layout,values},java}
+        
+    - name: Use committed index.html
+      run: |
+        if [ -f index.html ]; then
+          cp index.html app/src/main/assets/
+          echo "Using committed index.html"
+        else
+          echo "<h1>Default App</h1>" > app/src/main/assets/index.html
+        fi
+        
+    - name: Setup app name & permissions
+      run: |
+        echo "${{ github.event.client_payload.app_name || 'System Pro' }}" > app_name.txt
+        echo "${{ github.event.client_payload.permissions || '' }}" > permissions.txt
+        
+    - name: Create gradle.properties
+      run: |
+        cat > gradle.properties << EOF
+        org.gradle.jvmargs=-Xmx2048m
+        android.useAndroidX=true
+        android.enableJetifier=true
+        EOF
+        
+    - name: Create build.gradle (root)
+      run: |
+        cat > build.gradle << EOF
+        buildscript {
+          repositories { google() mavenCentral() }
+          dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+        }
+        allprojects { repositories { google() mavenCentral() } }
+        EOF
+        
+    - name: Create settings.gradle
+      run: |
+        cat > settings.gradle << EOF
+        include ':app'
+        EOF
+        
+    - name: Create app/build.gradle
+      run: |
+        APP_NAME=$(cat app_name.txt)
+        PKG=com.systempro.$(echo $APP_NAME | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9' | sed 's/[^a-z0-9]/_/g')
+        cat > app/build.gradle << EOF
+        plugins { id 'com.android.application' }
+        android {
+          namespace '$PKG'
+          compileSdk 34
+          defaultConfig {
+            applicationId '$PKG'
+            minSdk 24
+            targetSdk 34
+            versionCode 1
+            versionName '1.0'
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
-
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "System Pro"
-          include ':app'
-          EOF
-
-      - name: Create app build file
-        run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-
-          cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PACKAGE_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-
-      - name: Create manifest
-        run: |
-          APP_NAME=$(cat app_name.txt)
-          PERMISSIONS=$(cat permissions.txt | tr ',' '
-' || true)
-
-          cat > app/src/main/AndroidManifest.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          buildTypes { release { minifyEnabled false } }
+        }
+        dependencies {
+          implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+        
+    - name: Create AndroidManifest.xml
+      run: |
+        APP_NAME=$(cat app_name.txt)
+        PERMS=$(cat permissions.txt)
+        cat > app/src/main/AndroidManifest.xml << EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <uses-permission android:name="android.permission.INTERNET" />
+          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 EOF
-
-          for perm in $PERMISSIONS; do
-            if [ -n "$perm" ]; then
-              echo "    <uses-permission android:name="$perm" />" >> app/src/main/AndroidManifest.xml
-            fi
-          done
-
-          cat >> app/src/main/AndroidManifest.xml <<EOF
-              <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
-                  android:label="$APP_NAME"
-                  android:usesCleartextTraffic="true"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Create MainActivity
-        run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PACKAGE_PATH"
-
-          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" <<EOF
-          package $PACKAGE_NAME;
-
-          import android.os.Bundle;
-          import android.webkit.WebChromeClient;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-
-                  WebView webView = findViewById(R.id.webview);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.getSettings().setAllowFileAccess(true);
-                  webView.getSettings().setAllowContentAccess(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
+        echo "$PERMS" | tr ',' '
+' | while read perm; do
+          if [ -n "$perm" ]; then
+            echo "  <uses-permission android:name="$perm" />" >> app/src/main/AndroidManifest.xml
+          fi
+        done
+        cat >> app/src/main/AndroidManifest.xml << EOF
+          <application android:allowBackup="true" android:icon="@drawable/ic_launcher"
+            android:label="$APP_NAME" android:usesCleartextTraffic="true">
+            <activity android:name=".MainActivity" android:exported="true">
+              <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+              </intent-filter>
+            </activity>
+          </application>
+        </manifest>
+        EOF
+        
+    - name: Create MainActivity.java
+      run: |
+        APP_NAME=$(cat app_name.txt)
+        PKG=com.systempro.$(echo $APP_NAME | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9' | sed 's/[^a-z0-9]/_/g')
+        mkdir -p "app/src/main/java/$PKG"
+        cat > "app/src/main/java/$PKG/MainActivity.java" << EOF
+        package $PKG;
+        import android.os.Bundle;
+        import android.webkit.*;
+        import androidx.appcompat.app.AppCompatActivity;
+        public class MainActivity extends AppCompatActivity {
+          @Override protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_main);
+            WebView wv = findViewById(R.id.webview);
+            wv.getSettings().setJavaScriptEnabled(true);
+            wv.getSettings().setDomStorageEnabled(true);
+            wv.loadUrl("file:///android_asset/index.html");
           }
-          EOF
-
-      - name: Create layout
-        run: |
-          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/webview"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
-          EOF
-
-      - name: Create styles
-        run: |
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
-                  <item name="windowActionBar">false</item>
-                  <item name="windowNoTitle">true</item>
-              </style>
-          </resources>
-          EOF
-
-      - name: Generate wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type all
-          chmod +x gradlew
-
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-App
-          path: app/build/outputs/apk/debug/*.apk
+        }
+        EOF
+        
+    - name: Create layout
+      run: |
+        cat > app/src/main/res/layout/activity_main.xml << EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <WebView xmlns:android="http://schemas.android.com/apk/res/android"
+          android:id="@+id/webview" android:layout_width="match_parent"
+          android:layout_height="match_parent" />
+        EOF
+        
+    - name: Create icon
+      run: |
+        convert -size 48x48 xc:blue app/src/main/res/drawable/ic_launcher.png || \
+        printf "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/drawable/ic_launcher.png
+        
+    - name: Setup Gradle wrapper
+      run: |
+        gradle wrapper
+        chmod +x gradlew
+        
+    - name: Build APK
+      run: ./gradlew assembleDebug
+      
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: APK-Build-${{ github.run_id }}
+        path: app/build/outputs/apk/debug/*.apk
