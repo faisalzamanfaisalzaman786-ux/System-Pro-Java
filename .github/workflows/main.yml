@@ -1,4 +1,4 @@
-name: System Pro - Real APK Delivery
+name: System Pro - Emergency Fix
 
 on:
   workflow_dispatch:
@@ -18,22 +18,15 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Force Gradle 7.5
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 7.5
-
-      - name: Create Project Files
+      # کیشے کے بغیر کلین بلڈ
+      - name: Setup Android Project
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
-          
-          # HTML and Styles
-          echo "<html><body style='background:#000;color:#fff;text-align:center;'><h1>System Pro V2 Loaded</h1></body></html>" > app/src/main/assets/index.html
+          echo "<html><body style='background:#000;color:#fff;'><h1>System Pro V2 Active</h1></body></html>" > app/src/main/assets/index.html
           echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-
-          # Manifest
+          
           cat > app/src/main/AndroidManifest.xml << EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <application android:label="System Pro" android:theme="@style/AppTheme">
@@ -47,7 +40,6 @@ jobs:
           </manifest>
           EOF
 
-          # Java MainActivity
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
           import android.os.Bundle;
@@ -64,13 +56,13 @@ jobs:
           }
           EOF
 
-      - name: Setup Build Scripts
+      - name: Build With Embedded Gradle
         run: |
           echo "include ':app'" > settings.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.2.0' }
+              dependencies { classpath 'com.android.tools.build:gradle:7.0.4' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
@@ -78,28 +70,30 @@ jobs:
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
-              compileSdk 32
+              compileSdk 31
               namespace 'com.systempro.app'
               defaultConfig {
                   applicationId "com.systempro.app"
                   minSdk 21
-                  targetSdk 32
+                  targetSdk 31
                   versionCode 1
                   versionName "1.0"
               }
           }
           EOF
-
-      - name: Build and Locate APK
-        run: |
+          # بغیر کسی ایکشن کے ڈائریکٹ کمانڈ
+          chmod +x gradlew || true
           gradle assembleDebug --no-daemon
-          # Sab se important step: APK ko dhoond kar bahar lana
-          mkdir -p final_apk_folder
-          find . -name "*.apk" -exec cp {} final_apk_folder/SystemPro.apk \;
 
-      - name: Upload Real APK File
+      - name: Force APK Find
+        run: |
+          mkdir -p output
+          # تمام APK فائلز کو زبردستی نکالنا
+          find . -name "*.apk" -exec cp {} output/SystemPro_Final.apk \;
+
+      - name: Final Artifact Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Full-App
-          path: final_apk_folder/SystemPro.apk
+          name: System-Pro-v2-Download
+          path: output/SystemPro_Final.apk
           if-no-files-found: error
