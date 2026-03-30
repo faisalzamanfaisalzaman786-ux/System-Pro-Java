@@ -1,4 +1,4 @@
-name: System Pro - Ultra Stable Fix
+name: System Pro - Final APK Success
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -17,24 +17,24 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Setup Android Project
+      - name: Create Android Structure
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
 
-          # HTML Setup
+          # HTML file check
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body><h1>System Pro Loaded</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:#000;color:#fff;'><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Theme fix
+          # Themes & Resources
           echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           
-          # Manifest
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -50,7 +50,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Java Bridge
+      - name: Create Java MainActivity
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -64,21 +64,20 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView web = new WebView(this);
                   setContentView(web);
-                  web.getSettings().setJavaScriptEnabled(true);
-                  web.getSettings().setDomStorageEnabled(true);
-                  web.getSettings().setAllowFileAccess(true);
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccess(true);
                   web.setWebViewClient(new WebViewClient());
                   web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Hard Reset Gradle Version
+      - name: Setup Gradle Files
         run: |
-          # settings.gradle
           echo "include ':app'" > settings.gradle
           
-          # root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -87,7 +86,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # app build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -103,16 +101,19 @@ jobs:
           }
           EOF
 
-      - name: Execute Build (Version Force)
+      - name: Build APK (Bypass Wrapper)
         run: |
-          # Is line se GitHub majboor ho jayega purana version use karne par
-          wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip
-          unzip -q gradle-7.5-bin.zip
-          export PATH=$PWD/gradle-7.5/bin:$PATH
+          # Is command se GitHub system ka standard gradle use karega
           gradle assembleDebug
 
-      - name: Upload APK
+      - name: Find and Move APK
+        run: |
+          # APK ko dhoond kar main folder mein laayein taake size theek aaye
+          mkdir -p output
+          find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} output/SystemPro.apk \;
+
+      - name: Upload Real APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-App-Final
+          path: output/SystemPro.apk
