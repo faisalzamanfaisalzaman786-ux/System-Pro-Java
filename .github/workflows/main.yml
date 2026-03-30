@@ -1,15 +1,14 @@
-name: System Pro - Emergency Fix
+name: System Pro - Original Fix
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [build-apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 11
@@ -18,82 +17,15 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      # کیشے کے بغیر کلین بلڈ
-      - name: Setup Android Project
+      - name: Build APK
         run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/values
-          echo "<html><body style='background:#000;color:#fff;'><h1>System Pro V2 Active</h1></body></html>" > app/src/main/assets/index.html
-          echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-          
-          cat > app/src/main/AndroidManifest.xml << EOF
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <application android:label="System Pro" android:theme="@style/AppTheme">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # وہی سادہ کمانڈ جو آپ کی پہلی فائل میں تھی
+          bash ./gradlew assembleDebug --no-daemon || gradle assembleDebug --no-daemon
 
-          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
-          package com.systempro.app;
-          import android.os.Bundle;
-          import android.webkit.*;
-          import android.app.Activity;
-          public class MainActivity extends Activity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView web = new WebView(this);
-                  setContentView(web);
-                  web.getSettings().setJavaScriptEnabled(true);
-                  web.loadUrl("file:///android_asset/index.html");
-              }
-          }
-          EOF
-
-      - name: Build With Embedded Gradle
-        run: |
-          echo "include ':app'" > settings.gradle
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.0.4' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
-          android {
-              compileSdk 31
-              namespace 'com.systempro.app'
-              defaultConfig {
-                  applicationId "com.systempro.app"
-                  minSdk 21
-                  targetSdk 31
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-          # بغیر کسی ایکشن کے ڈائریکٹ کمانڈ
-          chmod +x gradlew || true
-          gradle assembleDebug --no-daemon
-
-      - name: Force APK Find
-        run: |
-          mkdir -p output
-          # تمام APK فائلز کو زبردستی نکالنا
-          find . -name "*.apk" -exec cp {} output/SystemPro_Final.apk \;
-
-      - name: Final Artifact Upload
+      - name: Delivery (The Main Fix)
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-v2-Download
-          path: output/SystemPro_Final.apk
+          name: SystemPro-App
+          # یہ وہ سیٹنگ ہے جو ہم بدل رہے ہیں تاکہ اصلی APK ملے
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
