@@ -1,4 +1,4 @@
-name: System Pro - Final Stable Build
+name: System Pro - Ultra Stable Build
 
 on:
   workflow_dispatch:
@@ -20,50 +20,36 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Android Structure
+      - name: Create Standard Android Structure
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/java/com/systempro/app
-          
-          # HTML Check
+
+          # HTML Copy Logic
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body style='background:#000;color:#fff;'><h1>System Pro: HTML Missing</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:black;color:white;text-align:center;'><h1>System Pro Loaded</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Create Base Files
-        run: |
-          # Create simple styles.xml to avoid theme errors
-          cat > app/src/main/res/values/themes.xml << EOF
+          # Theme Fix
+          cat > app/src/main/res/values/styles.xml << EOF
           <resources>
-              <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar" />
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
           </resources>
           EOF
 
-          # Handling Icon
-          ICON_DATA="${{ github.event.client_payload.app_icon }}"
-          if [ -n "$ICON_DATA" ]; then
-            printf '%s' "$ICON_DATA" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          else
-            printf 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          fi
-
-      - name: Fix AndroidManifest.xml
-        run: |
+          # Manifest Fix (Internet & Hardware Acceleration)
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
-                  android:label="${{ github.event.client_payload.app_name || 'System Pro' }}"
-                  android:theme="@style/Theme.SystemPro"
+                  android:label="System Pro"
+                  android:theme="@style/AppTheme"
                   android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
@@ -76,7 +62,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Fix MainActivity.java
+      - name: Create Java Code
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -88,20 +74,21 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  setContentView(webView);
-                  WebSettings s = webView.getSettings();
+                  WebView web = new WebView(this);
+                  setContentView(web);
+                  WebSettings s = web.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
                   s.setDatabaseEnabled(true);
                   s.setAllowFileAccess(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  web.setWebViewClient(new WebViewClient());
+                  web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Build Fixed APK
+      - name: Build with Gradle
         run: |
           echo "include ':app'" > settings.gradle
           cat > build.gradle << 'EOF'
@@ -109,10 +96,9 @@ jobs:
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -130,11 +116,11 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
-          chmod +x gradlew || gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.5
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final
+          name: SystemPro-Final-APK
           path: app/build/outputs/apk/debug/*.apk
