@@ -20,22 +20,30 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Android Project
+      - name: Prepare Android Structure
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/java/com/systempro/app
           
-          # HTML فائل کو چیک کرنا
+          # HTML Check
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body style='background:#000;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;'><h1>System Pro: HTML Not Found</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:#000;color:#fff;'><h1>System Pro: HTML Missing</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Handle Icon and Permissions
+      - name: Create Base Files
         run: |
-          # آئیکن پروسیسنگ
+          # Create simple styles.xml to avoid theme errors
+          cat > app/src/main/res/values/themes.xml << EOF
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar" />
+          </resources>
+          EOF
+
+          # Handling Icon
           ICON_DATA="${{ github.event.client_payload.app_icon }}"
           if [ -n "$ICON_DATA" ]; then
             printf '%s' "$ICON_DATA" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
@@ -43,7 +51,7 @@ jobs:
             printf 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-      - name: Fix AndroidManifest.xml (Internet & Permissions)
+      - name: Fix AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -51,16 +59,14 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:label="${{ github.event.client_payload.app_name || 'System Pro' }}"
+                  android:theme="@style/Theme.SystemPro"
                   android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -70,7 +76,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Fix MainActivity.java (Menu & Storage Fix)
+      - name: Fix MainActivity.java
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -84,48 +90,51 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView webView = new WebView(this);
                   setContentView(webView);
-                  
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true); // مینیو کھلنے کے لیے یہ لازمی ہے
+                  s.setDomStorageEnabled(true);
                   s.setDatabaseEnabled(true);
                   s.setAllowFileAccess(true);
-                  s.setAllowContentAccess(true);
-                  s.setGeolocationEnabled(true);
-                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  
                   webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                          callback.invoke(origin, true, false);
-                      }
-                  });
-                  
                   webView.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Build APK
+      - name: Build Fixed APK
         run: |
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
-          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
               compileSdk 34
-              defaultConfig { applicationId "com.systempro.app"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
           }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
           EOF
-          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew || gradle wrapper --gradle-version 8.5
           ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Fixed
+          name: SystemPro-Final
           path: app/build/outputs/apk/debug/*.apk
