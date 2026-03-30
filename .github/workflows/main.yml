@@ -61,14 +61,24 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+      # HTML کو heredoc کے ذریعے لکھیں تاکہ کوئی شیل انٹرپریٹیشن نہ ہو
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
+          # HTML (heredoc سے لکھیں)
+          cat << 'EOF' > app/src/main/assets/index.html
+          ${{ github.event.client_payload.app_html }}
+          EOF
+
+          # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
+
+          # Permissions
           printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
+
+          # App name
           printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Verify and fix HTML & Icon
