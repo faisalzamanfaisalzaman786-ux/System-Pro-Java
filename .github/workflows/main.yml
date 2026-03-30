@@ -26,6 +26,15 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            build-tools;34.0.0
+            platforms;android-34
+          accept-licenses: true
+
       - name: Prepare directories
         run: |
           mkdir -p app/src/main/assets
@@ -33,12 +42,21 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      - name: Process client payload (HTML, icon, permissions, app name)
+      # ریپوزٹری کے روٹ سے index.html کو assets میں کاپی کریں
+      - name: Copy HTML from repository
+        run: |
+          if [ -f index.html ]; then
+            cp index.html app/src/main/assets/index.html
+            echo "HTML file copied from repository root."
+          else
+            echo "Error: index.html not found in repository root."
+            exit 1
+          fi
+
+      # آئیکون، پرمیشنز، ایپ کا نام client_payload سے لیں
+      - name: Process client payload (icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
-          printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
           # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
@@ -68,7 +86,6 @@ jobs:
           # ---------- Fix Icon ----------
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
 
-          # Check if existing icon is valid (size > 100 bytes)
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -79,13 +96,11 @@ jobs:
             fi
           fi
 
-          # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
-              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
               printf '%s' \
                 "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
                 "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -103,21 +118,8 @@ jobs:
             echo "System Pro" > app_name.txt
           fi
 
-      - name: Payload size control (HTML & Icon)
+      - name: Payload size control (Icon)
         run: |
-          # Check HTML size
-          HTML_SIZE=$(wc -c < app/src/main/assets/index.html)
-          MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
-          if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
-            echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
-            head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
-            mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
-            echo "HTML truncated to 1 MB."
-          else
-            echo "✅ HTML size is within limit."
-          fi
-
-          # Check icon size
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
           if [ -f "$ICON_PATH" ]; then
             ICON_SIZE=$(wc -c < "$ICON_PATH")
@@ -135,10 +137,8 @@ jobs:
             fi
           fi
 
-      - name: Clean previous builds (keep wrapper)
-        run: |
-          rm -rf .gradle app/build build
-          # Do NOT remove gradle/wrapper or gradlew
+      - name: Clean previous builds
+        run: rm -rf .gradle app/build build
 
       - name: Create gradle.properties
         run: |
@@ -360,13 +360,6 @@ jobs:
               </style>
           </resources>
           EOF
-
-      - name: Setup Android SDK
-        run: |
-          # Ensure build-tools 34.0.0 is available (required for compileSdk 34)
-          sdkmanager "build-tools;34.0.0" || true
-          # Accept licenses if needed
-          yes | sdkmanager --licenses || true
 
       - name: Build APK with Gradle
         uses: gradle/gradle-build-action@v2
