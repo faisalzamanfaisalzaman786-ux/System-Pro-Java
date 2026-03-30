@@ -29,24 +29,35 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # Android SDK پہلے سے موجود ہے، صرف لائسنس قبول کریں اور build-tools انسٹال کریں
-      - name: Accept Android SDK licenses and install required tools
+      - name: Setup Android SDK
         run: |
-          # sdkmanager کا راستہ معلوم کریں
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -f "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/tools/bin/sdkmanager"
+          # SDK path
+          SDK_PATH="$ANDROID_HOME"
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "SDK not found at $SDK_PATH"
+            exit 1
           fi
-          if [ ! -f "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
+          echo "Android SDK found at $SDK_PATH"
+
+          # Find sdkmanager
+          SDKMANAGER=""
+          if [ -f "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK_PATH/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -f "$SDK_PATH/cmdline-tools/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK_PATH/cmdline-tools/tools/bin/sdkmanager"
+          elif [ -f "$SDK_PATH/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK_PATH/tools/bin/sdkmanager"
+          else
+            echo "sdkmanager not found"
+            exit 1
           fi
           echo "Using sdkmanager: $SDKMANAGER"
-          
-          # لائسنس قبول کریں (بغیر انٹریکشن کے)
+
+          # Accept licenses non-interactively
           yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
-          
-          # مطلوبہ پیکجز انسٹال کریں
-          $SDKMANAGER "platform-tools" "build-tools;34.0.0" "platforms;android-34" || true
+
+          # Install required packages
+          $SDKMANAGER "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
       - name: Prepare directories
         run: |
