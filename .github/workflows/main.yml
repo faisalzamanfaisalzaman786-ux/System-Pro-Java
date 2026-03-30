@@ -1,4 +1,4 @@
-name: System Pro - Final Success Build
+name: System Pro - Absolute Fix
 
 on:
   workflow_dispatch:
@@ -19,38 +19,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Basic App Folders
+      - name: Prepare Workspace
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
 
-          # HTML File Check
+          # HTML Copy
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body style='background:#000;color:#fff;text-align:center;'><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:#000;color:#fff;'><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Create Minimal Resources
-        run: |
-          # Simple Styles to avoid dependency errors
-          cat > app/src/main/res/values/styles.xml << EOF
-          <resources>
-              <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" />
-          </resources>
-          EOF
-
-          # Simple Manifest with Internet Permissions
+          # Theme & Manifest
+          echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
+          
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application 
-                  android:label="System Pro" 
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="true">
+              <application android:label="System Pro" android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -61,7 +50,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Native Java Code
+      - name: Create Native MainActivity
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -75,53 +64,51 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView web = new WebView(this);
                   setContentView(web);
-                  WebSettings s = web.getSettings();
-                  s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true);
-                  s.setAllowFileAccess(true);
+                  web.getSettings().setJavaScriptEnabled(true);
+                  web.getSettings().setDomStorageEnabled(true);
                   web.setWebViewClient(new WebViewClient());
                   web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Build with Clean Gradle Script
+      - name: Force Specific Gradle Version
         run: |
-          # Root build.gradle
+          # Create local wrapper to stop GitHub from using 9.4.1
+          gradle wrapper --gradle-version 8.2
+          
+          echo "include ':app'" > settings.gradle
+          
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # settings.gradle
-          echo "include ':app'" > settings.gradle
-
-          # app/build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
-              compileSdk 33
+              compileSdk 34
               defaultConfig {
                   applicationId "com.systempro.app"
-                  minSdk 21
-                  targetSdk 33
+                  minSdk 24
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
           }
           EOF
 
-          # Run build using standard gradle
-          gradle wrapper --gradle-version 7.5
+      - name: Build APK with Locked Gradle
+        run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Final APK
+      - name: Upload Success APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Fixed-APK
+          name: SystemPro-V1-Success
           path: app/build/outputs/apk/debug/*.apk
