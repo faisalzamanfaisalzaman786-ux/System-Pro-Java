@@ -26,6 +26,15 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            build-tools;34.0.0
+            platforms;android-34
+          accept-licenses: true
+
       - name: Prepare directories
         run: |
           mkdir -p app/src/main/assets
@@ -68,7 +77,6 @@ jobs:
           # ---------- Fix Icon ----------
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
 
-          # Check if existing icon is valid (size > 100 bytes)
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -76,19 +84,14 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              # Optional: show PNG header
-              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
-          # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
-            # Try using ImageMagick (available on runners)
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
-              # Fallback: embed a small valid PNG (48x48 blue square) as Base64
               printf '%s' \
                 "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
                 "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
@@ -113,7 +116,6 @@ jobs:
           MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
           if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
             echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
-            # Truncate to 1 MB
             head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
             mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
             echo "HTML truncated to 1 MB."
@@ -129,7 +131,6 @@ jobs:
             if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
               echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing with ImageMagick."
               if command -v convert >/dev/null 2>&1; then
-                # Resize to 128x128 and compress
                 convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
                 echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
               else
@@ -141,7 +142,7 @@ jobs:
           fi
 
       - name: Clean previous builds
-        run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
+        run: rm -rf .gradle app/build build
 
       - name: Create gradle.properties
         run: |
@@ -196,7 +197,8 @@ jobs:
       - name: Create app build.gradle with dynamic namespace
         run: |
           APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          # پیکج نام کو صرف حروف اور انڈر سکور میں تبدیل کریں
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           echo "Using package name: $PACKAGE_NAME"
 
@@ -253,7 +255,6 @@ jobs:
             fi
           done
 
-          # Icon is always referenced (we ensured it exists)
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
@@ -278,7 +279,7 @@ jobs:
       - name: Create MainActivity.java with dynamic package
         run: |
           APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
@@ -365,13 +366,11 @@ jobs:
           </resources>
           EOF
 
-      - name: Generate gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type all
-          chmod +x gradlew
-
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+      - name: Build APK with Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.5
+          arguments: assembleDebug --stacktrace --no-daemon
 
       - name: Get APK size
         run: |
@@ -381,6 +380,7 @@ jobs:
             echo "APK size: $APK_SIZE bytes ($(($APK_SIZE / 1024)) KB)"
           else
             echo "APK not found!"
+            exit 1
           fi
 
       - name: Upload APK artifact
