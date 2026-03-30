@@ -1,4 +1,4 @@
-name: System Pro - Final Working Build
+name: System Pro - Ultra Stable Fix
 
 on:
   workflow_dispatch:
@@ -18,22 +18,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Structure & Resources
+      - name: Setup Android Project
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
 
-          # HTML File Fix: Ensure JavaScript has access
+          # HTML Setup
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body><h1>File Not Found</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body><h1>System Pro Loaded</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Theme & Manifest
+          # Theme fix
           echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           
+          # Manifest
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -49,7 +50,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Enhanced MainActivity
+      - name: Create Java Bridge
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -63,53 +64,55 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView web = new WebView(this);
                   setContentView(web);
-                  WebSettings settings = web.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
-                  web.setWebChromeClient(new WebChromeClient());
+                  web.getSettings().setJavaScriptEnabled(true);
+                  web.getSettings().setDomStorageEnabled(true);
+                  web.getSettings().setAllowFileAccess(true);
                   web.setWebViewClient(new WebViewClient());
                   web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Configure Gradle
+      - name: Hard Reset Gradle Version
         run: |
+          # settings.gradle
           echo "include ':app'" > settings.gradle
+          
+          # root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
+          # app build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
-              compileSdk 34
+              compileSdk 33
               defaultConfig {
                   applicationId "com.systempro.app"
                   minSdk 21
-                  targetSdk 34
+                  targetSdk 33
                   versionCode 1
                   versionName "1.0"
               }
           }
           EOF
 
-      - name: Build APK
+      - name: Execute Build (Version Force)
         run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          # Is line se GitHub majboor ho jayega purana version use karne par
+          wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip
+          unzip -q gradle-7.5-bin.zip
+          export PATH=$PWD/gradle-7.5/bin:$PATH
+          gradle assembleDebug
 
-      - name: Upload APK File
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: SystemPro-Success-APK
+          path: app/build/outputs/apk/debug/*.apk
