@@ -29,7 +29,6 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # ---------- Manual Android SDK setup ----------
       - name: Setup Android SDK
         run: |
           SDK_PATH="$ANDROID_HOME"
@@ -65,32 +64,22 @@ jobs:
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML
           printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-
-          # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
-
-          # Permissions
           printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-
-          # App name
           printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Verify and fix HTML & Icon
         run: |
-          # ---------- Fix HTML ----------
           if [ ! -s app/src/main/assets/index.html ]; then
-            echo "Error: index.html is empty! Please provide HTML content in the payload."
+            echo "Error: index.html is empty! Please provide HTML content."
             exit 1
           fi
           echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
-          # ---------- Fix Icon ----------
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-
           if [ -f "$ICON_PATH" ]; then
             SIZE=$(wc -c < "$ICON_PATH")
             if [ "$SIZE" -lt 100 ]; then
@@ -100,7 +89,6 @@ jobs:
               echo "Icon file size: $SIZE bytes"
             fi
           fi
-
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
             if command -v convert >/dev/null 2>&1; then
@@ -194,7 +182,6 @@ jobs:
       - name: Create app build.gradle with dynamic namespace
         run: |
           APP_NAME=$(cat app_name.txt)
-          # پیکج نام کو محفوظ بنائیں
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
           if [ -z "$PACKAGE_BASE" ]; then
             PACKAGE_BASE="app"
@@ -277,7 +264,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package
+      - name: Create MainActivity.java with dynamic package (using printf)
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
@@ -286,67 +273,69 @@ jobs:
           fi
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          # پہلے پرانی فائل کو صاف کریں
+          rm -rf "app/src/main/java/$PACKAGE_PATH"
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat <<EOF > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
-          package $PACKAGE_NAME;
-
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import android.webkit.WebChromeClient;
-          import android.webkit.ValueCallback;
-          import android.net.Uri;
-          import android.content.Intent;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              private WebView webView;
-              private ValueCallback<Uri[]> filePathCallback;
-              private static final int FILE_CHOOSER_REQUEST_CODE = 1;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-
-                  webView = findViewById(R.id.webview);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.getSettings().setAllowFileAccess(true);
-                  webView.getSettings().setAllowContentAccess(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
-                                                       FileChooserParams fileChooserParams) {
-                          MainActivity.this.filePathCallback = filePathCallback;
-                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                          intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("image/*");
-                          startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
-                          return true;
-                      }
-                  });
-
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-
-              @Override
-              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-                  if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
-                      if (resultCode == RESULT_OK && data != null) {
-                          Uri[] uris = new Uri[]{data.getData()};
-                          filePathCallback.onReceiveValue(uris);
-                      } else {
-                          filePathCallback.onReceiveValue(null);
-                      }
-                      filePathCallback = null;
-                  }
-                  super.onActivityResult(requestCode, resultCode, data);
-              }
-          }
-          EOF
+          # پوری فائل printf کے ذریعے لکھیں (ہر لائن کو \n کے ساتھ)
+          printf "%s\n" \
+            "package $PACKAGE_NAME;" \
+            "" \
+            "import android.os.Bundle;" \
+            "import android.webkit.WebView;" \
+            "import android.webkit.WebViewClient;" \
+            "import android.webkit.WebChromeClient;" \
+            "import android.webkit.ValueCallback;" \
+            "import android.net.Uri;" \
+            "import android.content.Intent;" \
+            "import androidx.appcompat.app.AppCompatActivity;" \
+            "" \
+            "public class MainActivity extends AppCompatActivity {" \
+            "    private WebView webView;" \
+            "    private ValueCallback<Uri[]> filePathCallback;" \
+            "    private static final int FILE_CHOOSER_REQUEST_CODE = 1;" \
+            "" \
+            "    @Override" \
+            "    protected void onCreate(Bundle savedInstanceState) {" \
+            "        super.onCreate(savedInstanceState);" \
+            "        setContentView(R.layout.activity_main);" \
+            "" \
+            "        webView = findViewById(R.id.webview);" \
+            "        webView.getSettings().setJavaScriptEnabled(true);" \
+            "        webView.getSettings().setDomStorageEnabled(true);" \
+            "        webView.getSettings().setAllowFileAccess(true);" \
+            "        webView.getSettings().setAllowContentAccess(true);" \
+            "        webView.setWebViewClient(new WebViewClient());" \
+            "        webView.setWebChromeClient(new WebChromeClient() {" \
+            "            @Override" \
+            "            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback," \
+            "                                             FileChooserParams fileChooserParams) {" \
+            "                MainActivity.this.filePathCallback = filePathCallback;" \
+            "                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);" \
+            "                intent.addCategory(Intent.CATEGORY_OPENABLE);" \
+            "                intent.setType(\"image/*\");" \
+            "                startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);" \
+            "                return true;" \
+            "            }" \
+            "        });" \
+            "" \
+            "        webView.loadUrl(\"file:///android_asset/index.html\");" \
+            "    }" \
+            "" \
+            "    @Override" \
+            "    protected void onActivityResult(int requestCode, int resultCode, Intent data) {" \
+            "        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {" \
+            "            if (resultCode == RESULT_OK && data != null) {" \
+            "                Uri[] uris = new Uri[]{data.getData()};" \
+            "                filePathCallback.onReceiveValue(uris);" \
+            "            } else {" \
+            "                filePathCallback.onReceiveValue(null);" \
+            "            }" \
+            "            filePathCallback = null;" \
+            "        }" \
+            "        super.onActivityResult(requestCode, resultCode, data);" \
+            "    }" \
+            "}" > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
         run: |
