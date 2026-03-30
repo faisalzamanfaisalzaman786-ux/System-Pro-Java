@@ -5,6 +5,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
@@ -14,32 +15,35 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ویب ویو کو انیشلائز کرنا
         webView = new WebView(this);
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
         
-        // --- مینو اور بٹنوں کو چلانے کے لیے ضروری سیٹنگز ---
-        settings.setJavaScriptEnabled(true);        // جاوا اسکرپٹ آن کریں
-        settings.setDomStorageEnabled(true);       // مینو کی سٹیٹ اور لوکل سٹوریج کے لیے
-        settings.setDatabaseEnabled(true);         // ڈیٹا بیس سپورٹ
-        settings.setAllowFileAccess(true);         // فائل ایکسیس
-        settings.setAllowContentAccess(true);
+        // 1. انٹرنیٹ اور جاوا اسکرپٹ کو فعال کرنا
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true); // مینو اور ڈیٹا لوڈنگ کے لیے لازمی
+        settings.setDatabaseEnabled(true);
         
-        // مینو کو ہموار (smooth) چلانے کے لیے
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
+        // 2. نیٹ ورک اور مینو بٹنز کی سپورٹ
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); // تاکہ نیٹ سے ڈیٹا آ سکے
 
-        // ویب ویو کلائنٹس سیٹ کرنا تاکہ لنکس ایپ کے اندر ہی کھلیں
+        // 3. کلائنٹس سیٹ کرنا (تاکہ لنکس اور مینو ایپ کے اندر کھلیں)
         webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                request.grant(request.getResources());
+            }
+        });
 
-        // آپ کی اپلوڈ کردہ ایچ ٹی ایم ایل فائل لوڈ کرنا
+        // 4. فائل لوڈ کرنا
         webView.loadUrl("file:///android_asset/index.html");
     }
 
-    // بیک بٹن دبانے پر ایپ بند ہونے کے بجائے مینو یا پچھلا پیج بند ہوگا
     @Override
     public void onBackPressed() {
         if (webView.canGoBack()) {
