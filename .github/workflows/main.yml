@@ -32,17 +32,24 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/java/com/systempro/app
 
-      - name: Process HTML and Assets
+      - name: Create Default Icon (Fixes AAPT Error)
+        run: |
+          # اگر پے لوڈ میں آئیکن ہے تو اسے ڈی کوڈ کریں ورنہ ڈیفالٹ بنائیں
+          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
+            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          else
+            printf 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
+
+      - name: Process HTML
         run: |
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-          elif [ -f "index.html" ]; then
-            cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1><p>Default Page Loaded</p></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Create gradle.properties (Fix AndroidX Error)
+      - name: Create gradle.properties
         run: |
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
@@ -50,16 +57,13 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-      - name: Create Correct AndroidManifest.xml
+      - name: Create AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
@@ -67,11 +71,10 @@ jobs:
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
-                  
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -81,70 +84,40 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Enhanced MainActivity.java
+      - name: Create MainActivity.java
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
-
           import android.os.Bundle;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.webkit.WebChromeClient;
-          import android.webkit.PermissionRequest;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
-              private WebView webView;
-
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  
-                  webView = new WebView(this);
+                  WebView webView = new WebView(this);
                   setContentView(webView);
-
                   WebSettings settings = webView.getSettings();
-                  
                   settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true); 
+                  settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
                   settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
-                  settings.setJavaScriptCanOpenWindowsAutomatically(true);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-                  settings.setSupportZoom(false);
-
                   webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public void onPermissionRequest(PermissionRequest request) {
-                          request.grant(request.getResources());
-                      }
-                  });
-
+                  webView.setWebChromeClient(new WebChromeClient());
                   webView.loadUrl("file:///android_asset/index.html");
-              }
-
-              @Override
-              public void onBackPressed() {
-                  if (webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
               }
           }
           EOF
 
-      - name: Setup Build Files (Gradle)
+      - name: Setup Gradle Files
         run: |
-          # Settings Gradle
           echo "rootProject.name = 'System Pro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
-          
-          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -152,8 +125,6 @@ jobs:
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-
-          # App build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -166,15 +137,9 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
@@ -182,10 +147,10 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Fixed-v2
+          name: System-Pro-v3
           path: app/build/outputs/apk/debug/*.apk
