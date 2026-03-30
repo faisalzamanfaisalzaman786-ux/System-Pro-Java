@@ -1,4 +1,4 @@
-name: System Pro - Ultra Stable Build
+name: System Pro - Final Fix
 
 on:
   workflow_dispatch:
@@ -18,39 +18,38 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Create Standard Android Structure
+      - name: Setup Android Structure
         run: |
           mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-          # HTML Copy Logic
+          # HTML File
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body style='background:black;color:white;text-align:center;'><h1>System Pro Loaded</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Theme Fix
+          # Simple Styles
           cat > app/src/main/res/values/styles.xml << EOF
           <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
+              <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" />
           </resources>
           EOF
 
-          # Manifest Fix (Internet & Hardware Acceleration)
+      - name: Create Manifest & Java
+        run: |
+          # AndroidManifest
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application
-                  android:label="System Pro"
+              <application 
+                  android:label="System Pro" 
                   android:theme="@style/AppTheme"
-                  android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -62,39 +61,34 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Java Code
-        run: |
+          # MainActivity
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
           import android.os.Bundle;
           import android.webkit.*;
-          import androidx.appcompat.app.AppCompatActivity;
+          import android.app.Activity;
 
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   WebView web = new WebView(this);
                   setContentView(web);
-                  WebSettings s = web.getSettings();
-                  s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true);
-                  s.setDatabaseEnabled(true);
-                  s.setAllowFileAccess(true);
-                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  web.getSettings().setJavaScriptEnabled(true);
+                  web.getSettings().setDomStorageEnabled(true);
                   web.setWebViewClient(new WebViewClient());
                   web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Build with Gradle
+      - name: Final Build Script
         run: |
           echo "include ':app'" > settings.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
@@ -103,24 +97,21 @@ jobs:
           plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
-              compileSdk 34
+              compileSdk 33
               defaultConfig {
                   applicationId "com.systempro.app"
-                  minSdk 24
-                  targetSdk 34
+                  minSdk 21
+                  targetSdk 33
                   versionCode 1
                   versionName "1.0"
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
           EOF
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.0
           ./gradlew assembleDebug
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success
           path: app/build/outputs/apk/debug/*.apk
