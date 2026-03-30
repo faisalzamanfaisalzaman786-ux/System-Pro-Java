@@ -1,4 +1,4 @@
-name: System Pro - Force Version Fix
+name: System Pro - Real APK Delivery
 
 on:
   workflow_dispatch:
@@ -18,22 +18,22 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      # یہ سٹیپ سب سے اہم ہے، یہ زبردستی گریڈل 7.5 انسٹال کرے گا
-      - name: Setup Gradle 7.5
+      - name: Force Gradle 7.5
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 7.5
 
-      - name: Prepare Project Folders
+      - name: Create Project Files
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
-          if [ -f "index.html" ]; then cp index.html app/src/main/assets/; fi
+          
+          # HTML and Styles
+          echo "<html><body style='background:#000;color:#fff;text-align:center;'><h1>System Pro V2 Loaded</h1></body></html>" > app/src/main/assets/index.html
           echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
 
-      - name: Create Manifest and Java
-        run: |
+          # Manifest
           cat > app/src/main/AndroidManifest.xml << EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <application android:label="System Pro" android:theme="@style/AppTheme">
@@ -47,6 +47,7 @@ jobs:
           </manifest>
           EOF
 
+          # Java MainActivity
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
           import android.os.Bundle;
@@ -63,7 +64,7 @@ jobs:
           }
           EOF
 
-      - name: Writing Clean Gradle Files
+      - name: Setup Build Scripts
         run: |
           echo "include ':app'" > settings.gradle
           cat > build.gradle << 'EOF'
@@ -89,11 +90,16 @@ jobs:
           }
           EOF
 
-      - name: Final Build Attempt
-        run: gradle assembleDebug --no-daemon
+      - name: Build and Locate APK
+        run: |
+          gradle assembleDebug --no-daemon
+          # Sab se important step: APK ko dhoond kar bahar lana
+          mkdir -p final_apk_folder
+          find . -name "*.apk" -exec cp {} final_apk_folder/SystemPro.apk \;
 
-      - name: Upload Result
+      - name: Upload Real APK File
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemPro-Full-App
+          path: final_apk_folder/SystemPro.apk
+          if-no-files-found: error
