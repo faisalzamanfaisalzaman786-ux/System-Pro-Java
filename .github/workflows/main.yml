@@ -76,15 +76,12 @@ jobs:
               rm -f "$ICON_PATH"
             else
               echo "Icon file size: $SIZE bytes"
-              # Optional: show PNG header
-              head -c 20 "$ICON_PATH" | xxd
             fi
           fi
 
           # Create default icon if missing
           if [ ! -f "$ICON_PATH" ]; then
             echo "Creating default blue icon (48x48)."
-            # Try using ImageMagick (available on runners)
             if command -v convert >/dev/null 2>&1; then
               convert -size 48x48 xc:blue "$ICON_PATH"
             else
@@ -113,7 +110,6 @@ jobs:
           MAX_HTML_SIZE=$((1 * 1024 * 1024))  # 1 MB
           if [ $HTML_SIZE -gt $MAX_HTML_SIZE ]; then
             echo "⚠️ Warning: HTML size ($HTML_SIZE bytes) exceeds 1 MB. Truncating to 1 MB."
-            # Truncate to 1 MB
             head -c $MAX_HTML_SIZE app/src/main/assets/index.html > app/src/main/assets/index.html.tmp
             mv app/src/main/assets/index.html.tmp app/src/main/assets/index.html
             echo "HTML truncated to 1 MB."
@@ -129,7 +125,6 @@ jobs:
             if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
               echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing with ImageMagick."
               if command -v convert >/dev/null 2>&1; then
-                # Resize to 128x128 and compress
                 convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
                 echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
               else
@@ -140,8 +135,10 @@ jobs:
             fi
           fi
 
-      - name: Clean previous builds
-        run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
+      - name: Clean previous builds (keep wrapper)
+        run: |
+          rm -rf .gradle app/build build
+          # Do NOT remove gradle/wrapper or gradlew
 
       - name: Create gradle.properties
         run: |
@@ -253,7 +250,6 @@ jobs:
             fi
           done
 
-          # Icon is always referenced (we ensured it exists)
           cat <<EOF >> app/src/main/AndroidManifest.xml
 
               <application
@@ -365,13 +361,18 @@ jobs:
           </resources>
           EOF
 
-      - name: Generate gradle wrapper
+      - name: Setup Android SDK
         run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type all
-          chmod +x gradlew
+          # Ensure build-tools 34.0.0 is available (required for compileSdk 34)
+          sdkmanager "build-tools;34.0.0" || true
+          # Accept licenses if needed
+          yes | sdkmanager --licenses || true
 
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+      - name: Build APK with Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.5
+          arguments: assembleDebug --stacktrace --no-daemon
 
       - name: Get APK size
         run: |
@@ -381,6 +382,7 @@ jobs:
             echo "APK size: $APK_SIZE bytes ($(($APK_SIZE / 1024)) KB)"
           else
             echo "APK not found!"
+            exit 1
           fi
 
       - name: Upload APK artifact
