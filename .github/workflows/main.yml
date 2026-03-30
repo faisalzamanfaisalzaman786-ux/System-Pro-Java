@@ -34,14 +34,21 @@ jobs:
 
       - name: Process HTML and Assets
         run: |
-          # ڈیفالٹ ایچ ٹی ایم ایل اگر پے لوڈ میں نہ ہو
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
           elif [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body><h1>System Pro Ready</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1><p>Default Page Loaded</p></body></html>" > app/src/main/assets/index.html
           fi
+
+      - name: Create gradle.properties (Fix AndroidX Error)
+        run: |
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
 
       - name: Create Correct AndroidManifest.xml
         run: |
@@ -64,7 +71,7 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:configChanges="orientation|screenSize">
+                      android:configChanges="orientation|screenSize|keyboardHidden">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -99,7 +106,6 @@ jobs:
 
                   WebSettings settings = webView.getSettings();
                   
-                  // مینو، بٹن اور انٹرنیٹ ڈیٹا کے لیے سیٹنگز
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true); 
                   settings.setDatabaseEnabled(true);
@@ -108,6 +114,7 @@ jobs:
                   settings.setJavaScriptCanOpenWindowsAutomatically(true);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                  settings.setSupportZoom(false);
 
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
@@ -159,9 +166,15 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
@@ -169,10 +182,10 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Fixed
+          name: System-Pro-Fixed-v2
           path: app/build/outputs/apk/debug/*.apk
