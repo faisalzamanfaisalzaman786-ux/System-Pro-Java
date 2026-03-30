@@ -30,266 +30,87 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/java/com/systempro/app
 
-      - name: Process HTML from client payload or repo file
-        if: github.event_name == 'repository_dispatch'
+      - name: Process HTML and Assets
         run: |
-          echo "=== Processing HTML source ==="
-          
-          # 1. Try client_payload raw HTML
+          # ڈیفالٹ ایچ ٹی ایم ایل اگر پے لوڈ میں نہ ہو
           if [ -n "${{ github.event.client_payload.app_html }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_html }}" > app/src/main/assets/index.html
-            echo "✅ Using HTML from client_payload (raw)"
           elif [ -f "index.html" ]; then
-            # 2. If no HTML in payload, use index.html from repo root
             cp index.html app/src/main/assets/index.html
-            echo "✅ Using HTML from repo root (index.html)"
           else
-            echo "⚠️ No HTML source found"
-          fi
-          
-          # Show size for debug
-          if [ -f app/src/main/assets/index.html ]; then
-            echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
-            echo "=== First 200 chars ==="
-            head -c 200 app/src/main/assets/index.html
-            echo ""
+            echo "<html><body><h1>System Pro Ready</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Process icon and permissions from client payload
-        if: github.event_name == 'repository_dispatch'
-        env:
-          APP_ICON: ${{ github.event.client_payload.app_icon }}
-          PERMISSIONS: ${{ github.event.client_payload.permissions }}
+      - name: Create Correct AndroidManifest.xml
         run: |
-          if [ -n "$APP_ICON" ]; then
-            printf '%s' "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Icon decoded"
-          fi
-          if [ -n "$PERMISSIONS" ]; then
-            printf '%s' "$PERMISSIONS" > permissions.txt
-            echo "✅ Permissions saved"
-          fi
-
-      - name: Provide default HTML, icon, permissions if missing
-        run: |
-          if [ ! -s app/src/main/assets/index.html ]; then
-            printf '%s' "PCFET0NUWVBFIGh0bWw+CjxodG1sPgo8aGVhZD4KICAgIDxtZXRhIGNoYXJzZXQ9IlVURi04Ij4KICAgIDxtZXRhIG5hbWU9InZpZXdwb3J0IiBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsIGluaXRpYWwtc2NhbGU9MS4wIj4KICAgIDx0aXRsZT5TeXN0ZW0gUHJvPC90aXRsZT4KICAgIDxzdHlsZT4KICAgICAgICBib2R5IHsgZm9udC1mYW1pbHk6IHNhbnMtc2VyaWY7IHRleHQtYWxpZ246IGNlbnRlcjsgcGFkZGluZzogMnJlbTsgfQogICAgICAgIGJ1dHRvbiB7IHBhZGRpbmc6IDFyZW07IGZvbnQtc2l6ZTogMS4ycmVtOyBtYXJnaW4tdG9wOiAycmVtOyB9CiAgICA8L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgogICAgPGgxPlN5c3RlbSBQcm88L2gxPgogICAgPHA+RGVmYXVsdCBjb250ZW50IC0gcmVwbGFjZSB0aGlzIEhUTUwgYXMgbmVlZGVkLjwvcD4KICAgIDxidXR0b24gb25jbGljaz0iYWxlcnQoJ0hlbGxvIGZyb20gV2ViVmlldyEnKSI+Q2xpY2sgTWU8L2J1dHRvbj4KPC9ib2R5Pgo8L2h0bWw+" | base64 --decode > app/src/main/assets/index.html
-            echo "Default HTML created"
-          fi
-
-          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if [ ! -f "$ICON_PATH" ] || [ $(wc -c < "$ICON_PATH") -lt 100 ]; then
-            printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
-            echo "Default icon created"
-          fi
-
-          if [ ! -f permissions.txt ]; then
-            echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
-          fi
-
-      - name: Clean previous builds
-        run: rm -rf .gradle build app/build gradlew gradlew.bat gradle/
-
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-      - name: Create project build.gradle
-        run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
-
-      - name: Create settings.gradle
-        run: |
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "System Pro"
-          include ':app'
-          EOF
-
-      - name: Create app build.gradle with dynamic namespace
-        env:
-          APP_NAME: ${{ github.event.client_payload.app_name }}
-        run: |
-          if [ -n "$APP_NAME" ]; then
-            APP_NAME_VAL="$APP_NAME"
-          else
-            APP_NAME_VAL="System Pro"
-          fi
-          PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Using package name: $PACKAGE_NAME"
-
-          cat > app/build.gradle << EOF
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PACKAGE_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      debuggable true
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-
-      - name: Create AndroidManifest.xml with dynamic permissions
-        env:
-          APP_NAME: ${{ github.event.client_payload.app_name }}
-        run: |
-          if [ -n "$APP_NAME" ]; then
-            APP_NAME_VAL="$APP_NAME"
-          else
-            APP_NAME_VAL="System Pro"
-          fi
-          PERMISSIONS=$(cat permissions.txt 2>/dev/null | tr ',' '\n' || echo "")
-
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-          EOF
-
-          for perm in $PERMISSIONS; do
-            if [ -n "$perm" ]; then
-              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
-            fi
-          done
-
-          cat >> app/src/main/AndroidManifest.xml << EOF
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
 
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="$APP_NAME_VAL"
+                  android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
+                  
                   <activity
                       android:name=".MainActivity"
-                      android:exported="true">
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
-
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package
-        env:
-          APP_NAME: ${{ github.event.client_payload.app_name }}
+      - name: Create Enhanced MainActivity.java
         run: |
-          if [ -n "$APP_NAME" ]; then
-            APP_NAME_VAL="$APP_NAME"
-          else
-            APP_NAME_VAL="System Pro"
-          fi
-          PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PACKAGE_PATH"
-
-          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
-          package ${PACKAGE_NAME};
+          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
+          package com.systempro.app;
 
           import android.os.Bundle;
+          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.webkit.WebChromeClient;
           import android.webkit.PermissionRequest;
-          import android.webkit.ValueCallback;
-          import android.net.Uri;
-          import android.content.Intent;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
-              private ValueCallback<Uri[]> filePathCallback;
-              private static final int FILE_CHOOSER_REQUEST_CODE = 1;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
+                  
+                  webView = new WebView(this);
+                  setContentView(webView);
 
-                  webView = findViewById(R.id.webview);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.getSettings().setAllowFileAccess(true);
-                  webView.getSettings().setAllowContentAccess(true);
-                  webView.getSettings().setAllowFileAccessFromFileURLs(true);
-                  webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+                  WebSettings settings = webView.getSettings();
+                  
+                  // مینو، بٹن اور انٹرنیٹ ڈیٹا کے لیے سیٹنگز
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true); 
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setJavaScriptCanOpenWindowsAutomatically(true);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
-                                                       FileChooserParams fileChooserParams) {
-                          MainActivity.this.filePathCallback = filePathCallback;
-                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                          intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("*/*");
-                          startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
-                          return true;
-                      }
-
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
                           request.grant(request.getResources());
@@ -300,63 +121,58 @@ jobs:
               }
 
               @Override
-              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-                  if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
-                      if (resultCode == RESULT_OK && data != null) {
-                          Uri[] uris = new Uri[]{data.getData()};
-                          filePathCallback.onReceiveValue(uris);
-                      } else {
-                          filePathCallback.onReceiveValue(null);
-                      }
-                      filePathCallback = null;
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
                   }
-                  super.onActivityResult(requestCode, resultCode, data);
               }
           }
           EOF
 
-      - name: Create activity_main.xml
+      - name: Setup Build Files (Gradle)
         run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/webview"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
+          # Settings Gradle
+          echo "rootProject.name = 'System Pro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
+          
+          # Project build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-      - name: Create minimal styles.xml
-        run: |
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
-                  <item name="windowActionBar">false</item>
-                  <item name="windowNoTitle">true</item>
-              </style>
-          </resources>
+          # App build.gradle
+          cat > app/build.gradle << 'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
           EOF
-
-      - name: Generate gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type all
-          chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
-
-      - name: Get APK size
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          if [ -f "$APK_PATH" ]; then
-            APK_SIZE=$(stat -c%s "$APK_PATH")
-            echo "APK size: $APK_SIZE bytes ($(($APK_SIZE / 1024)) KB)"
-          else
-            echo "APK not found!"
-          fi
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-Fixed
           path: app/build/outputs/apk/debug/*.apk
