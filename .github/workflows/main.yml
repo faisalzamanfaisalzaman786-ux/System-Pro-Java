@@ -1,4 +1,4 @@
-name: System Pro - Absolute Fix
+name: System Pro - Force Version Fix
 
 on:
   workflow_dispatch:
@@ -12,33 +12,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
 
-      - name: Setup Android Structure
+      # یہ سٹیپ سب سے اہم ہے، یہ زبردستی گریڈل 7.5 انسٹال کرے گا
+      - name: Setup Gradle 7.5
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 7.5
+
+      - name: Prepare Project Folders
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/values
-
-          # HTML Setup
-          if [ -f "index.html" ]; then
-            cp index.html app/src/main/assets/index.html
-          else
-            echo "<html><body><h1>System Pro</h1></body></html>" > app/src/main/assets/index.html
-          fi
-
-          # Theme & Manifest
+          if [ -f "index.html" ]; then cp index.html app/src/main/assets/; fi
           echo '<resources><style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-          
+
+      - name: Create Manifest and Java
+        run: |
           cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
+              <application android:label="System Pro" android:theme="@style/AppTheme">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -49,66 +47,53 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity
-        run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
           import android.os.Bundle;
           import android.webkit.*;
           import android.app.Activity;
-
           public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
+              @Override protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   WebView web = new WebView(this);
                   setContentView(web);
                   web.getSettings().setJavaScriptEnabled(true);
-                  web.getSettings().setDomStorageEnabled(true);
                   web.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Direct Build (Bypassing Errors)
+      - name: Writing Clean Gradle Files
         run: |
           echo "include ':app'" > settings.gradle
-          
-          # Root build.gradle for Gradle 8+
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+              dependencies { classpath 'com.android.tools.build:gradle:7.2.0' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # App build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
+              compileSdk 32
               namespace 'com.systempro.app'
-              compileSdk 34
               defaultConfig {
                   applicationId "com.systempro.app"
                   minSdk 21
-                  targetSdk 34
+                  targetSdk 32
                   versionCode 1
                   versionName "1.0"
               }
           }
           EOF
 
-          # Building without Wrapper to avoid version conflicts
-          gradle assembleDebug --warning-mode none
+      - name: Final Build Attempt
+        run: gradle assembleDebug --no-daemon
 
-      - name: Move and Rename APK
-        run: |
-          mkdir -p final_output
-          cp app/build/outputs/apk/debug/app-debug.apk final_output/SystemPro-Build.apk
-
-      - name: Upload APK
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-v2-Full
-          path: final_output/SystemPro-Build.apk
+          name: SystemPro-Final-APK
+          path: app/build/outputs/apk/debug/*.apk
