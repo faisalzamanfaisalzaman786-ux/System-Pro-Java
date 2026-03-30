@@ -1,12 +1,7 @@
-name: System Pro - Dynamic APK Builder
+name: System Pro - Final Stable Build
 
 on:
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'System Pro'
   repository_dispatch:
     types: [build-apk]
 
@@ -17,8 +12,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -33,40 +26,37 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/java/com/systempro/app
           
-          # اگر ریپوزٹری میں index.html موجود ہے تو اسے اثاثوں میں منتقل کریں
+          # HTML فائل کو چیک کرنا
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "<html><body><h1>System Pro Ready</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:#000;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;'><h1>System Pro: HTML Not Found</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Handle Payload Assets (Icon & Config)
+      - name: Handle Icon and Permissions
         run: |
           # آئیکن پروسیسنگ
           ICON_DATA="${{ github.event.client_payload.app_icon }}"
           if [ -n "$ICON_DATA" ]; then
             printf '%s' "$ICON_DATA" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           else
-            # ڈیفالٹ خالی آئیکن (ایرر سے بچنے کے لیے)
             printf 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC' | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-      - name: Generate Manifest with Permissions
+      - name: Fix AndroidManifest.xml (Internet & Permissions)
         run: |
-          # پے لوڈ سے پرمیشنز لینا (UI کے چیک باکسز سے)
-          PERMS="${{ github.event.client_payload.permissions }}"
-          
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              $(echo $PERMS | sed 's/,/\n/g' | xargs -I {} echo '<uses-permission android:name="{}" />')
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="${{ github.event.client_payload.app_name || 'System Pro' }}"
+                  android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
@@ -80,7 +70,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java
+      - name: Fix MainActivity.java (Menu & Storage Fix)
         run: |
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
           package com.systempro.app;
@@ -94,29 +84,34 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView webView = new WebView(this);
                   setContentView(webView);
+                  
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true);
+                  s.setDomStorageEnabled(true); // مینیو کھلنے کے لیے یہ لازمی ہے
+                  s.setDatabaseEnabled(true);
                   s.setAllowFileAccess(true);
+                  s.setAllowContentAccess(true);
+                  s.setGeolocationEnabled(true);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  
                   webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient());
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                          callback.invoke(origin, true, false);
+                      }
+                  });
+                  
                   webView.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-      - name: Build and Sign APK
+      - name: Build APK
         run: |
-          # Gradle files setup
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
           echo "include ':app'" > settings.gradle
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
-          
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -126,12 +121,11 @@ jobs:
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           EOF
-
           gradle wrapper --gradle-version 8.5
           ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Release
+          name: System-Pro-Fixed
           path: app/build/outputs/apk/debug/*.apk
