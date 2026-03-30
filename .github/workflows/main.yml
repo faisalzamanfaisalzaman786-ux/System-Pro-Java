@@ -264,7 +264,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package (using printf)
+      - name: Create MainActivity.java with dynamic package (clean slate)
         run: |
           APP_NAME=$(cat app_name.txt)
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
@@ -273,11 +273,11 @@ jobs:
           fi
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          # پہلے پرانی فائل کو صاف کریں
-          rm -rf "app/src/main/java/$PACKAGE_PATH"
+          
+          # پوری java ڈائریکٹری صاف کریں تاکہ پرانی فائلیں نہ رہیں
+          rm -rf app/src/main/java
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          # پوری فائل printf کے ذریعے لکھیں (ہر لائن کو \n کے ساتھ)
           printf "%s\n" \
             "package $PACKAGE_NAME;" \
             "" \
