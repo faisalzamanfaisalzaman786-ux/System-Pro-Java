@@ -25,16 +25,16 @@ jobs:
           mkdir -p src/main/assets
           mkdir -p src/main/res/values
 
+          # HTML Copy
           if [ -f "index.html" ]; then
             cp index.html src/main/assets/
           else
-            echo "<html><body style='text-align:center;'><h1>System Pro Final</h1></body></html>" > src/main/assets/index.html
+            echo "<html><body style='text-align:center;'><h1>System Pro</h1></body></html>" > src/main/assets/index.html
           fi
 
-          # Android Manifest
+          # Manifest
           cat <<EOF > src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -46,7 +46,7 @@ jobs:
           </manifest>
           EOF
 
-          # MainActivity.java
+          # Java Code
           cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -58,20 +58,40 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-                  setContentView(webView);
+                  WebView wv = new WebView(this);
+                  wv.getSettings().setJavaScriptEnabled(true);
+                  wv.getSettings().setDomStorageEnabled(true);
+                  wv.setWebViewClient(new WebViewClient());
+                  wv.loadUrl("file:///android_asset/index.html");
+                  setContentView(wv);
               }
           }
           EOF
 
           echo '<resources><string name="app_name">System Pro</string></resources>' > src/main/res/values/strings.xml
 
-      - name: Setup Build Configuration
+      - name: Setup Gradle Files
         run: |
-          # build.gradle (Fixed Plugin Versioning)
+          # Settings file to fix Plugin Repository issue
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "System-Pro-v2"
+          EOF
+
+          # Build file
           cat <<EOF > build.gradle
           plugins {
               id 'com.android.application' version '8.1.1'
@@ -98,14 +118,7 @@ jobs:
                   }
               }
           }
-
-          repositories {
-              google()
-              mavenCentral()
-          }
           EOF
-
-          echo "" > settings.gradle
 
       - name: Build APK
         uses: gradle/gradle-build-action@v3
@@ -113,8 +126,8 @@ jobs:
           gradle-version: 8.2
           arguments: assembleDebug
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-V2-Success
           path: build/outputs/apk/debug/*.apk
