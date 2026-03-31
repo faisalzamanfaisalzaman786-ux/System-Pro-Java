@@ -29,14 +29,14 @@ jobs:
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body><h1>System Pro App</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1><p>WebView App Running Successfully!</p></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Create Manifest
+          # Create Manifest (Simplified)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
-                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
+                  <activity android:name="com.systempro.app.MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -46,19 +46,22 @@ jobs:
           </manifest>
           EOF
 
-          # Create MainActivity
+          # Create MainActivity (Using Core Android Activity for 100% compatibility)
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
+          import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebView;
-          import androidx.appcompat.app.AppCompatActivity;
+          import android.webkit.WebViewClient;
 
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   WebView wv = new WebView(this);
                   wv.getSettings().setJavaScriptEnabled(true);
+                  wv.getSettings().setDomStorageEnabled(true);
+                  wv.setWebViewClient(new WebViewClient());
                   wv.loadUrl("file:///android_asset/index.html");
                   setContentView(wv);
               }
@@ -78,7 +81,7 @@ jobs:
           }
           EOF
 
-          # App build.gradle
+          # App build.gradle (No external dependencies to avoid conflicts)
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -92,15 +95,12 @@ jobs:
                   versionName "1.0"
               }
           }
-          dependencies {
-              implementation "androidx.appcompat:appcompat:1.6.1"
-          }
           EOF
 
           echo "include ':app'" > settings.gradle
 
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.2
           arguments: assembleDebug
