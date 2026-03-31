@@ -21,13 +21,13 @@ jobs:
 
       - name: Create Full Application Structure
         run: |
-          # Directories
+          # Create directories
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # HTML asset (non-empty)
+          # HTML asset (non‑empty)
           cat <<EOF > app/src/main/assets/index.html
           <!DOCTYPE html>
           <html>
@@ -93,15 +93,7 @@ jobs:
           </resources>
           EOF
 
-      - name: Setup Gradle Wrapper
-        run: |
-          # Create a minimal gradle wrapper (if not present)
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.2
-          fi
-          chmod +x gradlew
-
-      - name: Configure Gradle Build Scripts
+      - name: Create Gradle Build Scripts
         run: |
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
@@ -146,11 +138,16 @@ jobs:
           }
           EOF
 
-      - name: Clean Previous Build (Optional)
-        run: ./gradlew clean
+      - name: Setup Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Clean Previous Build (optional)
+        run: gradle clean
 
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Inspect APK Contents
         run: |
