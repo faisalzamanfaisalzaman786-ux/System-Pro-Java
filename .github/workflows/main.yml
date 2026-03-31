@@ -1,4 +1,4 @@
-name: System Pro Final Fixed
+name: WebView APK Builder
 
 on:
   push:
@@ -19,110 +19,582 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Full Application Structure
+      - name: Create Android App Structure
         run: |
-          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/java/Com/faisal/clock
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          cat <<EOF > app/src/main/assets/index.html
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="UTF-8"><title>System Pro V2</title></head>
-          <body style="background:#000;color:#fff;text-align:center;margin-top:30vh;">
-            <h1>SYSTEM PRO V2</h1>
-            <p>Build Verified & Assets Included</p>
-          </body>
-          </html>
-          EOF
+          cat <<'HTML_CONTENT_EOF' > app/src/main/assets/index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>System Pro Auto Push Studio</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: #0a0c10;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 1rem;
+            color: #e6edf3;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #161b22;
+            border-radius: 28px;
+            padding: 1.8rem;
+            border: 1px solid #30363d;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin: 0 0 0.25rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .badge {
+            background: #238636;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.7rem;
+            border-radius: 20px;
+            font-weight: normal;
+        }
+        .sub {
+            color: #8b949e;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            border-left: 3px solid #238636;
+            padding-left: 0.8rem;
+        }
+        .status-bar {
+            display: flex;
+            gap: 2rem;
+            padding: 0.8rem 1rem;
+            background: #0d1117;
+            border-radius: 40px;
+            margin-bottom: 2rem;
+            justify-content: flex-start;
+        }
+        .led-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+        .led {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            transition: 0.2s;
+        }
+        .led-green {
+            background: #2ea043;
+            box-shadow: 0 0 6px #2ea043;
+        }
+        .led-red {
+            background: #f85149;
+            box-shadow: 0 0 6px #f85149;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #30363d;
+            margin-bottom: 1.5rem;
+        }
+        .tab {
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            opacity: 0.7;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+        .tab.active {
+            opacity: 1;
+            color: #2ea043;
+            border-bottom: 2px solid #2ea043;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        input, textarea, select {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 0.7rem 1rem;
+            color: #e6edf3;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        textarea {
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background: #238636;
+            border: none;
+            border-radius: 40px;
+            padding: 0.8rem 1.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            transition: 0.2s;
+            margin-top: 0.5rem;
+        }
+        button:hover {
+            background: #2ea043;
+        }
+        button.secondary {
+            background: #3d444d;
+        }
+        button.secondary:hover {
+            background: #4f5764;
+        }
+        .log-panel {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            margin-top: 1.8rem;
+            overflow: hidden;
+        }
+        .log-header {
+            background: #161b22;
+            padding: 0.6rem 1rem;
+            font-weight: 600;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+        }
+        pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.75rem;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'SF Mono', monospace;
+        }
+        .upload-area {
+            border: 2px dashed #3d444d;
+            border-radius: 20px;
+            padding: 1.5rem;
+            text-align: center;
+            background: #0d1117;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: border 0.2s;
+        }
+        .upload-area:hover {
+            border-color: #2ea043;
+        }
+        .file-name {
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-top: 0.5rem;
+        }
+        .flex-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .flex-row > * {
+            flex: 1;
+        }
+        hr {
+            border-color: #30363d;
+            margin: 1.5rem 0;
+        }
+        .settings-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 0.5rem;
+        }
+        @media (max-width: 600px) {
+            .card { padding: 1.2rem; }
+            .flex-row { flex-direction: column; }
+            .settings-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>⚡ System Pro Auto Push Studio <span class="badge">v2.1</span></h1>
+        <div class="sub">Upload HTML → Auto‑build Android App via GitHub Actions</div>
 
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/webview"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
-          EOF
+        <div class="status-bar">
+            <div class="led-group"><div id="netLed" class="led"></div> Internet</div>
+            <div class="led-group"><div id="gitLed" class="led"></div> GitHub Auth</div>
+        </div>
 
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.app">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:label="System Pro"
-                  android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+        <div class="tabs">
+            <div class="tab active" data-tab="config">⚙️ GitHub Settings</div>
+            <div class="tab" data-tab="html">📄 HTML Content</div>
+        </div>
 
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
-          package com.systempro.app;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  WebView webView = findViewById(R.id.webview);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-          }
-          EOF
+        <div id="config" class="tab-content active">
+            <div class="form-group">
+                <label>👤 GitHub Username / Owner</label>
+                <input type="text" id="ghUser" placeholder="e.g., faisalzamanfaisalzaman786-ux">
+            </div>
+            <div class="form-group">
+                <label>📁 Repository Name</label>
+                <input type="text" id="ghRepo" placeholder="e.g., System-Pro-v2">
+            </div>
+            <div class="form-group">
+                <label>🔑 GitHub Token (classic with <code>repo</code> scope)</label>
+                <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
+            </div>
+            <div class="flex-row">
+                <div class="form-group">
+                    <label>📱 App Name</label>
+                    <input type="text" id="appName" placeholder="My Web App">
+                </div>
+                <div class="form-group">
+                    <label>📦 Package ID</label>
+                    <input type="text" id="pkgID" placeholder="com.example.app">
+                </div>
+            </div>
+            <div class="settings-actions">
+                <button id="saveSettingsBtn" class="secondary" style="background:#2ea043;">💾 Save Settings</button>
+                <button id="clearSettingsBtn" class="secondary">🗑️ Clear Settings</button>
+            </div>
+        </div>
 
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">System Pro</string>
-          </resources>
-          EOF
+        <div id="html" class="tab-content">
+            <div class="upload-area" id="uploadArea">
+                <div style="font-size:2rem;">📂</div>
+                <div>Drag & drop or click to select HTML file</div>
+                <div class="file-name" id="fileName">No file selected</div>
+                <input type="file" id="htmlFile" accept=".html,.htm" style="display:none;">
+            </div>
+            <div class="form-group">
+                <label>✏️ Or paste your HTML code directly</label>
+                <textarea id="htmlCode" rows="12" placeholder="<html>...</html>"></textarea>
+            </div>
+        </div>
+
+        <button id="pushBtn" style="width:100%; margin-top:1.5rem;">🚀 Push Workflow & Trigger Build</button>
+
+        <div class="log-panel">
+            <div class="log-header">
+                <span>📋 Status & Logs</span>
+                <span id="logTimestamp"></span>
+            </div>
+            <pre id="logOutput">Ready. Fill in your GitHub details and HTML content.</pre>
+        </div>
+        <hr>
+        <div style="font-size:0.7rem; color:#8b949e; text-align:center;">
+            💡 Token needs <strong>repo</strong> and <strong>workflow</strong> scopes. After push, go to your repo → Actions tab to see the build. The APK will appear as an artifact.
+            <br>⚙️ Settings are saved locally in your browser.
+        </div>
+    </div>
+</div>
+
+<script>
+    // DOM elements
+    const ghUser = document.getElementById('ghUser');
+    const ghRepo = document.getElementById('ghRepo');
+    const ghToken = document.getElementById('ghToken');
+    const appNameInput = document.getElementById('appName');
+    const pkgInput = document.getElementById('pkgID');
+    const htmlCodeArea = document.getElementById('htmlCode');
+    const fileInput = document.getElementById('htmlFile');
+    const uploadArea = document.getElementById('uploadArea');
+    const fileNameSpan = document.getElementById('fileName');
+    const pushBtn = document.getElementById('pushBtn');
+    const logOutput = document.getElementById('logOutput');
+    const logTimestamp = document.getElementById('logTimestamp');
+    const netLed = document.getElementById('netLed');
+    const gitLed = document.getElementById('gitLed');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const clearSettingsBtn = document.getElementById('clearSettingsBtn');
+
+    let currentHtml = null;
+
+    // ========== LOCALSTORAGE FUNCTIONS ==========
+    function loadSettings() {
+        const saved = localStorage.getItem('autoPushStudio');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                ghUser.value = data.ghUser || '';
+                ghRepo.value = data.ghRepo || '';
+                ghToken.value = data.ghToken || '';
+                appNameInput.value = data.appName || '';
+                pkgInput.value = data.pkgID || '';
+                // Also restore HTML content if present
+                if (data.htmlContent) {
+                    currentHtml = data.htmlContent;
+                    htmlCodeArea.value = currentHtml;
+                    fileNameSpan.textContent = 'Restored from storage';
+                }
+                log('📀 Settings loaded from browser storage.', false);
+            } catch(e) { console.warn(e); }
+        }
+    }
+
+    function saveSettings() {
+        const data = {
+            ghUser: ghUser.value,
+            ghRepo: ghRepo.value,
+            ghToken: ghToken.value,
+            appName: appNameInput.value,
+            pkgID: pkgInput.value,
+            htmlContent: currentHtml || ''
+        };
+        localStorage.setItem('autoPushStudio', JSON.stringify(data));
+        log('💾 Settings saved to browser storage.', false);
+    }
+
+    function clearSettings() {
+        localStorage.removeItem('autoPushStudio');
+        ghUser.value = '';
+        ghRepo.value = '';
+        ghToken.value = '';
+        appNameInput.value = '';
+        pkgInput.value = '';
+        htmlCodeArea.value = '';
+        currentHtml = null;
+        fileNameSpan.textContent = 'No file selected';
+        log('🗑️ All settings cleared.', false);
+    }
+
+    // Internet check
+    function updateNetLed() {
+        netLed.className = navigator.onLine ? 'led led-green' : 'led led-red';
+    }
+    window.addEventListener('online', updateNetLed);
+    window.addEventListener('offline', updateNetLed);
+    updateNetLed();
+
+    // GitHub auth check
+    async function checkGitHubAuth() {
+        const token = ghToken.value.trim();
+        if (!token) {
+            gitLed.className = 'led led-red';
+            return;
+        }
+        try {
+            const res = await fetch('https://api.github.com/user', {
+                headers: { 'Authorization': \`token \${token}\` }
+            });
+            gitLed.className = res.ok ? 'led led-green' : 'led led-red';
+        } catch {
+            gitLed.className = 'led led-red';
+        }
+    }
+    ghToken.addEventListener('input', checkGitHubAuth);
+    ghUser.addEventListener('input', checkGitHubAuth);
+    checkGitHubAuth();
+
+    // File upload handler
+    function handleFile(file) {
+        if (!file || !file.name.match(/\.html?\$/i)) {
+            log('⚠️ Please select a valid .html file', true);
+            return;
+        }
+        fileNameSpan.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentHtml = e.target.result;
+            htmlCodeArea.value = currentHtml;
+            log(\`✅ Loaded HTML from \${file.name} (\${currentHtml.length} bytes)\`);
+        };
+        reader.onerror = () => log('❌ Failed to read file', true);
+        reader.readAsText(file);
+    }
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    // Drag & drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#2ea043';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.borderColor = '#3d444d';
+    });
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#3d444d';
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.match(/\.html?\$/i)) {
+            handleFile(file);
+            fileInput.files = e.dataTransfer.files;
+        } else {
+            log('❌ Please drop an HTML file', true);
+        }
+    });
+
+    // Monitor manual HTML edits
+    htmlCodeArea.addEventListener('input', () => {
+        currentHtml = htmlCodeArea.value;
+        if (currentHtml.trim()) fileNameSpan.textContent = 'Custom HTML entered';
+    });
+
+    function log(msg, isError = false) {
+        const time = new Date().toLocaleTimeString();
+        logTimestamp.textContent = time;
+        logOutput.textContent += (logOutput.textContent ? '\n' : '') + \`[\${time}] \${msg}\`;
+        if (isError) console.error(msg);
+        else console.log(msg);
+    }
+
+    function clearLog() {
+        logOutput.textContent = '';
+    }
+
+    // Generate full YAML (working Android WebView app)
+    function generateYAML(htmlContent, appName, packageName) {
+        const safeHtml = htmlContent.replace(/\`/g, '\\\`').replace(/\\$/g, '\\\$');
+        return \`name: WebView APK Builder
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Create Android App Structure
+        run: |
+          mkdir -p app/src/main/java/\${packageName.replace(/\./g, '/')}
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          cat <<'HTML_CONTENT_EOF' > app/src/main/assets/index.html
+\${safeHtml}
+HTML_CONTENT_EOF
+
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+<?xml version="1.0" encoding="utf-8"?>
+<WebView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webview"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+EOF
+
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="\${packageName}">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:label="\${appName}"
+        android:usesCleartextTraffic="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+
+          cat <<'EOF' > app/src/main/java/\${packageName.replace(/\./g, '/')}/MainActivity.java
+package \${packageName};
+import android.app.Activity;
+import android.os.Bundle;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+public class MainActivity extends Activity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        WebView webView = findViewById(R.id.webview);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl("file:///android_asset/index.html");
+    }
+}
+EOF
+
+          cat <<'EOF' > app/src/main/res/values/strings.xml
+<resources>
+    <string name="app_name">\${appName}</string>
+</resources>
+EOF
 
       - name: Create Gradle Build Scripts
         run: |
           echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
+          cat <<'EOF' > build.gradle
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+}
+allprojects { repositories { google(); mavenCentral() } }
+EOF
 
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
-          android {
-              namespace 'com.systempro.app'
-              compileSdk 33
-              buildToolsVersion "33.0.1"
+          cat <<'EOF' > app/build.gradle
+apply plugin: 'com.android.application'
+android {
+    namespace '\${packageName}'
+    compileSdk 33
+    buildToolsVersion "33.0.1"
 
-              defaultConfig {
-                  applicationId "com.systempro.app"
-                  minSdk 21
-                  targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
-              }
+    defaultConfig {
+        applicationId "\${packageName}"
+        minSdk 21
+        targetSdk 33
+        versionCode 1
+        versionName "1.0"
+    }
 
-              buildTypes {
-                  debug {
-                      debuggable true
-                  }
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-          EOF
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+}
+EOF
 
       - name: Setup Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
@@ -135,32 +607,237 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug
 
-      - name: Inspect Intermediate Resources
-        run: |
-          echo "=== Compiled resources (res) ==="
-          find app/build/intermediates -type d -name "res" | head -5
-          echo "=== Merged assets ==="
-          find app/build/intermediates -type f -name "index.html" 2>/dev/null || echo "index.html not found in intermediates"
-
-      - name: Inspect APK Contents
-        run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-          if [ -f "$APK_PATH" ]; then
-            echo "=== APK Size ==="
-            ls -lh "$APK_PATH"
-            echo "=== APK Contents (first 40 lines) ==="
-            unzip -l "$APK_PATH" | head -40
-            echo "=== Check assets in APK ==="
-            unzip -l "$APK_PATH" | grep "assets/" || echo "No assets/ directory found in APK!"
-            echo "=== Check layout in APK ==="
-            unzip -l "$APK_PATH" | grep "res/layout/" || echo "No layout resources found in APK!"
-          else
-            echo "ERROR: APK not found!"
-            exit 1
-          fi
-
-      - name: Upload Final APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: WebView-App-APK
+          path: app/build/outputs/apk/debug/*.apk
+\`;
+    }
+
+    async function pushToGitHub() {
+        const owner = ghUser.value.trim();
+        const repo = ghRepo.value.trim();
+        const token = ghToken.value.trim();
+        let appName = appNameInput.value.trim();
+        let packageName = pkgInput.value.trim();
+        const html = currentHtml;
+
+        if (!owner || !repo) {
+            log('❌ GitHub username and repository name are required.', true);
+            return;
+        }
+        if (!token) {
+            log('❌ GitHub token is required.', true);
+            return;
+        }
+        if (!html || html.trim() === '') {
+            log('❌ No HTML content provided. Upload a file or paste code.', true);
+            return;
+        }
+
+        // Auto‑generate app name from HTML title if empty
+        if (!appName) {
+            const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+            appName = match ? match[1].trim() : 'WebApp';
+            if (appName.length > 30) appName = appName.slice(0,30);
+            log(\`ℹ️ App name auto‑set to: \${appName}\`);
+        }
+        if (!packageName) {
+            const base = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            packageName = base ? \`com.webview.\${base}\` : 'com.webview.app';
+            log(\`ℹ️ Package auto‑set to: \${packageName}\`);
+        }
+
+        const yaml = generateYAML(html, appName, packageName);
+        const path = '.github/workflows/main.yml';
+        const apiUrl = \`https://api.github.com/repos/\${owner}/\${repo}/contents/\${path}\`;
+        let sha = '';
+
+        try {
+            const getRes = await fetch(apiUrl, {
+                headers: { 'Authorization': \`token \${token}\` }
+            });
+            if (getRes.ok) {
+                const fileData = await getRes.json();
+                sha = fileData.sha;
+                log(\`📄 Existing workflow found (SHA: \${sha.substring(0,7)}), will update.\`);
+            } else if (getRes.status === 404) {
+                log(\`📁 Creating new workflow file.\`);
+            } else {
+                const err = await getRes.json();
+                throw new Error(\`Cannot access repo: \${err.message}\`);
+            }
+        } catch (err) {
+            log(\`❌ Error checking repository: \${err.message}\`, true);
+            return;
+        }
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(yaml);
+        const base64Content = btoa(String.fromCharCode(...data));
+
+        try {
+            const putRes = await fetch(apiUrl, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': \`token \${token}\`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: \`Update WebView APK workflow for "\${appName}"\`,
+                    content: base64Content,
+                    sha: sha || undefined
+                })
+            });
+            if (putRes.ok) {
+                const result = await putRes.json();
+                log(\`✅ Success! Workflow pushed/updated.\`);
+                log(\`🔗 View your repo: https://github.com/\${owner}/\${repo}\`);
+                log(\`⚙️ Go to Actions tab to watch the build: https://github.com/\${owner}/\${repo}/actions\`);
+                log(\`⏳ The build will start automatically (if the default branch is "main").\`);
+            } else {
+                const err = await putRes.json();
+                throw new Error(\`GitHub API: \${err.message}\`);
+            }
+        } catch (err) {
+            log(\`❌ Push failed: \${err.message}\`, true);
+        }
+    }
+
+    // Event listeners
+    pushBtn.addEventListener('click', () => {
+        clearLog();
+        log(\`🚀 Starting push to GitHub...\`);
+        pushToGitHub();
+    });
+
+    saveSettingsBtn.addEventListener('click', saveSettings);
+    clearSettingsBtn.addEventListener('click', clearSettings);
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetId = tab.getAttribute('data-tab');
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.getElementById(targetId).classList.add('active');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+        });
+    });
+
+    // Load settings on startup
+    loadSettings();
+    // Ensure currentHtml is synced with textarea after load
+    if (htmlCodeArea.value) {
+        currentHtml = htmlCodeArea.value;
+        if (currentHtml.trim()) fileNameSpan.textContent = 'Restored from storage';
+    }
+</script>
+</body>
+</html>
+HTML_CONTENT_EOF
+
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+<?xml version="1.0" encoding="utf-8"?>
+<WebView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webview"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+EOF
+
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="Com.faisal.clock">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:label="clock"
+        android:usesCleartextTraffic="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+
+          cat <<'EOF' > app/src/main/java/Com/faisal/clock/MainActivity.java
+package Com.faisal.clock;
+import android.app.Activity;
+import android.os.Bundle;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+public class MainActivity extends Activity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        WebView webView = findViewById(R.id.webview);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl("file:///android_asset/index.html");
+    }
+}
+EOF
+
+          cat <<'EOF' > app/src/main/res/values/strings.xml
+<resources>
+    <string name="app_name">clock</string>
+</resources>
+EOF
+
+      - name: Create Gradle Build Scripts
+        run: |
+          echo "include ':app'" > settings.gradle
+          cat <<'EOF' > build.gradle
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+}
+allprojects { repositories { google(); mavenCentral() } }
+EOF
+
+          cat <<'EOF' > app/build.gradle
+apply plugin: 'com.android.application'
+android {
+    namespace 'Com.faisal.clock'
+    compileSdk 33
+    buildToolsVersion "33.0.1"
+
+    defaultConfig {
+        applicationId "Com.faisal.clock"
+        minSdk 21
+        targetSdk 33
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+}
+EOF
+
+      - name: Setup Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Clean Previous Build
+        run: gradle clean
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebView-App-APK
           path: app/build/outputs/apk/debug/*.apk
