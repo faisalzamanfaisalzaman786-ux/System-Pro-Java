@@ -21,7 +21,7 @@ jobs:
 
       - name: Create Android App Structure
         run: |
-          mkdir -p app/src/main/java/Com/faisal/clock
+          mkdir -p app/src/main/java/com/faisal/clock
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -349,7 +349,6 @@ jobs:
                 ghToken.value = data.ghToken || '';
                 appNameInput.value = data.appName || '';
                 pkgInput.value = data.pkgID || '';
-                // Also restore HTML content if present
                 if (data.htmlContent) {
                     currentHtml = data.htmlContent;
                     htmlCodeArea.value = currentHtml;
@@ -748,7 +747,7 @@ EOF
 
           cat <<'EOF' > app/src/main/AndroidManifest.xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="Com.faisal.clock">
+    package="com.faisal.clock">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="clock"
@@ -763,8 +762,8 @@ EOF
 </manifest>
 EOF
 
-          cat <<'EOF' > app/src/main/java/Com/faisal/clock/MainActivity.java
-package Com.faisal.clock;
+          cat <<'EOF' > app/src/main/java/com/faisal/clock/MainActivity.java
+package com.faisal.clock;
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.WebView;
@@ -802,12 +801,12 @@ EOF
           cat <<'EOF' > app/build.gradle
 apply plugin: 'com.android.application'
 android {
-    namespace 'Com.faisal.clock'
+    namespace 'com.faisal.clock'
     compileSdk 33
     buildToolsVersion "33.0.1"
 
     defaultConfig {
-        applicationId "Com.faisal.clock"
+        applicationId "com.faisal.clock"
         minSdk 21
         targetSdk 33
         versionCode 1
