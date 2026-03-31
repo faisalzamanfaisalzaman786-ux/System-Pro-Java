@@ -26,13 +26,13 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          cat <<'HTML_CONTENT_EOF' > app/src/main/assets/index.html
+          cat <<'HTML_CONTENT_EOF_MARKER' > app/src/main/assets/index.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>System Pro Auto Push Studio (Fixed)</title>
+    <title>System Pro Auto Push Studio (Fixed YAML)</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -182,7 +182,7 @@ jobs:
 <body>
 <div class="container">
     <div class="card">
-        <h1>⚡ System Pro Auto Push Studio <span class="badge">v3 (Fixed YAML)</span></h1>
+        <h1>⚡ System Pro Auto Push Studio <span class="badge">v3.1 (Fixed Syntax)</span></h1>
         <div class="sub">Upload HTML → Preview YAML → Push to GitHub → Auto‑build APK</div>
 
         <div class="status-bar">
@@ -260,7 +260,8 @@ jobs:
         <hr>
         <div style="font-size:0.7rem; color:#8b949e; text-align:center;">
             💡 Token needs <strong>repo</strong> and <strong>workflow</strong> scopes.<br>
-            ⚠️ If you see a YAML syntax error, use the preview to check the file. Ensure indentation is consistent and no stray backticks/dollar signs appear inside heredocs.
+            ⚠️ <strong>Fixed YAML syntax:</strong> the HTML content is now safely embedded using a unique heredoc marker.<br>
+            ✅ Use the preview to verify before pushing.
         </div>
     </div>
 </div>
@@ -396,10 +397,12 @@ jobs:
     }
     function clearLog() { logOutput.textContent = ''; }
 
-    // Generate YAML (robust escaping)
+    // Generate YAML with safe heredoc
     function generateYAML(htmlContent, appName, packageName) {
-        // Escape potential heredoc delimiter inside HTML
-        const safeHtml = htmlContent.replace(/HTML_CONTENT_EOF_ESCAPED/g, 'HTML_CONTENT_EOF_ESCAPED_ESCAPED')
+        // Use a delimiter that is extremely unlikely to appear in normal HTML
+        const HEREDOC_DELIM = 'HTML_CONTENT_EOF_MARKER_ESCAPED';
+        // Escape any occurrence of that delimiter inside the HTML
+        const safeHtml = htmlContent.replace(new RegExp(HEREDOC_DELIM, 'g'), 'HTML_CONTENT_EOF_MARKER_ESCAPED_ESCAPED')
                                     .replace(/\`/g, '\\\`')
                                     .replace(/\\$/g, '\\\$');
         return \`name: WebView APK Builder
@@ -430,9 +433,9 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          cat <<'HTML_CONTENT_EOF_ESCAPED' > app/src/main/assets/index.html
+          cat <<'\${HEREDOC_DELIM}' > app/src/main/assets/index.html
 \${safeHtml}
-HTML_CONTENT_EOF_ESCAPED
+\${HEREDOC_DELIM}
 
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -683,7 +686,7 @@ EOF
 </script>
 </body>
 </html>
-HTML_CONTENT_EOF
+HTML_CONTENT_EOF_MARKER
 
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
 <?xml version="1.0" encoding="utf-8"?>
