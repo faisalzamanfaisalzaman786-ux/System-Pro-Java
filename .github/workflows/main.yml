@@ -26,20 +26,20 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # HTML فائل چیک کرنا
+          # HTML چیکنگ
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro Auto App</h1><p>Welcome to your WebView App</p></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1><p>Running on WebView</p></body></html>" > app/src/main/assets/index.html
           fi
 
       - name: Create Android Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
-                  <activity android:name=".MainActivity" android:exported="true">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar" android:allowBackup="true">
+                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -51,7 +51,6 @@ jobs:
 
       - name: Create MainActivity (Java)
         run: |
-          # جاوا استعمال کر رہے ہیں تاکہ مطابقت بہتر رہے
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.os.Bundle;
@@ -65,6 +64,7 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView webView = new WebView(this);
                   webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
                   webView.setWebViewClient(new WebViewClient());
                   webView.loadUrl("file:///android_asset/index.html");
                   setContentView(webView);
@@ -72,7 +72,7 @@ jobs:
           }
           EOF
 
-      - name: Setup Build Files
+      - name: Setup Stable Build Files
         run: |
           # Root build.gradle
           cat <<EOF > build.gradle
@@ -85,9 +85,11 @@ jobs:
           }
           EOF
 
-          # App build.gradle (Simplified Syntax)
+          # App build.gradle (Updated for Gradle 8+)
           cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins {
+              id 'com.android.application'
+          }
 
           android {
               namespace 'com.systempro.app'
@@ -107,7 +109,9 @@ jobs:
           EOF
 
           echo "include ':app'" > settings.gradle
-          gradle wrapper
+
+          # اہم: ہم ایک مستحکم ورژن (8.2) استعمال کریں گے
+          gradle wrapper --gradle-version 8.2
 
       - name: Build Android APK
         run: |
@@ -117,5 +121,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: App-Debug-APK
+          name: System-Pro-APK
           path: app/build/outputs/apk/debug/app-debug.apk
