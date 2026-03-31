@@ -25,14 +25,12 @@ jobs:
           mkdir -p src/main/assets
           mkdir -p src/main/res/values
 
-          # HTML Copying
           if [ -f "index.html" ]; then
             cp index.html src/main/assets/
           else
-            echo "<html><body><h1>System Pro Success</h1></body></html>" > src/main/assets/index.html
+            echo "<html><body><h1>System Pro V2</h1></body></html>" > src/main/assets/index.html
           fi
 
-          # Android Manifest
           cat <<EOF > src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
@@ -46,7 +44,6 @@ jobs:
           </manifest>
           EOF
 
-          # Java MainActivity
           cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -72,7 +69,6 @@ jobs:
 
       - name: Setup Gradle Files
         run: |
-          # Settings file
           cat <<EOF > settings.gradle
           pluginManagement {
               repositories {
@@ -91,7 +87,6 @@ jobs:
           rootProject.name = "System-Pro-v2"
           EOF
 
-          # Build file with strict packaging
           cat <<EOF > build.gradle
           plugins {
               id 'com.android.application' version '8.1.1'
@@ -109,7 +104,6 @@ jobs:
                   versionName "1.0"
               }
 
-              # Force inclusion of all assets and code
               sourceSets {
                   main {
                       manifest.srcFile 'src/main/AndroidManifest.xml'
@@ -121,16 +115,17 @@ jobs:
           }
           EOF
 
-      - name: Build APK
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
 
-      - name: Run Assemble
-        run: ./gradlew assembleDebug
+      - name: Build APK
+        # یہاں ہم نے ./gradlew کو ہٹا کر براہ راست gradle استعمال کیا ہے تاکہ ایرر ختم ہو جائے
+        run: gradle assembleDebug
 
       - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Full-APK
+          name: System-Pro-Full-V2
           path: build/outputs/apk/debug/*.apk
