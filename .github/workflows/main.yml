@@ -27,22 +27,41 @@ jobs:
       - name: Prepare directories
         run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Process client payload (icon, permissions)
+      - name: Debug - Print client payload
+        env:
+          FULL_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: |
+          echo "=== Client Payload ==="
+          echo "$FULL_PAYLOAD"
+
+      - name: Process icon and permissions
         env:
           APP_ICON: ${{ github.event.client_payload.app_icon }}
           PERMISSIONS: ${{ github.event.client_payload.permissions }}
         run: |
-          # Save icon if provided
+          # Icon
           if [ -n "$APP_ICON" ]; then
-            echo "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            echo "Custom icon saved"
+            echo "Icon length: ${#APP_ICON} characters"
+            # Remove possible data:image prefix if present
+            CLEAN_ICON=$(echo "$APP_ICON" | sed 's/^data:image\/[^;]*;base64,//')
+            echo "$CLEAN_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            if [ $? -eq 0 ]; then
+              SIZE=$(wc -c < app/src/main/res/drawable/ic_launcher.png)
+              echo "✅ Icon saved, size: $SIZE bytes"
+            else
+              echo "❌ Failed to decode icon"
+            fi
+          else
+            echo "⚠️ No icon provided in client_payload"
           fi
-          
-          # Save permissions or use default
+
+          # Permissions
           if [ -n "$PERMISSIONS" ]; then
             echo "$PERMISSIONS" > permissions.txt
+            echo "✅ Permissions saved"
           else
             echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
+            echo "Default permissions created"
           fi
 
       - name: Copy HTML from repo
@@ -51,6 +70,7 @@ jobs:
             echo "<h1>Default</h1>" > index.html
           fi
           cp index.html app/src/main/assets/index.html
+          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
       - name: Create default icon if missing
         run: |
@@ -61,22 +81,18 @@ jobs:
 
       - name: Build Android project (fixed package)
         run: |
-          # Fixed package name – no dynamic naming
           PACKAGE_NAME="com.systempro.app"
           echo "Using package: $PACKAGE_NAME"
 
-          # Gradle wrapper
           gradle wrapper --gradle-version 8.5 --distribution-type all
           chmod +x gradlew
 
-          # gradle.properties
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
-          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -87,7 +103,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
@@ -100,7 +115,6 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle
           cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
@@ -125,7 +139,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
+          # AndroidManifest
           PERMISSIONS_LIST=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -153,7 +167,7 @@ jobs:
           </manifest>
           EOF
 
-          # MainActivity.java
+          # MainActivity
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
           cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
