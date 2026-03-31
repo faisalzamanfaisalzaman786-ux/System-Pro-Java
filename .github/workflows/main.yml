@@ -1,8 +1,6 @@
 name: System Pro - Dynamic APK Builder
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
   repository_dispatch:
     types: [build-apk]
@@ -61,88 +59,52 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      # ========== STRONG CLEANUP: Remove all previous build artifacts ==========
-      - name: Clean previous builds completely
+      # ریپوزٹری سے فائلیں کاپی کریں (UI نے پہلے ہی کمٹ کر دی ہیں)
+      - name: Copy files from repository
         run: |
-          rm -rf .gradle app/build build
-          rm -rf app/src/main/java   # Remove entire Java source to avoid stale files
-
-      # ========== Process client payload with safe heredoc ==========
-      - name: Process client payload (HTML, icon, permissions, app name)
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          # HTML: Use heredoc with a delimiter that is extremely unlikely to appear in HTML
-          cat << '___HTML_DELIMITER_END___' > app/src/main/assets/index.html
-          ${{ github.event.client_payload.app_html }}
-          ___HTML_DELIMITER_END___
-
-          # Icon: Base64 to PNG (optional)
-          if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
-            printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          fi
-
-          # Permissions: comma-separated list from UI
-          printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
-
-          # App name: used for package name and app label
-          printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
-
-      - name: Verify and fix HTML & Icon
-        run: |
-          if [ ! -s app/src/main/assets/index.html ]; then
-            echo "Error: index.html is empty! Please provide HTML content."
+          # HTML
+          if [ -f index.html ]; then
+            cp index.html app/src/main/assets/index.html
+          else
+            echo "Error: index.html not found in repository root"
             exit 1
           fi
-          echo "✅ HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
-          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if [ -f "$ICON_PATH" ]; then
-            SIZE=$(wc -c < "$ICON_PATH")
-            if [ "$SIZE" -lt 100 ]; then
-              echo "Icon too small ($SIZE bytes), replacing with default."
-              rm -f "$ICON_PATH"
-            else
-              echo "Icon file size: $SIZE bytes"
-            fi
-          fi
-          if [ ! -f "$ICON_PATH" ]; then
-            echo "Creating default blue icon (48x48)."
-            if command -v convert >/dev/null 2>&1; then
-              convert -size 48x48 xc:blue "$ICON_PATH"
-            else
-              printf '%s' \
-                "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
-                "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
-                "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > "$ICON_PATH"
-            fi
-            echo "Default icon created, size: $(wc -c < "$ICON_PATH") bytes"
+          # Icon
+          if [ -f ic_launcher.png ]; then
+            cp ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+          else
+            echo "Creating default icon"
+            printf '%s' \
+              "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
+              "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
+              "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-      - name: Provide default permissions and app name
-        run: |
-          if [ ! -f permissions.txt ]; then
-            touch permissions.txt
-          fi
-          if [ ! -f app_name.txt ]; then
+          # App name
+          if [ -f app_name.txt ]; then
+            cp app_name.txt .
+          else
             echo "System Pro" > app_name.txt
           fi
 
-      - name: Payload size control (Icon only)
-        run: |
-          ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
-          if [ -f "$ICON_PATH" ]; then
-            ICON_SIZE=$(wc -c < "$ICON_PATH")
-            MAX_ICON_SIZE=$((100 * 1024))
-            if [ $ICON_SIZE -gt $MAX_ICON_SIZE ]; then
-              echo "⚠️ Warning: Icon size ($ICON_SIZE bytes) exceeds 100 KB. Compressing..."
-              if command -v convert >/dev/null 2>&1; then
-                convert "$ICON_PATH" -resize 128x128 -quality 85 "$ICON_PATH"
-                echo "Icon compressed, new size: $(wc -c < "$ICON_PATH") bytes"
-              fi
-            fi
+          # Permissions
+          if [ -f permissions.txt ]; then
+            cp permissions.txt .
+          else
+            touch permissions.txt
           fi
 
-      # ========== Gradle configuration ==========
+      - name: Verify files
+        run: |
+          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
+          echo "Icon size: $(wc -c < app/src/main/res/drawable/ic_launcher.png) bytes"
+          echo "App name: $(cat app_name.txt)"
+          echo "Permissions: $(cat permissions.txt)"
+
+      - name: Clean previous builds
+        run: rm -rf .gradle app/build build
+
       - name: Create gradle.properties
         run: |
           echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
@@ -196,7 +158,6 @@ jobs:
       - name: Create app build.gradle with dynamic namespace
         run: |
           APP_NAME=$(cat app_name.txt)
-          # Sanitize package name: lowercase, only a-z0-9_, no leading digit
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
           if [ -z "$PACKAGE_BASE" ]; then
             PACKAGE_BASE="app"
@@ -239,7 +200,6 @@ jobs:
           }
           EOF
 
-      # ========== AndroidManifest with all necessary permissions ==========
       - name: Create AndroidManifest.xml with dynamic permissions and icon
         run: |
           APP_NAME=$(cat app_name.txt)
@@ -249,7 +209,6 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
           
-              <!-- Essential permissions for modern web apps -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -262,7 +221,6 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK" />
           EOF
 
-          # Add any extra permissions sent from UI (e.g., contacts, calls)
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
@@ -291,7 +249,6 @@ jobs:
           </manifest>
           EOF
 
-      # ========== Create MainActivity.java with full WebView support ==========
       - name: Create MainActivity.java with dynamic package (clean slate)
         run: |
           APP_NAME=$(cat app_name.txt)
@@ -302,10 +259,9 @@ jobs:
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           
-          # Create the Java package directory (already cleaned earlier)
+          rm -rf app/src/main/java
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          # Write MainActivity.java using a heredoc to avoid escaping issues
           cat << 'JAVA_END' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
@@ -340,7 +296,6 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
 
-                  // Request location permission on Android 6+
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                               != PackageManager.PERMISSION_GRANTED) {
@@ -384,7 +339,6 @@ jobs:
                           if (permissionGranted) {
                               callback.invoke(origin, true, false);
                           } else {
-                              // Wait a bit in case permission dialog is still pending
                               new android.os.Handler().postDelayed(() -> {
                                   if (permissionGranted) {
                                       callback.invoke(origin, true, false);
@@ -397,7 +351,6 @@ jobs:
 
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
-                          // Automatically grant camera/microphone permissions
                           request.grant(request.getResources());
                       }
 
@@ -418,11 +371,8 @@ jobs:
                       }
                   });
 
-                  // Load the HTML file (either now or after permission)
                   if (permissionGranted) {
                       webView.loadUrl("file:///android_asset/index.html");
-                  } else {
-                      // Will be loaded after permission result
                   }
               }
 
@@ -452,7 +402,6 @@ jobs:
                               webView.reload();
                           }
                       } else {
-                          // Permission denied: still load the page but location won't work
                           if (webView != null && webView.getUrl() == null) {
                               webView.loadUrl("file:///android_asset/index.html");
                           }
@@ -462,7 +411,6 @@ jobs:
           }
           JAVA_END
 
-          # Replace placeholder $PACKAGE_NAME with actual package name
           sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
