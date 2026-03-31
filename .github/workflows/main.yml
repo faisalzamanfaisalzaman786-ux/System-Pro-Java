@@ -64,8 +64,10 @@ jobs:
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کو محفوظ طریقے سے لکھیں (toJSON + jq)
-          echo '${{ toJSON(github.event.client_payload.app_html) }}' | jq -r '.' > app/src/main/assets/index.html
+          # HTML کو heredoc کے ذریعے محفوظ طریقے سے لکھیں
+          cat << '___HTML_CONTENT_DELIMITER___' > app/src/main/assets/index.html
+          ${{ github.event.client_payload.app_html }}
+          ___HTML_CONTENT_DELIMITER___
 
           # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
