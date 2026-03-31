@@ -25,7 +25,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # ریپوزٹری میں صرف YAML ہو تو بھی چلے گا
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -46,7 +45,7 @@ jobs:
 
       - name: Create Cordova project
         run: |
-          cordova create app ${{ github.event.inputs.package_name || 'com.example.webapp' }} "${{ github.event.inputs.app_name || 'My Web App' }}"
+          cordova create app "${{ github.event.inputs.package_name }}" "${{ github.event.inputs.app_name }}"
           cd app
           cordova platform add android
 
@@ -54,18 +53,17 @@ jobs:
         run: |
           cd app/www
           rm -rf *
-          # اگر صارف نے URL دیا ہے تو اسے ڈاؤن لوڈ کریں، ورنہ بلٹ ان HTML استعمال کریں
           if [ -n "${{ github.event.inputs.app_url }}" ]; then
             wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
           else
-            # بلٹ ان موبائل ریسپانسیو HTML (یہاں آپ اپنی مرضی کا ڈیزائن ڈال سکتے ہیں)
+            # بلٹ ان موبائل ریسپانسیو HTML (یہاں آپ اپنا ڈیزائن ڈال سکتے ہیں)
             cat > index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ur">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>${{ github.event.inputs.app_name || 'My Web App' }}</title>
+    <title>${{ github.event.inputs.app_name }}</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -93,16 +91,6 @@ jobs:
         }
         .header h1 { font-size: 1.8rem; margin-bottom: 8px; }
         .form-container { padding: 24px 20px 32px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; }
-        input, select {
-            width: 100%;
-            padding: 14px 16px;
-            border: 1px solid #ddd;
-            border-radius: 16px;
-            font-size: 16px;
-            background: #f9f9f9;
-        }
         button {
             width: 100%;
             padding: 16px;
@@ -115,12 +103,6 @@ jobs:
             cursor: pointer;
             margin-top: 12px;
         }
-        .status {
-            margin-top: 20px;
-            padding: 14px;
-            border-radius: 16px;
-            display: none;
-        }
         @media (max-width: 480px) {
             .header h1 { font-size: 1.5rem; }
             .form-container { padding: 20px 16px 28px; }
@@ -130,7 +112,7 @@ jobs:
 <body>
 <div class="card">
     <div class="header">
-        <h1>📱 ${{ github.event.inputs.app_name || 'My Web App' }}</h1>
+        <h1>📱 ${{ github.event.inputs.app_name }}</h1>
         <p>پلے اسٹور کے لیے تیار</p>
     </div>
     <div class="form-container">
@@ -146,7 +128,7 @@ EOF
       - name: Configure AndroidManifest for HTTP (if needed)
         run: |
           cd app/platforms/android/app/src/main
-          # اگر آپ HTTP پر مبنی ویب سائٹ استعمال کر رہے ہیں تو یہ پرمیشن شامل کریں
+          # اگر HTTP پر مبنی ویب سائٹ استعمال کر رہے ہیں تو یہ شامل کریں
           sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
 
       - name: Build release AAB
@@ -160,7 +142,6 @@ EOF
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          # اگر سیکرٹس میں کی اسٹور موجود ہے تو اسے ڈی کوڈ کریں، ورنہ ایک عارضی ڈیبگ کی اسٹور بنا لیں
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
           else
@@ -173,7 +154,6 @@ EOF
 
       - name: Sign AAB
         run: |
-          # Cordova نے app/build/outputs/bundle/release/ میں AAB بنایا ہے
           jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
             -keystore keystore.jks \
             -storepass "$KEYSTORE_PASSWORD" \
