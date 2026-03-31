@@ -56,6 +56,7 @@ jobs:
           if [ -n "${{ github.event.inputs.app_url }}" ]; then
             wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
           else
+            # Use a here-document to create index.html
             cat > index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ur">
