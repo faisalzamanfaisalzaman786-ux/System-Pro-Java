@@ -2,7 +2,147 @@ name: System Pro Final Fixed
 
 on:
   push:
+    branches: [ "main" ]name: System Pro Final Fixed
+
+on:
+  push:
     branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Create Full Application Structure
+        run: |
+          # Create all required directories
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+
+          # Create a proper HTML file (non‑empty)
+          cat <<EOF > app/src/main/assets/index.html
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="UTF-8"><title>System Pro V2</title></head>
+          <body style="background:#000;color:#fff;text-align:center;margin-top:30vh;">
+            <h1>SYSTEM PRO V2</h1>
+            <p>Build Verified & Assets Included</p>
+          </body>
+          </html>
+          EOF
+
+          # Create a simple layout (forces resource packaging)
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/webview"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent" />
+          EOF
+
+          # AndroidManifest with INTERNET permission and usesCleartextTraffic
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.app">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="System Pro"
+                  android:usesCleartextTraffic="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # MainActivity using the layout and loading the asset
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  WebView webView = findViewById(R.id.webview);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          # strings.xml
+          cat <<EOF > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">System Pro</string>
+          </resources>
+          EOF
+
+      - name: Setup Gradle Configuration
+        run: |
+          echo "include ':app'" > settings.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+          cat <<EOF > app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: Setup Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug
+
+      - name: Inspect APK Contents (Debug)
+        run: |
+          echo "=== APK Size ==="
+          ls -lh app/build/outputs/apk/debug/*.apk
+          echo "=== APK Contents ==="
+          unzip -l app/build/outputs/apk/debug/*.apk | head -30
+
+      - name: Upload Final APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: app/build/outputs/apk/debug/*.apk
   workflow_dispatch:
 
 jobs:
