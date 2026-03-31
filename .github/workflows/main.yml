@@ -59,7 +59,6 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      # ریپوزٹری سے فائلیں کاپی کریں (UI نے پہلے ہی کمٹ کر دی ہیں)
       - name: Copy files from repository
         run: |
           # HTML
@@ -81,17 +80,13 @@ jobs:
               "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # App name
-          if [ -f app_name.txt ]; then
-            cp app_name.txt .
-          else
+          # App name - just check existence, no need to copy
+          if [ ! -f app_name.txt ]; then
             echo "System Pro" > app_name.txt
           fi
 
-          # Permissions
-          if [ -f permissions.txt ]; then
-            cp permissions.txt .
-          else
+          # Permissions - just check existence
+          if [ ! -f permissions.txt ]; then
             touch permissions.txt
           fi
 
