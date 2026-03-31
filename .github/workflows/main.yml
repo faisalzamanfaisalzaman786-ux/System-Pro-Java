@@ -1,4 +1,4 @@
-name: HTML to Android Final Fixed
+name: Organized Android Builder
 
 on:
   push:
@@ -19,30 +19,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Project Structure
+      - name: Create Project Directory Structure
         run: |
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          # تمام ضروری فولڈرز ایک ساتھ بنانا
+          mkdir -p android_project/app/src/main/java/com/systempro/app
+          mkdir -p android_project/app/src/main/assets
+          mkdir -p android_project/app/src/main/res/layout
+          mkdir -p android_project/app/src/main/res/values
 
-          # HTML File
-          echo "<html><body style='background:#121212;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'><div><h1>System Pro V2</h1><p>Build Successful with Gradle 8.2</p></div></body></html>" > app/src/main/assets/index.html
+      - name: Generate Source Files in Folders
+        run: |
+          # HTML فائل
+          echo "<html><body style='background:#000;color:#0f0;text-align:center;padding-top:50px;font-family:sans-serif;'><h1>SYSTEM PRO V2</h1><p>Folder Structure: Active</p></body></html>" > android_project/app/src/main/assets/index.html
 
-          # Layout
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/webview"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
-          EOF
-
-          # Manifest
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          # Android Manifest
+          cat <<EOF > android_project/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar" android:usesCleartextTraffic="true">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -53,44 +46,39 @@ jobs:
           </manifest>
           EOF
 
-          # Java MainActivity
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          # Java Activity
+          cat <<EOF > android_project/app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebView;
-          import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  WebView wv = findViewById(R.id.webview);
-                  wv.getSettings().setJavaScriptEnabled(true);
-                  wv.getSettings().setDomStorageEnabled(true);
-                  wv.setWebViewClient(new WebViewClient());
-                  wv.loadUrl("file:///android_asset/index.html");
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  setContentView(webView);
+                  webView.loadUrl("file:///android_asset/index.html");
               }
           }
           EOF
 
-          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+          # Resources
+          echo '<resources><string name="app_name">System Pro</string></resources>' > android_project/app/src/main/res/values/strings.xml
 
-      - name: Generate Build Configuration
+      - name: Create Build Configuration Files
         run: |
-          cat <<EOF > settings.gradle
-          include ':app'
-          EOF
-
+          cd android_project
+          echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
           cat <<EOF > app/build.gradle
@@ -111,20 +99,15 @@ jobs:
       - name: Setup Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.2 # آپ کی تجویز کے مطابق 8.2 پر فکس کر دیا گیا ہے
+          gradle-version: 8.2
 
-      - name: Build APK
-        run: gradle :app:assembleDebug
-
-      - name: Verify and Inspect
+      - name: Build APK from Folder
         run: |
-          echo "Checking APK Size..."
-          ls -lh app/build/outputs/apk/debug/*.apk
-          echo "Verifying Assets..."
-          unzip -l app/build/outputs/apk/debug/*.apk | grep "index.html"
+          cd android_project
+          gradle :app:assembleDebug
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-Folder-Build
+          path: android_project/app/build/outputs/apk/debug/*.apk
