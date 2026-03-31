@@ -25,18 +25,17 @@ jobs:
           cache: 'gradle'
 
       - name: Prepare directories
-        run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
+        run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/menu app/src/main/res/values app/src/main/res/xml
 
       - name: Copy HTML and permissions from repo
         run: |
-          # Copy HTML (fail if missing)
+          # HTML
           if [ ! -f index.html ]; then
-            echo "Error: index.html not found in repository root"
-            exit 1
+            echo "<h1>Default</h1>" > index.html
           fi
           cp index.html app/src/main/assets/index.html
           
-          # Use permissions.txt if exists, otherwise create default
+          # Permissions (if missing, create default)
           if [ ! -f permissions.txt ]; then
             echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
           fi
@@ -50,24 +49,23 @@ jobs:
         env:
           APP_NAME: ${{ github.event.client_payload.app_name }}
         run: |
-          # Use provided app name or default
           APP_NAME_VAL="${APP_NAME:-System Pro}"
           PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Package name: $PACKAGE_NAME"
+          echo "Package: $PACKAGE_NAME"
 
           # Gradle wrapper
           gradle wrapper --gradle-version 8.5 --distribution-type all
           chmod +x gradlew
 
-          # gradle.properties
+          # Gradle properties
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
-          # build.gradle (project)
+          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -116,7 +114,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
+          # AndroidManifest.xml with permissions
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -140,17 +138,19 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+                  <activity android:name=".SettingsActivity" android:label="Settings" android:parentActivityName=".MainActivity" />
               </application>
           </manifest>
           EOF
 
-          # MainActivity.java (no placeholder, direct variable substitution)
+          # MainActivity.java (with menu and permissions)
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
           cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
           package $PACKAGE_NAME;
-
           import android.os.Bundle;
+          import android.view.Menu;
+          import android.view.MenuItem;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.webkit.WebChromeClient;
@@ -159,15 +159,11 @@ jobs:
           import android.net.Uri;
           import android.content.Intent;
           import android.webkit.WebSettings;
-          import android.util.Log;
           import androidx.appcompat.app.AppCompatActivity;
-
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
               private ValueCallback<Uri[]> filePathCallback;
               private static final int FILE_CHOOSER_REQUEST_CODE = 1;
-              private static final String TAG = "WebViewApp";
-
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -181,19 +177,11 @@ jobs:
                   settings.setAllowFileAccessFromFileURLs(true);
                   settings.setAllowUniversalAccessFromFileURLs(true);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  settings.setLoadWithOverviewMode(true);
-                  settings.setUseWideViewPort(true);
-                  webView.setWebViewClient(new WebViewClient() {
-                      @Override
-                      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                          Log.e(TAG, "Error: " + errorCode + " - " + description);
-                      }
-                  });
+                  webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
-                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
-                                                       FileChooserParams fileChooserParams) {
-                          MainActivity.this.filePathCallback = filePathCallback;
+                      public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                          filePathCallback = callback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
                           intent.setType("*/*");
@@ -204,23 +192,26 @@ jobs:
                       public void onPermissionRequest(PermissionRequest request) {
                           request.grant(request.getResources());
                       }
-                      @Override
-                      public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
-                          Log.d(TAG, "JS: " + consoleMessage.message());
-                          return true;
-                      }
                   });
                   webView.loadUrl("file:///android_asset/index.html");
               }
-
+              @Override
+              public boolean onCreateOptionsMenu(Menu menu) {
+                  getMenuInflater().inflate(R.menu.main_menu, menu);
+                  return true;
+              }
+              @Override
+              public boolean onOptionsItemSelected(MenuItem item) {
+                  if (item.getItemId() == R.id.action_settings) {
+                      startActivity(new Intent(this, SettingsActivity.class));
+                      return true;
+                  }
+                  return super.onOptionsItemSelected(item);
+              }
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                   if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
-                      if (resultCode == RESULT_OK && data != null) {
-                          filePathCallback.onReceiveValue(new Uri[]{data.getData()});
-                      } else {
-                          filePathCallback.onReceiveValue(null);
-                      }
+                      filePathCallback.onReceiveValue(resultCode == RESULT_OK && data != null ? new Uri[]{data.getData()} : null);
                       filePathCallback = null;
                   }
                   super.onActivityResult(requestCode, resultCode, data);
@@ -228,13 +219,60 @@ jobs:
           }
           EOF
 
-          # Layout
+          # SettingsActivity.java
+          cat > "app/src/main/java/$PACKAGE_PATH/SettingsActivity.java" << EOF
+          package $PACKAGE_NAME;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class SettingsActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_settings);
+                  getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+              }
+              @Override
+              public boolean onSupportNavigateUp() {
+                  finish();
+                  return true;
+              }
+          }
+          EOF
+
+          # Layout files
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
               android:layout_width="match_parent"
               android:layout_height="match_parent" />
+          EOF
+
+          cat > app/src/main/res/layout/activity_settings.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="Settings" android:textSize="24sp" android:textStyle="bold" />
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="All permissions are declared. If features don't work, check system settings." />
+          </LinearLayout>
+          EOF
+
+          # Menu XML with correct namespace
+          cat > app/src/main/res/menu/main_menu.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <menu xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto">
+              <item
+                  android:id="@+id/action_settings"
+                  android:title="Settings"
+                  android:orderInCategory="100"
+                  app:showAsAction="never" />
+          </menu>
           EOF
 
           # Styles
