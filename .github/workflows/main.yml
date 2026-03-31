@@ -21,19 +21,17 @@ jobs:
 
       - name: Create App Structure
         run: |
-          # فولڈرز کی درست ترتیب
           mkdir -p src/main/java/com/systempro/app
           mkdir -p src/main/assets
           mkdir -p src/main/res/values
 
-          # HTML فائل کو ایسیٹس میں منتقل کرنا
           if [ -f "index.html" ]; then
             cp index.html src/main/assets/
           else
             echo "<html><body style='text-align:center;'><h1>System Pro Final</h1></body></html>" > src/main/assets/index.html
           fi
 
-          # مینی فیسٹ فائل
+          # Android Manifest
           cat <<EOF > src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -48,7 +46,7 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا کوڈ
+          # MainActivity.java
           cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -62,7 +60,6 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView webView = new WebView(this);
                   webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
                   webView.setWebViewClient(new WebViewClient());
                   webView.loadUrl("file:///android_asset/index.html");
                   setContentView(webView);
@@ -70,15 +67,14 @@ jobs:
           }
           EOF
 
-          # ریسورس فائل
           echo '<resources><string name="app_name">System Pro</string></resources>' > src/main/res/values/strings.xml
 
       - name: Setup Build Configuration
         run: |
-          # سنگل ماڈیول build.gradle
+          # build.gradle (Fixed Plugin Versioning)
           cat <<EOF > build.gradle
           plugins {
-              id 'com.android.application'
+              id 'com.android.application' version '8.1.1'
           }
 
           android {
@@ -117,8 +113,8 @@ jobs:
           gradle-version: 8.2
           arguments: assembleDebug
 
-      - name: Upload Real APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Working-APK
+          name: System-Pro-App
           path: build/outputs/apk/debug/*.apk
