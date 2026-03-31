@@ -61,13 +61,11 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-      # HTML کو بیس 64 انکوڈنگ کے ذریعے محفوظ کریں
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کو بیس 64 میں تبدیل کریں اور ڈی کوڈ کریں
-          HTML_BASE64=$(printf '%s' "${{ github.event.client_payload.app_html }}" | base64 -w 0)
-          echo "$HTML_BASE64" | base64 -d > app/src/main/assets/index.html
+          # HTML کو محفوظ طریقے سے لکھیں (toJSON + jq)
+          echo '${{ toJSON(github.event.client_payload.app_html) }}' | jq -r '.' > app/src/main/assets/index.html
 
           # Icon (Base64 to PNG)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
@@ -297,7 +295,6 @@ jobs:
           rm -rf app/src/main/java
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          # MainActivity.java کو printf کے ذریعے لکھیں (محفوظ طریقہ)
           printf "%s\n" \
             "package $PACKAGE_NAME;" \
             "" \
