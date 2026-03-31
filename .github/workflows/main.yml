@@ -1,183 +1,112 @@
-name: Build Signed AAB for Play Store
+name: HTML to Android Builder
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Name (e.g., My App)'
-        required: true
-        default: 'My Web App'
-      package_name:
-        description: 'Package Name (e.g., com.example.myapp)'
-        required: true
-        default: 'com.example.mywebapp'
-      app_url:
-        description: 'Website URL (leave empty to use built‑in HTML)'
-        required: false
-        default: ''
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Cordova
-        run: npm install -g cordova
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Create Cordova project
+      - name: Initialize Android Project
         run: |
-          cordova create app "${{ github.event.inputs.package_name }}" "${{ github.event.inputs.app_name }}"
-          cd app
-          cordova platform add android
+          # خودکار طور پر اینڈرائیڈ سٹرکچر تیار کرنا
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-      - name: Prepare web content
-        run: |
-          cd app/www
-          rm -rf *
-          if [ -n "${{ github.event.inputs.app_url }}" ]; then
-            wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
+          # HTML فائل کو ایسیٹس میں منتقل کرنا
+          if [ -f "index.html" ]; then
+            cp index.html app/src/main/assets/
           else
-            # Use a here-document to create index.html
-            cat > index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="ur">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>${{ github.event.inputs.app_name }}</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .card {
-            max-width: 500px;
-            width: 100%;
-            background: white;
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
-        .header {
-            background: linear-gradient(135deg, #4a00e0, #8e2de2);
-            padding: 30px 20px;
-            text-align: center;
-            color: white;
-        }
-        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }
-        .form-container { padding: 24px 20px 32px; }
-        button {
-            width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #4a00e0, #8e2de2);
-            border: none;
-            border-radius: 40px;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 12px;
-        }
-        @media (max-width: 480px) {
-            .header h1 { font-size: 1.5rem; }
-            .form-container { padding: 20px 16px 28px; }
-        }
-    </style>
-</head>
-<body>
-<div class="card">
-    <div class="header">
-        <h1>📱 ${{ github.event.inputs.app_name }}</h1>
-        <p>پلے اسٹور کے لیے تیار</p>
-    </div>
-    <div class="form-container">
-        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>
-        <button onclick="alert('مبارک ہو! ایپ کامیابی سے چل رہی ہے۔')">ٹیسٹ کریں</button>
-    </div>
-</div>
-</body>
-</html>
-EOF
+            echo "<html><body><h1>System Pro Auto App</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Configure AndroidManifest for HTTP (if needed)
+      - name: Create Manifest and Resources
         run: |
-          cd app/platforms/android/app/src/main
-          sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
+          # Android Manifest فائل کی تخلیق
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="System Pro App" android:theme="@android:style/Theme.NoTitleBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: Build release AAB
+          # Strings XML
+          echo '<resources><string name="app_name">System Pro App</string></resources>' > app/src/main/res/values/strings.xml
+
+      - name: Generate MainActivity (Kotlin)
         run: |
-          cd app
-          cordova build android --release -- --packageType=bundle
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.kt
+          package com.systempro.app
+          import android.os.Bundle
+          import android.webkit.WebView
+          import androidx.appcompat.app.AppCompatActivity
 
-      - name: Set up signing keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState: Bundle?)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  webView.loadUrl("file:///android_asset/index.html")
+                  setContentView(webView)
+              }
+          }
+          EOF
+
+      - name: Setup Gradle Build Files
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-          else
-            echo "No keystore secret found. Creating a debug keystore for testing (NOT for Play Store)."
-            keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, S=Debug, C=US"
-            mv debug.keystore keystore.jks
-            KEYSTORE_PASSWORD="android"
-            KEY_ALIAS="debug"
-          fi
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:8.1.1" }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
 
-      - name: Sign AAB
-        run: |
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-            -keystore keystore.jks \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEYSTORE_PASSWORD" \
-            app/platforms/android/app/build/outputs/bundle/release/app-release.aab \
-            "$KEY_ALIAS"
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
 
-      - name: Verify signing
-        run: |
-          jarsigner -verify app/platforms/android/app/build/outputs/bundle/release/app-release.aab
-          echo "AAB signed successfully"
+          echo "include ':app'" > settings.gradle
 
-      - name: Upload AAB as artifact
+      - name: Build Android APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: app/platforms/android/app/build/outputs/bundle/release/app-release.aab
-
-      - name: (Optional) Also generate APK for testing
-        run: |
-          cd app
-          cordova build android --release
-          cp platforms/android/app/build/outputs/apk/release/app-release.apk ../
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: app-release.apk
+          name: System-Pro-App
+          path: app/build/outputs/apk/debug/app-debug.apk
