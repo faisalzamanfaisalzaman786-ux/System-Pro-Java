@@ -61,23 +61,30 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+      # ========== STRONG CLEANUP: Remove all previous build artifacts ==========
+      - name: Clean previous builds completely
+        run: |
+          rm -rf .gradle app/build build
+          rm -rf app/src/main/java   # Remove entire Java source to avoid stale files
+
+      # ========== Process client payload with safe heredoc ==========
       - name: Process client payload (HTML, icon, permissions, app name)
         if: github.event_name == 'repository_dispatch'
         run: |
-          # HTML کو heredoc کے ذریعے محفوظ طریقے سے لکھیں (delimiter بہت یونیک ہے)
+          # HTML: Use heredoc with a delimiter that is extremely unlikely to appear in HTML
           cat << '___HTML_DELIMITER_END___' > app/src/main/assets/index.html
           ${{ github.event.client_payload.app_html }}
           ___HTML_DELIMITER_END___
 
-          # Icon (Base64 to PNG)
+          # Icon: Base64 to PNG (optional)
           if [ -n "${{ github.event.client_payload.app_icon }}" ]; then
             printf '%s' "${{ github.event.client_payload.app_icon }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # Permissions
+          # Permissions: comma-separated list from UI
           printf '%s' "${{ github.event.client_payload.permissions }}" > permissions.txt
 
-          # App name
+          # App name: used for package name and app label
           printf '%s' "${{ github.event.client_payload.app_name }}" > app_name.txt
 
       - name: Verify and fix HTML & Icon
@@ -86,7 +93,7 @@ jobs:
             echo "Error: index.html is empty! Please provide HTML content."
             exit 1
           fi
-          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
+          echo "✅ HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
 
           ICON_PATH="app/src/main/res/drawable/ic_launcher.png"
           if [ -f "$ICON_PATH" ]; then
@@ -135,9 +142,7 @@ jobs:
             fi
           fi
 
-      - name: Clean previous builds
-        run: rm -rf .gradle app/build build
-
+      # ========== Gradle configuration ==========
       - name: Create gradle.properties
         run: |
           echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
@@ -191,6 +196,7 @@ jobs:
       - name: Create app build.gradle with dynamic namespace
         run: |
           APP_NAME=$(cat app_name.txt)
+          # Sanitize package name: lowercase, only a-z0-9_, no leading digit
           PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
           if [ -z "$PACKAGE_BASE" ]; then
             PACKAGE_BASE="app"
@@ -233,6 +239,7 @@ jobs:
           }
           EOF
 
+      # ========== AndroidManifest with all necessary permissions ==========
       - name: Create AndroidManifest.xml with dynamic permissions and icon
         run: |
           APP_NAME=$(cat app_name.txt)
@@ -242,7 +249,7 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
           
-              <!-- ضروری پرمیشنز -->
+              <!-- Essential permissions for modern web apps -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -255,6 +262,7 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK" />
           EOF
 
+          # Add any extra permissions sent from UI (e.g., contacts, calls)
           for perm in $PERMISSIONS; do
             if [ -n "$perm" ]; then
               echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
@@ -283,6 +291,7 @@ jobs:
           </manifest>
           EOF
 
+      # ========== Create MainActivity.java with full WebView support ==========
       - name: Create MainActivity.java with dynamic package (clean slate)
         run: |
           APP_NAME=$(cat app_name.txt)
@@ -293,11 +302,11 @@ jobs:
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           
-          # پوری java ڈائریکٹری صاف کریں
-          rm -rf app/src/main/java
+          # Create the Java package directory (already cleaned earlier)
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
 
-          cat << 'JAVA_CODE_END' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          # Write MainActivity.java using a heredoc to avoid escaping issues
+          cat << 'JAVA_END' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
           package $PACKAGE_NAME;
 
           import android.Manifest;
@@ -325,14 +334,13 @@ jobs:
               private static final int FILE_CHOOSER_REQUEST_CODE = 1;
               private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
               private boolean permissionGranted = false;
-              private boolean hasRequestedPermission = false;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
 
-                  // لوکیشن پرمیشن چیک کریں
+                  // Request location permission on Android 6+
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                               != PackageManager.PERMISSION_GRANTED) {
@@ -340,7 +348,6 @@ jobs:
                                   new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
                                           Manifest.permission.ACCESS_COARSE_LOCATION},
                                   LOCATION_PERMISSION_REQUEST_CODE);
-                          hasRequestedPermission = true;
                       } else {
                           permissionGranted = true;
                       }
@@ -348,7 +355,6 @@ jobs:
                       permissionGranted = true;
                   }
 
-                  // WebView کو ترتیب دیں
                   webView = findViewById(R.id.webview);
                   WebSettings webSettings = webView.getSettings();
                   webSettings.setJavaScriptEnabled(true);
@@ -378,7 +384,7 @@ jobs:
                           if (permissionGranted) {
                               callback.invoke(origin, true, false);
                           } else {
-                              // اگر پرمیشن ابھی نہیں ملی تو تھوڑی دیر بعد ریٹرائی کریں
+                              // Wait a bit in case permission dialog is still pending
                               new android.os.Handler().postDelayed(() -> {
                                   if (permissionGranted) {
                                       callback.invoke(origin, true, false);
@@ -391,6 +397,7 @@ jobs:
 
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
+                          // Automatically grant camera/microphone permissions
                           request.grant(request.getResources());
                       }
 
@@ -411,11 +418,11 @@ jobs:
                       }
                   });
 
-                  // اگر پرمیشن پہلے سے موجود ہے تو فوراً لوڈ کریں
+                  // Load the HTML file (either now or after permission)
                   if (permissionGranted) {
                       webView.loadUrl("file:///android_asset/index.html");
                   } else {
-                      // پرمیشن کی درخواست کا انتظار کریں
+                      // Will be loaded after permission result
                   }
               }
 
@@ -439,14 +446,13 @@ jobs:
                   if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
                       if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                           permissionGranted = true;
-                          // صفحہ لوڈ کریں (اگر پہلے لوڈ نہیں کیا)
                           if (webView != null && webView.getUrl() == null) {
                               webView.loadUrl("file:///android_asset/index.html");
                           } else {
                               webView.reload();
                           }
                       } else {
-                          // پرمیشن نہیں ملی تو بھی صفحہ لوڈ کریں (لیکن لوکیشن نہیں چلے گی)
+                          // Permission denied: still load the page but location won't work
                           if (webView != null && webView.getUrl() == null) {
                               webView.loadUrl("file:///android_asset/index.html");
                           }
@@ -454,9 +460,9 @@ jobs:
                   }
               }
           }
-          JAVA_CODE_END
+          JAVA_END
 
-          # پیکج کا نام تبدیل کریں
+          # Replace placeholder $PACKAGE_NAME with actual package name
           sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
