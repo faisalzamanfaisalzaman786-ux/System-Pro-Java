@@ -19,25 +19,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Project Directory Structure
+      - name: Create App Structure
         run: |
-          # مکمل اینڈرائیڈ اسٹرکچر بنانا
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
+          # فولڈرز کی درست ترتیب
+          mkdir -p src/main/java/com/systempro/app
+          mkdir -p src/main/assets
+          mkdir -p src/main/res/values
 
-          # HTML فائل کو ایسیٹس میں ڈالنا
+          # HTML فائل کو ایسیٹس میں منتقل کرنا
           if [ -f "index.html" ]; then
-            cp index.html app/src/main/assets/
+            cp index.html src/main/assets/
           else
-            echo "<html><body style='text-align:center;'><h1>System Pro App</h1><p>Ready to Work</p></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;'><h1>System Pro Final</h1></body></html>" > src/main/assets/index.html
           fi
 
-      - name: Generate Android Source Files
-        run: |
-          # Manifest File
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          # مینی فیسٹ فائل
+          cat <<EOF > src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
@@ -51,8 +48,8 @@ jobs:
           </manifest>
           EOF
 
-          # Java Source Code
-          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          # جاوا کوڈ
+          cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
@@ -73,28 +70,16 @@ jobs:
           }
           EOF
 
-          # Values/Strings
-          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+          # ریسورس فائل
+          echo '<resources><string name="app_name">System Pro</string></resources>' > src/main/res/values/strings.xml
 
-      - name: Create Build Scripts
+      - name: Setup Build Configuration
         run: |
-          # Settings
-          echo "include ':app'" > settings.gradle
-
-          # Root build.gradle
+          # سنگل ماڈیول build.gradle
           cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.1.1" }
+          plugins {
+              id 'com.android.application'
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
-
-          # App build.gradle (مضبوط کنفیگریشن)
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
 
           android {
               namespace 'com.systempro.app'
@@ -117,16 +102,23 @@ jobs:
                   }
               }
           }
+
+          repositories {
+              google()
+              mavenCentral()
+          }
           EOF
+
+          echo "" > settings.gradle
 
       - name: Build APK
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.2
-          arguments: :app:assembleDebug
+          arguments: assembleDebug
 
-      - name: Upload Final APK
+      - name: Upload Real APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Real-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: System-Pro-Working-APK
+          path: build/outputs/apk/debug/*.apk
