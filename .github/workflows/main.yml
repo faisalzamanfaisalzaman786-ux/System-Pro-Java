@@ -25,9 +25,9 @@ jobs:
           cache: 'gradle'
 
       - name: Prepare directories
-        run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/menu app/src/main/res/values app/src/main/res/xml
+        run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Copy HTML and permissions from repo
+      - name: Copy files from repo
         run: |
           # HTML
           if [ ! -f index.html ]; then
@@ -35,30 +35,27 @@ jobs:
           fi
           cp index.html app/src/main/assets/index.html
           
-          # Permissions (if missing, create default)
+          # Permissions
           if [ ! -f permissions.txt ]; then
             echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
           fi
           
-          # Default icon if not present
+          # Default icon
           if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
             printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-      - name: Build Android project
-        env:
-          APP_NAME: ${{ github.event.client_payload.app_name }}
+      - name: Build Android project (static package)
         run: |
-          APP_NAME_VAL="${APP_NAME:-System Pro}"
-          PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Package: $PACKAGE_NAME"
+          # Fixed package name to avoid mismatches
+          PACKAGE_NAME="com.systempro.app"
+          echo "Using fixed package: $PACKAGE_NAME"
 
           # Gradle wrapper
           gradle wrapper --gradle-version 8.5 --distribution-type all
           chmod +x gradlew
 
-          # Gradle properties
+          # gradle.properties
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
@@ -114,7 +111,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml with permissions
+          # AndroidManifest.xml
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -129,7 +126,7 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="$APP_NAME_VAL"
+                  android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
@@ -138,19 +135,17 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-                  <activity android:name=".SettingsActivity" android:label="Settings" android:parentActivityName=".MainActivity" />
               </application>
           </manifest>
           EOF
 
-          # MainActivity.java (with menu and permissions)
+          # MainActivity.java
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
           cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
           package $PACKAGE_NAME;
+
           import android.os.Bundle;
-          import android.view.Menu;
-          import android.view.MenuItem;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.webkit.WebChromeClient;
@@ -160,10 +155,12 @@ jobs:
           import android.content.Intent;
           import android.webkit.WebSettings;
           import androidx.appcompat.app.AppCompatActivity;
+
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
               private ValueCallback<Uri[]> filePathCallback;
               private static final int FILE_CHOOSER_REQUEST_CODE = 1;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -195,19 +192,7 @@ jobs:
                   });
                   webView.loadUrl("file:///android_asset/index.html");
               }
-              @Override
-              public boolean onCreateOptionsMenu(Menu menu) {
-                  getMenuInflater().inflate(R.menu.main_menu, menu);
-                  return true;
-              }
-              @Override
-              public boolean onOptionsItemSelected(MenuItem item) {
-                  if (item.getItemId() == R.id.action_settings) {
-                      startActivity(new Intent(this, SettingsActivity.class));
-                      return true;
-                  }
-                  return super.onOptionsItemSelected(item);
-              }
+
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                   if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
@@ -219,60 +204,13 @@ jobs:
           }
           EOF
 
-          # SettingsActivity.java
-          cat > "app/src/main/java/$PACKAGE_PATH/SettingsActivity.java" << EOF
-          package $PACKAGE_NAME;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class SettingsActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_settings);
-                  getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-              }
-              @Override
-              public boolean onSupportNavigateUp() {
-                  finish();
-                  return true;
-              }
-          }
-          EOF
-
-          # Layout files
+          # Layout
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
               android:layout_width="match_parent"
               android:layout_height="match_parent" />
-          EOF
-
-          cat > app/src/main/res/layout/activity_settings.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:padding="16dp">
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="Settings" android:textSize="24sp" android:textStyle="bold" />
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="All permissions are declared. If features don't work, check system settings." />
-          </LinearLayout>
-          EOF
-
-          # Menu XML with correct namespace
-          cat > app/src/main/res/menu/main_menu.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <menu xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto">
-              <item
-                  android:id="@+id/action_settings"
-                  android:title="Settings"
-                  android:orderInCategory="100"
-                  app:showAsAction="never" />
-          </menu>
           EOF
 
           # Styles
