@@ -80,14 +80,20 @@ jobs:
               "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # App name - just check existence, no need to copy
+          # App name
           if [ ! -f app_name.txt ]; then
             echo "System Pro" > app_name.txt
           fi
 
-          # Permissions - just check existence
+          # Permissions
           if [ ! -f permissions.txt ]; then
             touch permissions.txt
+          fi
+
+          # Package name (optional)
+          if [ ! -f package_name.txt ]; then
+            # Will be generated later from app_name.txt
+            touch package_name.txt
           fi
 
       - name: Verify files
@@ -96,6 +102,7 @@ jobs:
           echo "Icon size: $(wc -c < app/src/main/res/drawable/ic_launcher.png) bytes"
           echo "App name: $(cat app_name.txt)"
           echo "Permissions: $(cat permissions.txt)"
+          echo "Package name: $(cat package_name.txt)"
 
       - name: Clean previous builds
         run: rm -rf .gradle app/build build
@@ -152,14 +159,20 @@ jobs:
 
       - name: Create app build.gradle with dynamic namespace
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
-          if [ -z "$PACKAGE_BASE" ]; then
-            PACKAGE_BASE="app"
-            echo "Warning: App name sanitization resulted empty. Using 'app' as package base."
+          # Read package name from file (if present and non-empty)
+          if [ -f package_name.txt ] && [ -s package_name.txt ]; then
+            PACKAGE_NAME=$(cat package_name.txt)
+            echo "Using custom package name: $PACKAGE_NAME"
+          else
+            # Generate from app name
+            APP_NAME=$(cat app_name.txt)
+            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
+            if [ -z "$PACKAGE_BASE" ]; then
+              PACKAGE_BASE="app"
+            fi
+            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+            echo "Using generated package name: $PACKAGE_NAME"
           fi
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Using package name: $PACKAGE_NAME"
 
           cat <<EOF > app/build.gradle
           plugins {
@@ -246,12 +259,18 @@ jobs:
 
       - name: Create MainActivity.java with dynamic package (clean slate)
         run: |
-          APP_NAME=$(cat app_name.txt)
-          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
-          if [ -z "$PACKAGE_BASE" ]; then
-            PACKAGE_BASE="app"
+          # Determine package name again (same logic as in app build.gradle)
+          if [ -f package_name.txt ] && [ -s package_name.txt ]; then
+            PACKAGE_NAME=$(cat package_name.txt)
+          else
+            APP_NAME=$(cat app_name.txt)
+            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
+            if [ -z "$PACKAGE_BASE" ]; then
+              PACKAGE_BASE="app"
+            fi
+            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
           fi
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           
           rm -rf app/src/main/java
@@ -406,6 +425,7 @@ jobs:
           }
           JAVA_END
 
+          # Replace placeholder $PACKAGE_NAME with actual package name
           sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
       - name: Create activity_main.xml
