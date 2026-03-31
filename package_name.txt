@@ -1,1 +1,1 @@
-com.faisal.myapp1
+com.faisal.clock
