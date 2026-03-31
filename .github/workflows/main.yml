@@ -27,42 +27,47 @@ jobs:
       - name: Prepare directories
         run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Copy files from repo
+      - name: Copy HTML and permissions from repo
         run: |
-          # HTML
-          if [ -f index.html ]; then
-            cp index.html app/src/main/assets/index.html
-          else
-            echo "<h1>Default</h1>" > app/src/main/assets/index.html
+          # Copy HTML (fail if missing)
+          if [ ! -f index.html ]; then
+            echo "Error: index.html not found in repository root"
+            exit 1
           fi
-          # Icon (if missing, use default)
-          if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
-            printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-          fi
-          # Permissions (if missing, create default)
+          cp index.html app/src/main/assets/index.html
+          
+          # Use permissions.txt if exists, otherwise create default
           if [ ! -f permissions.txt ]; then
             echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
           fi
+          
+          # Default icon if not present
+          if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
+            printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
 
-      - name: Create Android project files
+      - name: Build Android project
         env:
           APP_NAME: ${{ github.event.client_payload.app_name }}
         run: |
+          # Use provided app name or default
           APP_NAME_VAL="${APP_NAME:-System Pro}"
           PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
           PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          echo "Using package name: $PACKAGE_NAME"
+          echo "Package name: $PACKAGE_NAME"
 
           # Gradle wrapper
           gradle wrapper --gradle-version 8.5 --distribution-type all
           chmod +x gradlew
 
+          # gradle.properties
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
+          # build.gradle (project)
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -73,6 +78,7 @@ jobs:
           }
           EOF
 
+          # settings.gradle
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
@@ -85,6 +91,7 @@ jobs:
           include ':app'
           EOF
 
+          # app/build.gradle
           cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
@@ -109,7 +116,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest
+          # AndroidManifest.xml
           PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -137,11 +144,11 @@ jobs:
           </manifest>
           EOF
 
-          # MainActivity.java
+          # MainActivity.java (no placeholder, direct variable substitution)
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
-          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
-          package ${PACKAGE_NAME};
+          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
+          package $PACKAGE_NAME;
 
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -209,17 +216,19 @@ jobs:
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                   if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
-                      filePathCallback.onReceiveValue(resultCode == RESULT_OK && data != null ? new Uri[]{data.getData()} : null);
+                      if (resultCode == RESULT_OK && data != null) {
+                          filePathCallback.onReceiveValue(new Uri[]{data.getData()});
+                      } else {
+                          filePathCallback.onReceiveValue(null);
+                      }
                       filePathCallback = null;
                   }
                   super.onActivityResult(requestCode, resultCode, data);
               }
           }
           EOF
-          # Replace placeholder with actual package name
-          sed -i "s/\${PACKAGE_NAME}/$PACKAGE_NAME/g" "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
 
-          # Layout and styles
+          # Layout
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -228,6 +237,7 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
+          # Styles
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
