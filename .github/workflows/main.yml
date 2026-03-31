@@ -1,3 +1,72 @@
+name: HTML to Android Builder
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Create App Structure
+        run: |
+          mkdir -p src/main/java/com/systempro/app
+          mkdir -p src/main/assets
+          mkdir -p src/main/res/values
+
+          if [ -f "index.html" ]; then
+            cp index.html src/main/assets/
+          else
+            echo "<html><body style='text-align:center;'><h1>System Pro</h1></body></html>" > src/main/assets/index.html
+          fi
+
+          cat <<EOF > src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView wv = new WebView(this);
+                  wv.getSettings().setJavaScriptEnabled(true);
+                  wv.getSettings().setDomStorageEnabled(true);
+                  wv.setWebViewClient(new WebViewClient());
+                  wv.loadUrl("file:///android_asset/index.html");
+                  setContentView(wv);
+              }
+          }
+          EOF
+
+          echo '<resources><string name="app_name">System Pro</string></resources>' > src/main/res/values/strings.xml
+
       - name: Setup Gradle Files
         run: |
           cat <<EOF > settings.gradle
@@ -35,7 +104,6 @@
                   versionName "1.0"
               }
 
-              # یہ حصہ فائلوں کو APK میں شامل کرنے کے لیے بہت ضروری ہے
               sourceSets {
                   main {
                       manifest.srcFile 'src/main/AndroidManifest.xml'
@@ -44,14 +112,17 @@
                       assets.srcDirs = ['src/main/assets']
                   }
               }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false # فائل کا سائز برقرار رکھنے کے لیے
-                  }
-                  debug {
-                      debuggable true
-                  }
-              }
           }
           EOF
+
+      - name: Build APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.2
+          arguments: assembleDebug
+
+      - name: Upload Final APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: build/outputs/apk/debug/*.apk
