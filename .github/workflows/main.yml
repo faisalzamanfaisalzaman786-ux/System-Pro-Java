@@ -27,29 +27,54 @@ jobs:
       - name: Prepare directories
         run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Copy files from repo
+      - name: Process client payload (app_name, icon, permissions)
+        env:
+          APP_NAME: ${{ github.event.client_payload.app_name }}
+          APP_ICON: ${{ github.event.client_payload.app_icon }}
+          PERMISSIONS: ${{ github.event.client_payload.permissions }}
         run: |
-          # HTML
+          # Use provided app name or default
+          if [ -n "$APP_NAME" ]; then
+            APP_NAME_VAL="$APP_NAME"
+          else
+            APP_NAME_VAL="System Pro"
+          fi
+          echo "APP_NAME_VAL=$APP_NAME_VAL" >> $GITHUB_ENV
+
+          # Save permissions
+          if [ -n "$PERMISSIONS" ]; then
+            echo "$PERMISSIONS" > permissions.txt
+          else
+            echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
+          fi
+
+          # Save icon (Base64 decode)
+          if [ -n "$APP_ICON" ]; then
+            echo "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            echo "Custom icon saved"
+          fi
+
+      - name: Copy HTML from repo
+        run: |
           if [ ! -f index.html ]; then
             echo "<h1>Default</h1>" > index.html
           fi
           cp index.html app/src/main/assets/index.html
-          
-          # Permissions
-          if [ ! -f permissions.txt ]; then
-            echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
-          fi
-          
-          # Default icon
+
+      - name: Create default icon if missing
+        run: |
           if [ ! -f app/src/main/res/drawable/ic_launcher.png ]; then
             printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            echo "Default icon created"
           fi
 
-      - name: Build Android project (static package)
+      - name: Build Android project (dynamic package)
         run: |
-          # Fixed package name to avoid mismatches
-          PACKAGE_NAME="com.systempro.app"
-          echo "Using fixed package: $PACKAGE_NAME"
+          # Create package name from app name
+          APP_NAME_VAL="${APP_NAME_VAL:-System Pro}"
+          PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          echo "Using package: $PACKAGE_NAME"
 
           # Gradle wrapper
           gradle wrapper --gradle-version 8.5 --distribution-type all
@@ -111,22 +136,22 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
-          PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
+          # AndroidManifest.xml with permissions
+          PERMISSIONS_LIST=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
           EOF
-          for perm in $PERMISSIONS; do
+          for perm in $PERMISSIONS_LIST; do
             echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
           done
           cat >> app/src/main/AndroidManifest.xml << EOF
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="System Pro"
+                  android:label="$APP_NAME_VAL"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
