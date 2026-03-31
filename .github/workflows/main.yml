@@ -1,4 +1,4 @@
-name: Organized Android Builder
+name: System Pro Final Builder
 
 on:
   push:
@@ -19,23 +19,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Project Directory Structure
+      - name: Create Project Folder Structure
         run: |
-          # تمام ضروری فولڈرز ایک ساتھ بنانا
-          mkdir -p android_project/app/src/main/java/com/systempro/app
-          mkdir -p android_project/app/src/main/assets
-          mkdir -p android_project/app/src/main/res/layout
-          mkdir -p android_project/app/src/main/res/values
+          mkdir -p my_app/app/src/main/java/com/systempro/app
+          mkdir -p my_app/app/src/main/assets
+          mkdir -p my_app/app/src/main/res/layout
+          mkdir -p my_app/app/src/main/res/values
 
-      - name: Generate Source Files in Folders
+      - name: Generate Default App Files
         run: |
-          # HTML فائل
-          echo "<html><body style='background:#000;color:#0f0;text-align:center;padding-top:50px;font-family:sans-serif;'><h1>SYSTEM PRO V2</h1><p>Folder Structure: Active</p></body></html>" > android_project/app/src/main/assets/index.html
+          # 1. HTML Content (Asset)
+          echo "<html><body style='background:#121212;color:#00ff00;text-align:center;font-family:sans-serif;'><h1>SYSTEM PRO V2</h1><p>Status: Active & Verified</p></body></html>" > my_app/app/src/main/assets/index.html
 
-          # Android Manifest
-          cat <<EOF > android_project/app/src/main/AndroidManifest.xml
+          # 2. Android Manifest
+          cat <<EOF > my_app/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
+              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -46,8 +45,8 @@ jobs:
           </manifest>
           EOF
 
-          # Java Activity
-          cat <<EOF > android_project/app/src/main/java/com/systempro/app/MainActivity.java
+          # 3. Java Code (Main Logic)
+          cat <<EOF > my_app/app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
@@ -65,12 +64,12 @@ jobs:
           }
           EOF
 
-          # Resources
-          echo '<resources><string name="app_name">System Pro</string></resources>' > android_project/app/src/main/res/values/strings.xml
+          # 4. Strings Resource
+          echo '<resources><string name="app_name">System Pro</string></resources>' > my_app/app/src/main/res/values/strings.xml
 
-      - name: Create Build Configuration Files
+      - name: Configure Gradle Files
         run: |
-          cd android_project
+          cd my_app
           echo "include ':app'" > settings.gradle
           
           cat <<EOF > build.gradle
@@ -93,6 +92,15 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              // یہ وہ حصہ ہے جو APK کا سائز اور کوڈ یقینی بنائے گا
+              sourceSets {
+                  main {
+                      manifest.srcFile 'src/main/AndroidManifest.xml'
+                      java.srcDirs = ['src/main/java']
+                      res.srcDirs = ['src/main/res']
+                      assets.srcDirs = ['src/main/assets']
+                  }
+              }
           }
           EOF
 
@@ -101,13 +109,19 @@ jobs:
         with:
           gradle-version: 8.2
 
-      - name: Build APK from Folder
+      - name: Build Final APK
         run: |
-          cd android_project
+          cd my_app
           gradle :app:assembleDebug
 
-      - name: Upload Final APK
+      - name: Verify APK Size
+        run: |
+          APK_FILE=$(find my_app/app/build/outputs/apk/debug/ -name "*.apk")
+          echo "Final APK Size:"
+          du -h "$APK_FILE"
+
+      - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Folder-Build
-          path: android_project/app/build/outputs/apk/debug/*.apk
+          name: System-Pro-V2-Final
+          path: my_app/app/build/outputs/apk/debug/*.apk
