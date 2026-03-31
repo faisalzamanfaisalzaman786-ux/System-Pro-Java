@@ -19,29 +19,32 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Initialize Android Project
+      - name: Initialize Android Project Structure
         run: |
-          # خودکار طور پر اینڈرائیڈ سٹرکچر تیار کرنا
+          # اینڈرائیڈ کے لیے ضروری فولڈرز بنانا
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # HTML فائل کو ایسیٹس میں منتقل کرنا
+          # اگر index.html موجود ہے تو اسے اثاثوں (assets) میں کاپی کرنا
+          if [ -f "1000191903.jpg" ]; then
+             echo "Found image, but looking for HTML..."
+          fi
+          
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body><h1>System Pro Auto App</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='display:flex;justify-content:center;align-items:center;height:100vh;'><h1>System Pro Auto App</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-      - name: Create Manifest and Resources
+      - name: Create Android Manifest
         run: |
-          # Android Manifest فائل کی تخلیق
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="System Pro App" android:theme="@android:style/Theme.NoTitleBar">
-                  <activity android:name=".MainActivity" android:exported="true">
+                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -51,15 +54,13 @@ jobs:
           </manifest>
           EOF
 
-          # Strings XML
-          echo '<resources><string name="app_name">System Pro App</string></resources>' > app/src/main/res/values/strings.xml
-
-      - name: Generate MainActivity (Kotlin)
+      - name: Create MainActivity (Kotlin)
         run: |
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.kt
           package com.systempro.app
           import android.os.Bundle
           import android.webkit.WebView
+          import android.webkit.WebViewClient
           import androidx.appcompat.app.AppCompatActivity
 
           class MainActivity : AppCompatActivity() {
@@ -67,14 +68,17 @@ jobs:
                   super.onCreate(savedInstanceState: Bundle?)
                   val webView = WebView(this)
                   webView.settings.javaScriptEnabled = true
+                  webView.settings.domStorageEnabled = true
+                  webView.webViewClient = WebViewClient()
                   webView.loadUrl("file:///android_asset/index.html")
                   setContentView(webView)
               }
           }
           EOF
 
-      - name: Setup Gradle Build Files
+      - name: Setup Gradle Files
         run: |
+          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -85,8 +89,12 @@ jobs:
           }
           EOF
 
+          # App build.gradle
           cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          plugins { id 'com.android.application' id 'org.jetbrains.kotlin.android' version '1.8.10' apply false }
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+
           android {
               namespace 'com.systempro.app'
               compileSdk 33
@@ -97,16 +105,30 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation "androidx.appcompat:appcompat:1.6.1"
+              implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.10"
           }
           EOF
 
           echo "include ':app'" > settings.gradle
+          
+          # اہم: Gradle Wrapper جنریٹ کرنا تاکہ ./gradlew مل سکے
+          gradle wrapper
 
       - name: Build Android APK
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-Debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
