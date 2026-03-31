@@ -21,22 +21,25 @@ jobs:
 
       - name: Initialize Android Project
         run: |
+          # فولڈر اسٹرکچر بنانا
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-          # HTML Check
+          # HTML فائل سیٹ کرنا
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro</h1><p>WebView App Running Successfully!</p></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;'><h1>System Pro App</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Create Manifest (Simplified)
+          # مینی فیسٹ فائل (Manifest)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
-                  <activity android:name="com.systempro.app.MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                  <activity android:name="com.systempro.app.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -46,7 +49,7 @@ jobs:
           </manifest>
           EOF
 
-          # Create MainActivity (Using Core Android Activity for 100% compatibility)
+          # مین ایکٹیویٹی (MainActivity)
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -68,7 +71,10 @@ jobs:
           }
           EOF
 
-      - name: Setup Build Files
+          # ریسورس فائل (Strings)
+          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+
+      - name: Setup Build Configuration
         run: |
           # Root build.gradle
           cat <<EOF > build.gradle
@@ -81,7 +87,7 @@ jobs:
           }
           EOF
 
-          # App build.gradle (No external dependencies to avoid conflicts)
+          # App build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -94,19 +100,24 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           EOF
 
           echo "include ':app'" > settings.gradle
 
-      - name: Build with Gradle
+      - name: Build APK with Gradle
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.2
           arguments: assembleDebug
 
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/app-debug.apk
