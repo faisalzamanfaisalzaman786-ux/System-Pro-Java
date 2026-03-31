@@ -14,7 +14,7 @@ on:
         required: true
         default: 'com.example.mywebapp'
       app_url:
-        description: 'Website URL (leave empty to use built-in HTML)'
+        description: 'Website URL (leave empty to use built‑in HTML)'
         required: false
         default: ''
 
@@ -56,7 +56,6 @@ jobs:
           if [ -n "${{ github.event.inputs.app_url }}" ]; then
             wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
           else
-            # بلٹ ان موبائل ریسپانسیو HTML (یہاں آپ اپنا ڈیزائن ڈال سکتے ہیں)
             cat > index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ur">
@@ -128,7 +127,6 @@ EOF
       - name: Configure AndroidManifest for HTTP (if needed)
         run: |
           cd app/platforms/android/app/src/main
-          # اگر HTTP پر مبنی ویب سائٹ استعمال کر رہے ہیں تو یہ شامل کریں
           sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
 
       - name: Build release AAB
