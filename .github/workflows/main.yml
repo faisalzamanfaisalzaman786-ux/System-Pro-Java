@@ -1,4 +1,4 @@
-name: HTML to Android Builder
+name: HTML to Android Builder Pro
 
 on:
   push:
@@ -19,23 +19,40 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create App Structure
+      - name: Initialize Standard Project Structure
         run: |
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # HTML Copying
+          # HTML Assets Packaging
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro V2</h1><p>Ready to Build!</p></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='background:#f0f0f0;padding:20px;'><h1>System Pro V2</h1><p>Static Assets Loaded.</p></body></html>" > app/src/main/assets/index.html
           fi
 
-          # Android Manifest
+          # 1. Layout File (تجویز کردہ حل کے مطابق)
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+              <WebView android:id="@+id/webview" 
+                  android:layout_width="match_parent" 
+                  android:layout_height="match_parent" />
+          </RelativeLayout>
+          EOF
+
+          # 2. Manifest with Cleartext Traffic
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar" android:allowBackup="true">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application 
+                  android:label="System Pro" 
+                  android:theme="@android:style/Theme.NoTitleBar"
+                  android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -46,7 +63,7 @@ jobs:
           </manifest>
           EOF
 
-          # Java MainActivity
+          # 3. Robust MainActivity
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -59,58 +76,33 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView wv = new WebView(this);
-                  WebSettings settings = wv.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
+                  setContentView(R.layout.activity_main);
+                  WebView wv = findViewById(R.id.webview);
+                  WebSettings ws = wv.getSettings();
+                  ws.setJavaScriptEnabled(true);
+                  ws.setDomStorageEnabled(true);
                   wv.setWebViewClient(new WebViewClient());
                   wv.loadUrl("file:///android_asset/index.html");
-                  setContentView(wv);
               }
           }
           EOF
 
           echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
 
-      - name: Setup Gradle Project Files
+      - name: Configure Gradle
         run: |
-          # Settings file (Fixes the Plugin Not Found error)
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
           include ':app'
-          rootProject.name = "System-Pro-V2"
           EOF
 
-          # Root build file
           cat <<EOF > build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.1'
-              }
-          }
+          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.1' } }
           EOF
 
-          # App build file
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-
           android {
               namespace 'com.systempro.app'
               compileSdk 33
@@ -129,11 +121,16 @@ jobs:
         with:
           gradle-version: 8.2
 
-      - name: Build APK
-        run: gradle :app:assembleDebug
+      - name: Build and Inspect APK
+        run: |
+          gradle :app:assembleDebug
+          echo "--- APK SIZE CHECK ---"
+          du -sh app/build/outputs/apk/debug/*.apk
+          echo "--- APK CONTENT INSPECTION ---"
+          unzip -l app/build/outputs/apk/debug/*.apk | grep -E 'assets/|classes.dex|resources.arsc'
 
-      - name: Upload Final APK
+      - name: Upload Verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final-APK
+          name: System-Pro-Verified-APK
           path: app/build/outputs/apk/debug/*.apk
