@@ -4,88 +4,62 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'App name (will appear in launcher)'
+        description: 'App name (shown below the icon)'
         required: true
         default: 'MyWebApp'
-        type: string
       package_name:
-        description: 'Package name (optional, e.g., com.example.app) – if empty, auto‑generated from app name'
+        description: 'Package name (optional, auto‑generated if empty)'
         required: false
-        type: string
+        default: ''
       html_content:
-        description: 'Full HTML source code of your web app'
+        description: 'Full HTML source code'
         required: true
-        type: string
         default: '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>My App</title></head><body><h1>Hello from GitHub Actions!</h1></body></html>'
       icon_base64:
-        description: 'Base64 encoded PNG icon (max 8 KB) – optional, a default icon will be used if empty'
+        description: 'Base64 encoded PNG icon (max 8 KB) – optional'
         required: false
-        type: string
         default: ''
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create build workspace
-        run: |
-          mkdir -p build_input
-          echo "Build workspace ready"
-
       - name: Write HTML file
-        run: |
-          cat << 'EOF' > build_input/index.html
-          ${{ inputs.html_content }}
-          EOF
+        run: echo "${{ inputs.html_content }}" > index.html
 
       - name: Write app name
-        run: |
-          echo "${{ inputs.app_name }}" > build_input/app_name.txt
+        run: echo "${{ inputs.app_name }}" > app_name.txt
 
       - name: Write package name (auto if empty)
         run: |
           if [ -z "${{ inputs.package_name }}" ]; then
             # Generate a safe package name from app name
             PACKAGE=$(echo "${{ inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-            echo "com.example.${PACKAGE}" > build_input/package_name.txt
+            echo "com.example.${PACKAGE}" > package_name.txt
           else
-            echo "${{ inputs.package_name }}" > build_input/package_name.txt
+            echo "${{ inputs.package_name }}" > package_name.txt
           fi
 
-      - name: Decode and save icon (if provided)
+      - name: Decode icon (if provided)
         run: |
           if [ -n "${{ inputs.icon_base64 }}" ]; then
-            echo "${{ inputs.icon_base64 }}" | base64 --decode > build_input/ic_launcher.png
-            echo "Custom icon saved"
-          else
-            # Create a dummy placeholder icon (transparent 1x1 pixel) – will be replaced by default in builder
-            echo "No icon provided, using builder default"
+            echo "${{ inputs.icon_base64 }}" | base64 --decode > icon.png
           fi
 
-      - name: Build APK using WebView APK Builder
-        # Uses the popular wangyucode/simple-webview-apk action which builds an APK from HTML + icon
-        uses: wangyucode/simple-webview-apk@v1.0
+      - name: Build APK using VivekWeb2013/android-webview-apk
+        uses: VivekWeb2013/android-webview-apk@v1.0
         with:
-          html_path: 'build_input/index.html'
-          app_name: '${{ inputs.app_name }}'
-          package_name: $(cat build_input/package_name.txt)
-          icon_path: 'build_input/ic_launcher.png'   # if missing, default icon will be used
-          output_apk: 'app-release.apk'
+          html: index.html
+          app_name: ${{ inputs.app_name }}
+          package_name: $(cat package_name.txt)
+          icon: icon.png   # will be ignored if not present
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: my-webapp-apk
-          path: app-release.apk
+          path: app.apk
           retention-days: 5
-
-      - name: (Optional) Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build_input/
-          retention-days: 1
