@@ -27,31 +27,22 @@ jobs:
       - name: Prepare directories
         run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Process client payload (app_name, icon, permissions)
+      - name: Process client payload (icon, permissions)
         env:
-          APP_NAME: ${{ github.event.client_payload.app_name }}
           APP_ICON: ${{ github.event.client_payload.app_icon }}
           PERMISSIONS: ${{ github.event.client_payload.permissions }}
         run: |
-          # Use provided app name or default
-          if [ -n "$APP_NAME" ]; then
-            APP_NAME_VAL="$APP_NAME"
-          else
-            APP_NAME_VAL="System Pro"
+          # Save icon if provided
+          if [ -n "$APP_ICON" ]; then
+            echo "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            echo "Custom icon saved"
           fi
-          echo "APP_NAME_VAL=$APP_NAME_VAL" >> $GITHUB_ENV
-
-          # Save permissions
+          
+          # Save permissions or use default
           if [ -n "$PERMISSIONS" ]; then
             echo "$PERMISSIONS" > permissions.txt
           else
             echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
-          fi
-
-          # Save icon (Base64 decode)
-          if [ -n "$APP_ICON" ]; then
-            echo "$APP_ICON" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-            echo "Custom icon saved"
           fi
 
       - name: Copy HTML from repo
@@ -68,12 +59,10 @@ jobs:
             echo "Default icon created"
           fi
 
-      - name: Build Android project (dynamic package)
+      - name: Build Android project (fixed package)
         run: |
-          # Create package name from app name
-          APP_NAME_VAL="${APP_NAME_VAL:-System Pro}"
-          PACKAGE_BASE=$(echo "$APP_NAME_VAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
-          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
+          # Fixed package name – no dynamic naming
+          PACKAGE_NAME="com.systempro.app"
           echo "Using package: $PACKAGE_NAME"
 
           # Gradle wrapper
@@ -136,7 +125,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml with permissions
+          # AndroidManifest.xml
           PERMISSIONS_LIST=$(cat permissions.txt | tr ',' '\n')
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -151,7 +140,7 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
-                  android:label="$APP_NAME_VAL"
+                  android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
