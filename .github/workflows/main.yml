@@ -21,24 +21,24 @@ jobs:
 
       - name: Initialize Android Project Structure
         run: |
-          # فولڈرز کی درست ترتیب
-          mkdir -p app/src/main/java/com/github/app
+          mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
           # HTML فائل چیک کرنا
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/
           else
-            echo "<html><body style='text-align:center;padding-top:50px;'><h1>Auto Generated App</h1></body></html>" > app/src/main/assets/index.html
+            echo "<html><body style='text-align:center;padding-top:50px;'><h1>System Pro Auto App</h1><p>Welcome to your WebView App</p></body></html>" > app/src/main/assets/index.html
           fi
 
       - name: Create Android Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.app">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="AutoApp" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -49,16 +49,17 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity (Java - More Reliable for CI)
+      - name: Create MainActivity (Java)
         run: |
-          cat <<EOF > app/src/main/java/com/github/app/MainActivity.java
-          package com.github.app;
-          import android.app.Activity;
+          # جاوا استعمال کر رہے ہیں تاکہ مطابقت بہتر رہے
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+          package com.systempro.app;
           import android.os.Bundle;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends Activity {
+          public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -71,12 +72,9 @@ jobs:
           }
           EOF
 
-      - name: Setup Gradle Files
+      - name: Setup Build Files
         run: |
-          # settings.gradle
-          echo "include ':app'" > settings.gradle
-
-          # root build.gradle
+          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -87,23 +85,28 @@ jobs:
           }
           EOF
 
-          # app build.gradle (Simplified)
+          # App build.gradle (Simplified Syntax)
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
+
           android {
-              namespace 'com.github.app'
+              namespace 'com.systempro.app'
               compileSdk 33
               defaultConfig {
-                  applicationId "com.github.app"
+                  applicationId "com.systempro.app"
                   minSdk 21
                   targetSdk 33
                   versionCode 1
                   versionName "1.0"
               }
           }
+
+          dependencies {
+              implementation "androidx.appcompat:appcompat:1.6.1"
+          }
           EOF
 
-          # Gradle Wrapper generate
+          echo "include ':app'" > settings.gradle
           gradle wrapper
 
       - name: Build Android APK
@@ -114,5 +117,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Generated-Android-App
+          name: App-Debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
