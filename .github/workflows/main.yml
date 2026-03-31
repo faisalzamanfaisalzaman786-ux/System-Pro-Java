@@ -19,21 +19,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create App Structure
+      - name: Setup Android Project
         run: |
-          mkdir -p src/main/java/com/systempro/app
-          mkdir -p src/main/assets
-          mkdir -p src/main/res/values
+          # فولڈرز بنائیں
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/values
 
+          # اپنی HTML فائل کاپی کریں
           if [ -f "index.html" ]; then
-            cp index.html src/main/assets/
+            cp index.html app/src/main/assets/
           else
-            echo "<html><body><h1>System Pro V2</h1></body></html>" > src/main/assets/index.html
+            echo "<html><body><h1>System Pro V2 Ready</h1></body></html>" > app/src/main/assets/index.html
           fi
 
-          cat <<EOF > src/main/AndroidManifest.xml
+          # اینڈرائیڈ مینی فیسٹ
+          cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
-              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar" android:icon="@android:drawable/sym_def_app_icon">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -44,7 +47,8 @@ jobs:
           </manifest>
           EOF
 
-          cat <<EOF > src/main/java/com/systempro/app/MainActivity.java
+          # جاوا کوڈ
+          cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
@@ -57,7 +61,6 @@ jobs:
                   super.onCreate(savedInstanceState);
                   WebView wv = new WebView(this);
                   wv.getSettings().setJavaScriptEnabled(true);
-                  wv.getSettings().setDomStorageEnabled(true);
                   wv.setWebViewClient(new WebViewClient());
                   wv.loadUrl("file:///android_asset/index.html");
                   setContentView(wv);
@@ -65,52 +68,34 @@ jobs:
           }
           EOF
 
-          echo '<resources><string name="app_name">System Pro</string></resources>' > src/main/res/values/strings.xml
+          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
 
       - name: Setup Gradle Files
         run: |
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          include ':app'
           rootProject.name = "System-Pro-v2"
           EOF
 
           cat <<EOF > build.gradle
           plugins {
-              id 'com.android.application' version '8.1.1'
+              id 'com.android.application' version '8.1.1' apply false
           }
+          EOF
 
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace 'com.systempro.app'
               compileSdk 33
-              
               defaultConfig {
                   applicationId "com.systempro.app"
                   minSdk 21
                   targetSdk 33
                   versionCode 1
                   versionName "1.0"
-              }
-
-              sourceSets {
-                  main {
-                      manifest.srcFile 'src/main/AndroidManifest.xml'
-                      java.srcDirs = ['src/main/java']
-                      res.srcDirs = ['src/main/res']
-                      assets.srcDirs = ['src/main/assets']
-                  }
               }
           }
           EOF
@@ -121,11 +106,10 @@ jobs:
           gradle-version: 8.2
 
       - name: Build APK
-        # یہاں ہم نے ./gradlew کو ہٹا کر براہ راست gradle استعمال کیا ہے تاکہ ایرر ختم ہو جائے
-        run: gradle assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Full-V2
-          path: build/outputs/apk/debug/*.apk
+          name: System-Pro-V2-Final-Package
+          path: app/build/outputs/apk/debug/*.apk
