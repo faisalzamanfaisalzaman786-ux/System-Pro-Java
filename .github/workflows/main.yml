@@ -1,4 +1,4 @@
-name: HTML to Android Final
+name: HTML to Android Final Fixed
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
           mkdir -p app/src/main/res/values
 
           # HTML File
-          echo "<html><body style='background:black;color:white;display:flex;justify-content:center;align-items:center;height:100vh;'><h1>SYSTEM PRO V2 WORKING</h1></body></html>" > app/src/main/assets/index.html
+          echo "<html><body style='background:#121212;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'><div><h1>System Pro V2</h1><p>Build Successful with Gradle 8.2</p></div></body></html>" > app/src/main/assets/index.html
 
           # Layout
           cat <<EOF > app/src/main/res/layout/activity_main.xml
@@ -42,7 +42,7 @@ jobs:
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:usesCleartextTraffic="true">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -53,7 +53,7 @@ jobs:
           </manifest>
           EOF
 
-          # Java Code
+          # Java MainActivity
           cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
           package com.systempro.app;
           import android.app.Activity;
@@ -68,6 +68,7 @@ jobs:
                   setContentView(R.layout.activity_main);
                   WebView wv = findViewById(R.id.webview);
                   wv.getSettings().setJavaScriptEnabled(true);
+                  wv.getSettings().setDomStorageEnabled(true);
                   wv.setWebViewClient(new WebViewClient());
                   wv.loadUrl("file:///android_asset/index.html");
               }
@@ -76,7 +77,7 @@ jobs:
 
           echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
 
-      - name: Generate Gradle Files
+      - name: Generate Build Configuration
         run: |
           cat <<EOF > settings.gradle
           include ':app'
@@ -107,19 +108,23 @@ jobs:
           }
           EOF
 
-      - name: Build with Gradle
-        run: |
-          # انسٹال شدہ گریڈل کا استعمال کریں بجائے ریپوزٹری کے فائل ڈھونڈنے کے
-          gradle assembleDebug
+      - name: Setup Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2 # آپ کی تجویز کے مطابق 8.2 پر فکس کر دیا گیا ہے
 
-      - name: Verify APK Size and Content
+      - name: Build APK
+        run: gradle :app:assembleDebug
+
+      - name: Verify and Inspect
         run: |
-          echo "Checking APK File..."
+          echo "Checking APK Size..."
           ls -lh app/build/outputs/apk/debug/*.apk
+          echo "Verifying Assets..."
           unzip -l app/build/outputs/apk/debug/*.apk | grep "index.html"
 
-      - name: Upload Real APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Real
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
