@@ -12,9 +12,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -27,161 +24,75 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Android SDK
-        run: |
-          SDK_PATH="$ANDROID_HOME"
-          if [ ! -d "$SDK_PATH" ]; then
-            echo "SDK not found at $SDK_PATH"
-            exit 1
-          fi
-          echo "Android SDK found at $SDK_PATH"
-
-          SDKMANAGER=""
-          if [ -f "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK_PATH/cmdline-tools/latest/bin/sdkmanager"
-          elif [ -f "$SDK_PATH/cmdline-tools/tools/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK_PATH/cmdline-tools/tools/bin/sdkmanager"
-          elif [ -f "$SDK_PATH/tools/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK_PATH/tools/bin/sdkmanager"
-          else
-            echo "sdkmanager not found"
-            exit 1
-          fi
-          echo "Using sdkmanager: $SDKMANAGER"
-
-          yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
-          $SDKMANAGER "platform-tools" "build-tools;34.0.0" "platforms;android-34"
-
       - name: Prepare directories
-        run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+        run: mkdir -p app/src/main/assets app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
 
-      - name: Copy files from repository
+      - name: Copy files from repo
         run: |
-          # HTML
+          # Copy HTML (if exists, else create default)
           if [ -f index.html ]; then
             cp index.html app/src/main/assets/index.html
           else
-            echo "Error: index.html not found in repository root"
-            exit 1
+            echo "<h1>Default</h1>" > app/src/main/assets/index.html
           fi
-
-          # Icon
-          if [ -f ic_launcher.png ]; then
-            cp ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+          # Copy icon if exists
+          if [ -f app/src/main/res/drawable/ic_launcher.png ]; then
+            echo "Icon already present"
           else
-            echo "Creating default icon"
-            printf '%s' \
-              "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeT" \
-              "AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAA" \
-              "g6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+            # Use default icon if missing
+            printf '%s' "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABlJREFUaN7t0DEBAAAAg6D7vzQNwAMtBAAAnwP9AABYF2RJAAAAAElFTkSuQmCC" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
+          fi
+          # Copy permissions if exists
+          if [ -f permissions.txt ]; then
+            cp permissions.txt .
+          else
+            echo "android.permission.INTERNET,android.permission.ACCESS_NETWORK_STATE" > permissions.txt
           fi
 
-          # App name
-          if [ ! -f app_name.txt ]; then
-            echo "System Pro" > app_name.txt
-          fi
-
-          # Permissions
-          if [ ! -f permissions.txt ]; then
-            touch permissions.txt
-          fi
-
-          # Package name (optional)
-          if [ ! -f package_name.txt ]; then
-            touch package_name.txt
-          fi
-
-      - name: Verify files
+      - name: Create Android project files (gradle, manifest, activity)
         run: |
-          echo "HTML size: $(wc -c < app/src/main/assets/index.html) bytes"
-          echo "Icon size: $(wc -c < app/src/main/res/drawable/ic_launcher.png) bytes"
-          echo "App name: $(cat app_name.txt)"
-          echo "Permissions: $(cat permissions.txt)"
-          echo "Package name: $(cat package_name.txt)"
+          # Use the app name from client_payload or default
+          APP_NAME="${APP_NAME:-System Pro}"
+          PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+          PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
 
-      - name: Clean previous builds
-        run: rm -rf .gradle app/build build
+          # Create gradle wrapper and build files
+          gradle wrapper --gradle-version 8.5 --distribution-type all
+          chmod +x gradlew
 
-      - name: Create gradle.properties
-        run: |
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
 
-      - name: Create project build.gradle
-        run: |
-          cat <<'EOF' > build.gradle
+          cat > build.gradle << 'EOF'
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-                  maven { url "https://plugins.gradle.org/m2/" }
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-                  maven { url "https://jitpack.io" }
-              }
+              repositories { google(); mavenCentral() }
           }
           EOF
 
-      - name: Create settings.gradle
-        run: |
-          cat <<'EOF' > settings.gradle
+          cat > settings.gradle << 'EOF'
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-                  maven { url "https://jitpack.io" }
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "System Pro"
           include ':app'
           EOF
 
-      - name: Create app build.gradle with dynamic namespace
-        run: |
-          # Read package name from file (if present and non-empty)
-          if [ -f package_name.txt ] && [ -s package_name.txt ]; then
-            PACKAGE_NAME=$(cat package_name.txt)
-            echo "Using custom package name: $PACKAGE_NAME"
-          else
-            # Generate from app name
-            APP_NAME=$(cat app_name.txt)
-            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
-            if [ -z "$PACKAGE_BASE" ]; then
-              PACKAGE_BASE="app"
-            fi
-            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-            echo "Using generated package name: $PACKAGE_NAME"
-          fi
-
-          cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
+          cat > app/build.gradle << EOF
+          plugins { id 'com.android.application' }
           android {
               namespace '$PACKAGE_NAME'
               compileSdk 34
-
               defaultConfig {
                   applicationId "$PACKAGE_NAME"
                   minSdk 24
@@ -189,17 +100,11 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-
               buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      debuggable true
-                  }
+                  release { minifyEnabled false }
+                  debug { debuggable true }
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
@@ -207,231 +112,123 @@ jobs:
           }
           EOF
 
-      - name: Create AndroidManifest.xml with dynamic permissions and icon
-        run: |
-          APP_NAME=$(cat app_name.txt)
-          PERMISSIONS=$(cat permissions.txt | tr ',' '\n' || true)
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          # AndroidManifest
+          PERMISSIONS=$(cat permissions.txt | tr ',' '\n')
+          cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-          
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
           EOF
-
           for perm in $PERMISSIONS; do
-            if [ -n "$perm" ]; then
-              echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
-            fi
+            echo "    <uses-permission android:name=\"$perm\" />" >> app/src/main/AndroidManifest.xml
           done
-
-          cat <<EOF >> app/src/main/AndroidManifest.xml
-
+          cat >> app/src/main/AndroidManifest.xml << EOF
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
                   android:label="$APP_NAME"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-                  android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
-
           </manifest>
           EOF
 
-      - name: Create MainActivity.java with dynamic package (using printf)
-        run: |
-          # Read package name (same logic as above)
-          if [ -f package_name.txt ] && [ -s package_name.txt ]; then
-            PACKAGE_NAME=$(cat package_name.txt)
-          else
-            APP_NAME=$(cat app_name.txt)
-            PACKAGE_BASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/^[0-9]/_/' | sed 's/^_*//')
-            if [ -z "$PACKAGE_BASE" ]; then
-              PACKAGE_BASE="app"
-            fi
-            PACKAGE_NAME="com.systempro.${PACKAGE_BASE}"
-          fi
-
+          # MainActivity.java (with debug logging)
           PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          
-          rm -rf app/src/main/java
           mkdir -p "app/src/main/java/$PACKAGE_PATH"
+          cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << EOF
+          package ${PACKAGE_NAME};
 
-          # Write Java file using printf to avoid any heredoc issues
-          printf "%s\n" \
-            "package $PACKAGE_NAME;" \
-            "" \
-            "import android.Manifest;" \
-            "import android.content.pm.PackageManager;" \
-            "import android.os.Build;" \
-            "import android.os.Bundle;" \
-            "import android.webkit.GeolocationPermissions;" \
-            "import android.webkit.PermissionRequest;" \
-            "import android.webkit.ValueCallback;" \
-            "import android.webkit.WebChromeClient;" \
-            "import android.webkit.WebSettings;" \
-            "import android.webkit.WebView;" \
-            "import android.webkit.WebViewClient;" \
-            "import android.net.Uri;" \
-            "import android.content.Intent;" \
-            "import androidx.appcompat.app.AppCompatActivity;" \
-            "import androidx.core.app.ActivityCompat;" \
-            "import androidx.core.content.ContextCompat;" \
-            "import android.util.Log;" \
-            "" \
-            "public class MainActivity extends AppCompatActivity {" \
-            "    private static final String TAG = \"WebViewDebug\";" \
-            "    private WebView webView;" \
-            "    private ValueCallback<Uri[]> filePathCallback;" \
-            "    private static final int FILE_CHOOSER_REQUEST_CODE = 1;" \
-            "    private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;" \
-            "    private boolean permissionGranted = false;" \
-            "" \
-            "    @Override" \
-            "    protected void onCreate(Bundle savedInstanceState) {" \
-            "        super.onCreate(savedInstanceState);" \
-            "        setContentView(R.layout.activity_main);" \
-            "" \
-            "        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {" \
-            "            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)" \
-            "                    != PackageManager.PERMISSION_GRANTED) {" \
-            "                ActivityCompat.requestPermissions(this," \
-            "                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION," \
-            "                                Manifest.permission.ACCESS_COARSE_LOCATION}," \
-            "                        LOCATION_PERMISSION_REQUEST_CODE);" \
-            "            } else {" \
-            "                permissionGranted = true;" \
-            "            }" \
-            "        } else {" \
-            "            permissionGranted = true;" \
-            "        }" \
-            "" \
-            "        webView = findViewById(R.id.webview);" \
-            "        WebSettings webSettings = webView.getSettings();" \
-            "        webSettings.setJavaScriptEnabled(true);" \
-            "        webSettings.setDomStorageEnabled(true);" \
-            "        webSettings.setAllowFileAccess(true);" \
-            "        webSettings.setAllowContentAccess(true);" \
-            "        webSettings.setGeolocationEnabled(true);" \
-            "        webSettings.setDatabaseEnabled(true);" \
-            "        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);" \
-            "        webSettings.setAllowUniversalAccessFromFileURLs(true);" \
-            "        webSettings.setAllowFileAccessFromFileURLs(true);" \
-            "        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {" \
-            "            webSettings.setMediaPlaybackRequiresUserGesture(false);" \
-            "        }" \
-            "" \
-            "        webView.setWebViewClient(new WebViewClient() {" \
-            "            @Override" \
-            "            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {" \
-            "                Log.e(TAG, \"WebView error: \" + errorCode + \" - \" + description + \" at \" + failingUrl);" \
-            "            }" \
-            "        });" \
-            "" \
-            "        webView.setWebChromeClient(new WebChromeClient() {" \
-            "            @Override" \
-            "            public void onGeolocationPermissionsShowPrompt(String origin," \
-            "                                                           GeolocationPermissions.Callback callback) {" \
-            "                if (permissionGranted) {" \
-            "                    callback.invoke(origin, true, false);" \
-            "                } else {" \
-            "                    new android.os.Handler().postDelayed(() -> {" \
-            "                        if (permissionGranted) {" \
-            "                            callback.invoke(origin, true, false);" \
-            "                        } else {" \
-            "                            callback.invoke(origin, false, false);" \
-            "                        }" \
-            "                    }, 1000);" \
-            "                }" \
-            "            }" \
-            "" \
-            "            @Override" \
-            "            public void onPermissionRequest(PermissionRequest request) {" \
-            "                request.grant(request.getResources());" \
-            "            }" \
-            "" \
-            "            @Override" \
-            "            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback," \
-            "                                             FileChooserParams fileChooserParams) {" \
-            "                MainActivity.this.filePathCallback = filePathCallback;" \
-            "                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);" \
-            "                intent.addCategory(Intent.CATEGORY_OPENABLE);" \
-            "                intent.setType(\"image/*\");" \
-            "                startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);" \
-            "                return true;" \
-            "            }" \
-            "" \
-            "            @Override" \
-            "            public void onConsoleMessage(String message, int lineNumber, String sourceID) {" \
-            "                Log.d(TAG, \"Console: \" + message + \" (line \" + lineNumber + \")\");" \
-            "            }" \
-            "        });" \
-            "" \
-            "        if (permissionGranted) {" \
-            "            webView.loadUrl(\"file:///android_asset/index.html\");" \
-            "        }" \
-            "    }" \
-            "" \
-            "    @Override" \
-            "    protected void onActivityResult(int requestCode, int resultCode, Intent data) {" \
-            "        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {" \
-            "            if (resultCode == RESULT_OK && data != null) {" \
-            "                Uri[] uris = new Uri[]{data.getData()};" \
-            "                filePathCallback.onReceiveValue(uris);" \
-            "            } else {" \
-            "                filePathCallback.onReceiveValue(null);" \
-            "            }" \
-            "            filePathCallback = null;" \
-            "        }" \
-            "        super.onActivityResult(requestCode, resultCode, data);" \
-            "    }" \
-            "" \
-            "    @Override" \
-            "    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {" \
-            "        super.onRequestPermissionsResult(requestCode, permissions, grantResults);" \
-            "        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {" \
-            "            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {" \
-            "                permissionGranted = true;" \
-            "                if (webView != null && webView.getUrl() == null) {" \
-            "                    webView.loadUrl(\"file:///android_asset/index.html\");" \
-            "                } else {" \
-            "                    webView.reload();" \
-            "                }" \
-            "            } else {" \
-            "                if (webView != null && webView.getUrl() == null) {" \
-            "                    webView.loadUrl(\"file:///android_asset/index.html\");" \
-            "                }" \
-            "            }" \
-            "        }" \
-            "    }" \
-            "}" > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.webkit.WebChromeClient;
+          import android.webkit.PermissionRequest;
+          import android.webkit.ValueCallback;
+          import android.net.Uri;
+          import android.content.Intent;
+          import android.webkit.WebSettings;
+          import android.util.Log;
+          import androidx.appcompat.app.AppCompatActivity;
 
-      - name: Debug - show MainActivity.java content
-        run: |
-          echo "=== MainActivity.java content (first 20 lines) ==="
-          head -n 20 app/src/main/java/*/MainActivity.java || true
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+              private ValueCallback<Uri[]> filePathCallback;
+              private static final int FILE_CHOOSER_REQUEST_CODE = 1;
+              private static final String TAG = "WebViewApp";
 
-      - name: Create activity_main.xml
-        run: |
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  webView = findViewById(R.id.webview);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  settings.setLoadWithOverviewMode(true);
+                  settings.setUseWideViewPort(true);
+
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                          Log.e(TAG, "WebView error: " + errorCode + " - " + description + " URL: " + failingUrl);
+                      }
+                  });
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                                                       FileChooserParams fileChooserParams) {
+                          MainActivity.this.filePathCallback = filePathCallback;
+                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                          intent.addCategory(Intent.CATEGORY_OPENABLE);
+                          intent.setType("*/*");
+                          startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                          return true;
+                      }
+                      @Override
+                      public void onPermissionRequest(PermissionRequest request) {
+                          request.grant(request.getResources());
+                      }
+                      @Override
+                      public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                          Log.d(TAG, "JS: " + consoleMessage.message() + " line:" + consoleMessage.lineNumber());
+                          return true;
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+                      if (resultCode == RESULT_OK && data != null) {
+                          filePathCallback.onReceiveValue(new Uri[]{data.getData()});
+                      } else {
+                          filePathCallback.onReceiveValue(null);
+                      }
+                      filePathCallback = null;
+                  }
+                  super.onActivityResult(requestCode, resultCode, data);
+              }
+          }
+          EOF
+
+          # Layout and styles
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <WebView xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/webview"
@@ -439,9 +236,7 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
-      - name: Create minimal styles.xml
-        run: |
-          cat <<'EOF' > app/src/main/res/values/styles.xml
+          cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
@@ -451,24 +246,10 @@ jobs:
           </resources>
           EOF
 
-      - name: Build APK with Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.5
-          arguments: assembleDebug --stacktrace --no-daemon
+      - name: Build APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Get APK size
-        run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          if [ -f "$APK_PATH" ]; then
-            APK_SIZE=$(stat -c%s "$APK_PATH")
-            echo "APK size: $APK_SIZE bytes ($(($APK_SIZE / 1024)) KB)"
-          else
-            echo "APK not found!"
-            exit 1
-          fi
-
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-App
