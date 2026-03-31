@@ -21,7 +21,7 @@ jobs:
 
       - name: Create Android App Structure
         run: |
-          mkdir -p app/src/main/java/com/faisal/clock
+          mkdir -p app/src/main/java/Com/faisal/clock
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -32,23 +32,17 @@ jobs:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>System Pro Auto Push Studio</title>
+    <title>System Pro Auto Push Studio (Fixed)</title>
     <style>
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+        * { box-sizing: border-box; }
         body {
             background: #0a0c10;
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 1rem;
             color: #e6edf3;
         }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1100px; margin: 0 auto; }
         .card {
             background: #161b22;
             border-radius: 28px;
@@ -68,7 +62,6 @@ jobs:
             font-size: 0.7rem;
             padding: 0.2rem 0.7rem;
             border-radius: 20px;
-            font-weight: normal;
         }
         .sub {
             color: #8b949e;
@@ -84,29 +77,14 @@ jobs:
             background: #0d1117;
             border-radius: 40px;
             margin-bottom: 2rem;
-            justify-content: flex-start;
         }
-        .led-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.8rem;
-        }
+        .led-group { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
         .led {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #333;
-            transition: 0.2s;
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #333; transition: 0.2s;
         }
-        .led-green {
-            background: #2ea043;
-            box-shadow: 0 0 6px #2ea043;
-        }
-        .led-red {
-            background: #f85149;
-            box-shadow: 0 0 6px #f85149;
-        }
+        .led-green { background: #2ea043; box-shadow: 0 0 6px #2ea043; }
+        .led-red { background: #f85149; box-shadow: 0 0 6px #f85149; }
         .tabs {
             display: flex;
             border-bottom: 1px solid #30363d;
@@ -117,22 +95,15 @@ jobs:
             cursor: pointer;
             opacity: 0.7;
             font-weight: 500;
-            transition: 0.2s;
         }
         .tab.active {
             opacity: 1;
             color: #2ea043;
             border-bottom: 2px solid #2ea043;
         }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .form-group {
-            margin-bottom: 1.2rem;
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 1.2rem; }
         label {
             display: block;
             margin-bottom: 0.4rem;
@@ -147,12 +118,8 @@ jobs:
             padding: 0.7rem 1rem;
             color: #e6edf3;
             font-family: monospace;
-            font-size: 0.9rem;
         }
-        textarea {
-            font-family: monospace;
-            resize: vertical;
-        }
+        textarea { resize: vertical; }
         button {
             background: #238636;
             border: none;
@@ -161,26 +128,18 @@ jobs:
             font-weight: 600;
             cursor: pointer;
             color: white;
-            transition: 0.2s;
             margin-top: 0.5rem;
         }
-        button:hover {
-            background: #2ea043;
-        }
-        button.secondary {
-            background: #3d444d;
-        }
-        button.secondary:hover {
-            background: #4f5764;
-        }
-        .log-panel {
+        button.secondary { background: #3d444d; }
+        button:hover { background: #2ea043; }
+        .log-panel, .preview-panel {
             background: #0d1117;
             border: 1px solid #30363d;
             border-radius: 16px;
             margin-top: 1.8rem;
             overflow: hidden;
         }
-        .log-header {
+        .log-header, .preview-header {
             background: #161b22;
             padding: 0.6rem 1rem;
             font-weight: 600;
@@ -195,9 +154,9 @@ jobs:
             white-space: pre-wrap;
             word-wrap: break-word;
             font-size: 0.75rem;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
-            font-family: 'SF Mono', monospace;
+            font-family: monospace;
         }
         .upload-area {
             border: 2px dashed #3d444d;
@@ -207,46 +166,24 @@ jobs:
             background: #0d1117;
             margin-bottom: 1rem;
             cursor: pointer;
-            transition: border 0.2s;
         }
-        .upload-area:hover {
-            border-color: #2ea043;
-        }
-        .file-name {
-            font-size: 0.8rem;
-            color: #8b949e;
-            margin-top: 0.5rem;
-        }
-        .flex-row {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-        .flex-row > * {
-            flex: 1;
-        }
-        hr {
-            border-color: #30363d;
-            margin: 1.5rem 0;
-        }
-        .settings-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 0.5rem;
-        }
+        .upload-area:hover { border-color: #2ea043; }
+        .file-name { font-size: 0.8rem; color: #8b949e; margin-top: 0.5rem; }
+        .flex-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .flex-row > * { flex: 1; }
+        .settings-actions { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 0.5rem; }
+        hr { border-color: #30363d; margin: 1.5rem 0; }
         @media (max-width: 600px) {
             .card { padding: 1.2rem; }
             .flex-row { flex-direction: column; }
-            .settings-actions { flex-direction: column; }
         }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="card">
-        <h1>⚡ System Pro Auto Push Studio <span class="badge">v2.1</span></h1>
-        <div class="sub">Upload HTML → Auto‑build Android App via GitHub Actions</div>
+        <h1>⚡ System Pro Auto Push Studio <span class="badge">v3 (Fixed YAML)</span></h1>
+        <div class="sub">Upload HTML → Preview YAML → Push to GitHub → Auto‑build APK</div>
 
         <div class="status-bar">
             <div class="led-group"><div id="netLed" class="led"></div> Internet</div>
@@ -273,11 +210,11 @@ jobs:
             </div>
             <div class="flex-row">
                 <div class="form-group">
-                    <label>📱 App Name</label>
-                    <input type="text" id="appName" placeholder="My Web App">
+                    <label>📱 App Name (optional)</label>
+                    <input type="text" id="appName" placeholder="Auto from HTML title">
                 </div>
                 <div class="form-group">
-                    <label>📦 Package ID</label>
+                    <label>📦 Package ID (optional)</label>
                     <input type="text" id="pkgID" placeholder="com.example.app">
                 </div>
             </div>
@@ -300,7 +237,18 @@ jobs:
             </div>
         </div>
 
-        <button id="pushBtn" style="width:100%; margin-top:1.5rem;">🚀 Push Workflow & Trigger Build</button>
+        <div class="flex-row" style="gap:1rem; margin-top:1rem;">
+            <button id="previewBtn" class="secondary" style="flex:1;">🔍 Show YAML Preview</button>
+            <button id="pushBtn" style="flex:1;">🚀 Push Workflow</button>
+        </div>
+
+        <div id="previewPanel" class="preview-panel" style="display:none;">
+            <div class="preview-header">
+                <span>📄 Generated YAML (main.yml)</span>
+                <button id="copyPreviewBtn" class="secondary" style="padding:0.2rem 0.8rem; margin:0;">Copy</button>
+            </div>
+            <pre id="yamlPreview"></pre>
+        </div>
 
         <div class="log-panel">
             <div class="log-header">
@@ -311,8 +259,8 @@ jobs:
         </div>
         <hr>
         <div style="font-size:0.7rem; color:#8b949e; text-align:center;">
-            💡 Token needs <strong>repo</strong> and <strong>workflow</strong> scopes. After push, go to your repo → Actions tab to see the build. The APK will appear as an artifact.
-            <br>⚙️ Settings are saved locally in your browser.
+            💡 Token needs <strong>repo</strong> and <strong>workflow</strong> scopes.<br>
+            ⚠️ If you see a YAML syntax error, use the preview to check the file. Ensure indentation is consistent and no stray backticks/dollar signs appear inside heredocs.
         </div>
     </div>
 </div>
@@ -329,6 +277,10 @@ jobs:
     const uploadArea = document.getElementById('uploadArea');
     const fileNameSpan = document.getElementById('fileName');
     const pushBtn = document.getElementById('pushBtn');
+    const previewBtn = document.getElementById('previewBtn');
+    const previewPanel = document.getElementById('previewPanel');
+    const yamlPreview = document.getElementById('yamlPreview');
+    const copyPreviewBtn = document.getElementById('copyPreviewBtn');
     const logOutput = document.getElementById('logOutput');
     const logTimestamp = document.getElementById('logTimestamp');
     const netLed = document.getElementById('netLed');
@@ -338,7 +290,7 @@ jobs:
 
     let currentHtml = null;
 
-    // ========== LOCALSTORAGE FUNCTIONS ==========
+    // ========== LOCALSTORAGE ==========
     function loadSettings() {
         const saved = localStorage.getItem('autoPushStudio');
         if (saved) {
@@ -358,7 +310,6 @@ jobs:
             } catch(e) { console.warn(e); }
         }
     }
-
     function saveSettings() {
         const data = {
             ghUser: ghUser.value,
@@ -369,9 +320,8 @@ jobs:
             htmlContent: currentHtml || ''
         };
         localStorage.setItem('autoPushStudio', JSON.stringify(data));
-        log('💾 Settings saved to browser storage.', false);
+        log('💾 Settings saved.', false);
     }
-
     function clearSettings() {
         localStorage.removeItem('autoPushStudio');
         ghUser.value = '';
@@ -385,35 +335,25 @@ jobs:
         log('🗑️ All settings cleared.', false);
     }
 
-    // Internet check
-    function updateNetLed() {
-        netLed.className = navigator.onLine ? 'led led-green' : 'led led-red';
-    }
+    // Internet & Auth
+    function updateNetLed() { netLed.className = navigator.onLine ? 'led led-green' : 'led led-red'; }
     window.addEventListener('online', updateNetLed);
     window.addEventListener('offline', updateNetLed);
     updateNetLed();
 
-    // GitHub auth check
     async function checkGitHubAuth() {
         const token = ghToken.value.trim();
-        if (!token) {
-            gitLed.className = 'led led-red';
-            return;
-        }
+        if (!token) { gitLed.className = 'led led-red'; return; }
         try {
-            const res = await fetch('https://api.github.com/user', {
-                headers: { 'Authorization': \`token \${token}\` }
-            });
+            const res = await fetch('https://api.github.com/user', { headers: { 'Authorization': \`token \${token}\` } });
             gitLed.className = res.ok ? 'led led-green' : 'led led-red';
-        } catch {
-            gitLed.className = 'led led-red';
-        }
+        } catch { gitLed.className = 'led led-red'; }
     }
     ghToken.addEventListener('input', checkGitHubAuth);
     ghUser.addEventListener('input', checkGitHubAuth);
     checkGitHubAuth();
 
-    // File upload handler
+    // File handling
     function handleFile(file) {
         if (!file || !file.name.match(/\.html?\$/i)) {
             log('⚠️ Please select a valid .html file', true);
@@ -429,20 +369,10 @@ jobs:
         reader.onerror = () => log('❌ Failed to read file', true);
         reader.readAsText(file);
     }
-
     uploadArea.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
-    });
-
-    // Drag & drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = '#2ea043';
-    });
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.style.borderColor = '#3d444d';
-    });
+    fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]); });
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = '#2ea043'; });
+    uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = '#3d444d'; });
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.style.borderColor = '#3d444d';
@@ -450,12 +380,8 @@ jobs:
         if (file && file.name.match(/\.html?\$/i)) {
             handleFile(file);
             fileInput.files = e.dataTransfer.files;
-        } else {
-            log('❌ Please drop an HTML file', true);
-        }
+        } else { log('❌ Please drop an HTML file', true); }
     });
-
-    // Monitor manual HTML edits
     htmlCodeArea.addEventListener('input', () => {
         currentHtml = htmlCodeArea.value;
         if (currentHtml.trim()) fileNameSpan.textContent = 'Custom HTML entered';
@@ -468,14 +394,14 @@ jobs:
         if (isError) console.error(msg);
         else console.log(msg);
     }
+    function clearLog() { logOutput.textContent = ''; }
 
-    function clearLog() {
-        logOutput.textContent = '';
-    }
-
-    // Generate full YAML (working Android WebView app)
+    // Generate YAML (robust escaping)
     function generateYAML(htmlContent, appName, packageName) {
-        const safeHtml = htmlContent.replace(/\`/g, '\\\`').replace(/\\$/g, '\\\$');
+        // Escape potential heredoc delimiter inside HTML
+        const safeHtml = htmlContent.replace(/HTML_CONTENT_EOF_ESCAPED/g, 'HTML_CONTENT_EOF_ESCAPED_ESCAPED')
+                                    .replace(/\`/g, '\\\`')
+                                    .replace(/\\$/g, '\\\$');
         return \`name: WebView APK Builder
 
 on:
@@ -504,9 +430,9 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          cat <<'HTML_CONTENT_EOF' > app/src/main/assets/index.html
+          cat <<'HTML_CONTENT_EOF_ESCAPED' > app/src/main/assets/index.html
 \${safeHtml}
-HTML_CONTENT_EOF
+HTML_CONTENT_EOF_ESCAPED
 
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -614,6 +540,37 @@ EOF
 \`;
     }
 
+    // Show preview
+    function showPreview() {
+        if (!currentHtml) {
+            log('⚠️ No HTML content. Please upload or paste HTML first.', true);
+            return;
+        }
+        let appName = appNameInput.value.trim();
+        let packageName = pkgInput.value.trim();
+        if (!appName) {
+            const match = currentHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
+            appName = match ? match[1].trim() : 'WebApp';
+            if (appName.length > 30) appName = appName.slice(0,30);
+        }
+        if (!packageName) {
+            const base = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            packageName = base ? \`com.webview.\${base}\` : 'com.webview.app';
+        }
+        const yaml = generateYAML(currentHtml, appName, packageName);
+        yamlPreview.textContent = yaml;
+        previewPanel.style.display = 'block';
+    }
+
+    copyPreviewBtn.addEventListener('click', () => {
+        if (yamlPreview.textContent) {
+            navigator.clipboard.writeText(yamlPreview.textContent).then(() => {
+                log('📋 YAML preview copied to clipboard.', false);
+            }).catch(() => log('❌ Could not copy.', true));
+        }
+    });
+
+    // Push to GitHub
     async function pushToGitHub() {
         const owner = ghUser.value.trim();
         const repo = ghRepo.value.trim();
@@ -631,11 +588,10 @@ EOF
             return;
         }
         if (!html || html.trim() === '') {
-            log('❌ No HTML content provided. Upload a file or paste code.', true);
+            log('❌ No HTML content provided.', true);
             return;
         }
 
-        // Auto‑generate app name from HTML title if empty
         if (!appName) {
             const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
             appName = match ? match[1].trim() : 'WebApp';
@@ -654,9 +610,7 @@ EOF
         let sha = '';
 
         try {
-            const getRes = await fetch(apiUrl, {
-                headers: { 'Authorization': \`token \${token}\` }
-            });
+            const getRes = await fetch(apiUrl, { headers: { 'Authorization': \`token \${token}\` } });
             if (getRes.ok) {
                 const fileData = await getRes.json();
                 sha = fileData.sha;
@@ -679,10 +633,7 @@ EOF
         try {
             const putRes = await fetch(apiUrl, {
                 method: 'PUT',
-                headers: {
-                    'Authorization': \`token \${token}\`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': \`token \${token}\`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: \`Update WebView APK workflow for "\${appName}"\`,
                     content: base64Content,
@@ -690,11 +641,10 @@ EOF
                 })
             });
             if (putRes.ok) {
-                const result = await putRes.json();
                 log(\`✅ Success! Workflow pushed/updated.\`);
                 log(\`🔗 View your repo: https://github.com/\${owner}/\${repo}\`);
-                log(\`⚙️ Go to Actions tab to watch the build: https://github.com/\${owner}/\${repo}/actions\`);
-                log(\`⏳ The build will start automatically (if the default branch is "main").\`);
+                log(\`⚙️ Actions: https://github.com/\${owner}/\${repo}/actions\`);
+                log(\`⏳ Build will start automatically if default branch is "main".\`);
             } else {
                 const err = await putRes.json();
                 throw new Error(\`GitHub API: \${err.message}\`);
@@ -704,13 +654,12 @@ EOF
         }
     }
 
-    // Event listeners
     pushBtn.addEventListener('click', () => {
         clearLog();
         log(\`🚀 Starting push to GitHub...\`);
         pushToGitHub();
     });
-
+    previewBtn.addEventListener('click', showPreview);
     saveSettingsBtn.addEventListener('click', saveSettings);
     clearSettingsBtn.addEventListener('click', clearSettings);
 
@@ -725,9 +674,8 @@ EOF
         });
     });
 
-    // Load settings on startup
+    // Load settings
     loadSettings();
-    // Ensure currentHtml is synced with textarea after load
     if (htmlCodeArea.value) {
         currentHtml = htmlCodeArea.value;
         if (currentHtml.trim()) fileNameSpan.textContent = 'Restored from storage';
@@ -747,7 +695,7 @@ EOF
 
           cat <<'EOF' > app/src/main/AndroidManifest.xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.faisal.clock">
+    package="Com.faisal.clock">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="clock"
@@ -762,8 +710,8 @@ EOF
 </manifest>
 EOF
 
-          cat <<'EOF' > app/src/main/java/com/faisal/clock/MainActivity.java
-package com.faisal.clock;
+          cat <<'EOF' > app/src/main/java/Com/faisal/clock/MainActivity.java
+package Com.faisal.clock;
 import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.WebView;
@@ -801,12 +749,12 @@ EOF
           cat <<'EOF' > app/build.gradle
 apply plugin: 'com.android.application'
 android {
-    namespace 'com.faisal.clock'
+    namespace 'Com.faisal.clock'
     compileSdk 33
     buildToolsVersion "33.0.1"
 
     defaultConfig {
-        applicationId "com.faisal.clock"
+        applicationId "Com.faisal.clock"
         minSdk 21
         targetSdk 33
         versionCode 1
