@@ -1,1 +1,1 @@
-myapp
+com.faisal.myapp
