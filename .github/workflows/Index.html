@@ -64,71 +64,71 @@ jobs:
               cp -r "$GITHUB_WORKSPACE"/* .
             else
               echo "No project files found. Using built-in HTML."
-              # built-in HTML بغیر here-document کے (echo کے ذریعے)
-              echo '<!DOCTYPE html>' > index.html
-              echo '<html lang="ur">' >> index.html
-              echo '<head>' >> index.html
-              echo '    <meta charset="UTF-8">' >> index.html
-              echo '    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">' >> index.html
-              echo '    <title>${{ github.event.inputs.app_name }}</title>' >> index.html
-              echo '    <style>' >> index.html
-              echo '        * { margin:0; padding:0; box-sizing:border-box; }' >> index.html
-              echo '        body {' >> index.html
-              echo '            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' >> index.html
-              echo '            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;' >> index.html
-              echo '            min-height: 100vh;' >> index.html
-              echo '            display: flex;' >> index.html
-              echo '            justify-content: center;' >> index.html
-              echo '            align-items: center;' >> index.html
-              echo '            padding: 20px;' >> index.html
-              echo '        }' >> index.html
-              echo '        .card {' >> index.html
-              echo '            max-width: 500px;' >> index.html
-              echo '            width: 100%;' >> index.html
-              echo '            background: white;' >> index.html
-              echo '            border-radius: 24px;' >> index.html
-              echo '            overflow: hidden;' >> index.html
-              echo '            box-shadow: 0 20px 40px rgba(0,0,0,0.1);' >> index.html
-              echo '        }' >> index.html
-              echo '        .header {' >> index.html
-              echo '            background: linear-gradient(135deg, #4a00e0, #8e2de2);' >> index.html
-              echo '            padding: 30px 20px;' >> index.html
-              echo '            text-align: center;' >> index.html
-              echo '            color: white;' >> index.html
-              echo '        }' >> index.html
-              echo '        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }' >> index.html
-              echo '        .form-container { padding: 24px 20px 32px; }' >> index.html
-              echo '        button {' >> index.html
-              echo '            width: 100%;' >> index.html
-              echo '            padding: 16px;' >> index.html
-              echo '            background: linear-gradient(135deg, #4a00e0, #8e2de2);' >> index.html
-              echo '            border: none;' >> index.html
-              echo '            border-radius: 40px;' >> index.html
-              echo '            color: white;' >> index.html
-              echo '            font-size: 1.1rem;' >> index.html
-              echo '            font-weight: bold;' >> index.html
-              echo '            cursor: pointer;' >> index.html
-              echo '            margin-top: 12px;' >> index.html
-              echo '        }' >> index.html
-              echo '        @media (max-width: 480px) {' >> index.html
-              echo '            .header h1 { font-size: 1.5rem; }' >> index.html
-              echo '            .form-container { padding: 20px 16px 28px; }' >> index.html
-              echo '        }' >> index.html
-              echo '    </style>' >> index.html
-              echo '</head>' >> index.html
-              echo '<body>' >> index.html
-              echo '<div class="card">' >> index.html
-              echo '    <div class="header">' >> index.html
-              echo '        <h1>📱 ${{ github.event.inputs.app_name }}</h1>' >> index.html
-              echo '        <p>پلے اسٹور کے لیے تیار</p>' >> index.html
-              echo '    </div>' >> index.html
-              echo '    <div class="form-container">' >> index.html
-              echo '        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>' >> index.html
-              echo '        <button onclick="alert(\'مبارک ہو! ایپ کامیابی سے چل رہی ہے۔\')">ٹیسٹ کریں</button>' >> index.html
-              echo '    </div>' >> index.html
-              echo '</div>' >> index.html
-              echo '</body>' >> index.html
-              echo '</html>' >> index.html
+              # built-in HTML بغیر here-document کے (printf کا استعمال)
+              printf '<!DOCTYPE html>\n' > index.html
+              printf '<html lang="ur">\n' >> index.html
+              printf '<head>\n' >> index.html
+              printf '    <meta charset="UTF-8">\n' >> index.html
+              printf '    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">\n' >> index.html
+              printf '    <title>%s</title>\n' "${{ github.event.inputs.app_name }}" >> index.html
+              printf '    <style>\n' >> index.html
+              printf '        * { margin:0; padding:0; box-sizing:border-box; }\n' >> index.html
+              printf '        body {\n' >> index.html
+              printf '            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);\n' >> index.html
+              printf '            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;\n' >> index.html
+              printf '            min-height: 100vh;\n' >> index.html
+              printf '            display: flex;\n' >> index.html
+              printf '            justify-content: center;\n' >> index.html
+              printf '            align-items: center;\n' >> index.html
+              printf '            padding: 20px;\n' >> index.html
+              printf '        }\n' >> index.html
+              printf '        .card {\n' >> index.html
+              printf '            max-width: 500px;\n' >> index.html
+              printf '            width: 100%;\n' >> index.html
+              printf '            background: white;\n' >> index.html
+              printf '            border-radius: 24px;\n' >> index.html
+              printf '            overflow: hidden;\n' >> index.html
+              printf '            box-shadow: 0 20px 40px rgba(0,0,0,0.1);\n' >> index.html
+              printf '        }\n' >> index.html
+              printf '        .header {\n' >> index.html
+              printf '            background: linear-gradient(135deg, #4a00e0, #8e2de2);\n' >> index.html
+              printf '            padding: 30px 20px;\n' >> index.html
+              printf '            text-align: center;\n' >> index.html
+              printf '            color: white;\n' >> index.html
+              printf '        }\n' >> index.html
+              printf '        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }\n' >> index.html
+              printf '        .form-container { padding: 24px 20px 32px; }\n' >> index.html
+              printf '        button {\n' >> index.html
+              printf '            width: 100%;\n' >> index.html
+              printf '            padding: 16px;\n' >> index.html
+              printf '            background: linear-gradient(135deg, #4a00e0, #8e2de2);\n' >> index.html
+              printf '            border: none;\n' >> index.html
+              printf '            border-radius: 40px;\n' >> index.html
+              printf '            color: white;\n' >> index.html
+              printf '            font-size: 1.1rem;\n' >> index.html
+              printf '            font-weight: bold;\n' >> index.html
+              printf '            cursor: pointer;\n' >> index.html
+              printf '            margin-top: 12px;\n' >> index.html
+              printf '        }\n' >> index.html
+              printf '        @media (max-width: 480px) {\n' >> index.html
+              printf '            .header h1 { font-size: 1.5rem; }\n' >> index.html
+              printf '            .form-container { padding: 20px 16px 28px; }\n' >> index.html
+              printf '        }\n' >> index.html
+              printf '    </style>\n' >> index.html
+              printf '</head>\n' >> index.html
+              printf '<body>\n' >> index.html
+              printf '<div class="card">\n' >> index.html
+              printf '    <div class="header">\n' >> index.html
+              printf '        <h1>📱 %s</h1>\n' "${{ github.event.inputs.app_name }}" >> index.html
+              printf '        <p>پلے اسٹور کے لیے تیار</p>\n' >> index.html
+              printf '    </div>\n' >> index.html
+              printf '    <div class="form-container">\n' >> index.html
+              printf '        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>\n' >> index.html
+              printf '        <button onclick="alert(\'مبارک ہو! ایپ کامیابی سے چل رہی ہے۔\')">ٹیسٹ کریں</button>\n' >> index.html
+              printf '    </div>\n' >> index.html
+              printf '</div>\n' >> index.html
+              printf '</body>\n' >> index.html
+              printf '</html>\n' >> index.html
             fi
           fi
 
