@@ -1,793 +1,113 @@
-name: WebView APK Builder
+name: Build Signed AAB for Play Store
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'ایپ کا نام'
+        required: true
+        default: 'System Pro'
+      package_name:
+        description: 'پیکیج کا نام'
+        required: true
+        default: 'com.systempro.app'
+      app_url:
+        description: 'ویب سائٹ کا لنک (اگر ہو، ورنہ خالی چھوڑ دیں)'
+        required: false
+        default: ''
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Cordova
+        run: npm install -g cordova
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
-
-      - name: Create Android App Structure
-        run: |
-          mkdir -p app/src/main/java/Com/faisal/clock
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-
-          cat <<'HTML_CONTENT_EOF_MARKER' > app/src/main/assets/index.html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>System Pro Auto Push Studio (Fixed YAML)</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            background: #0a0c10;
-            font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 1rem;
-            color: #e6edf3;
-        }
-        .container { max-width: 1100px; margin: 0 auto; }
-        .card {
-            background: #161b22;
-            border-radius: 28px;
-            padding: 1.8rem;
-            border: 1px solid #30363d;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
-        }
-        h1 {
-            font-size: 1.8rem;
-            margin: 0 0 0.25rem 0;
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-        }
-        .badge {
-            background: #238636;
-            font-size: 0.7rem;
-            padding: 0.2rem 0.7rem;
-            border-radius: 20px;
-        }
-        .sub {
-            color: #8b949e;
-            margin-bottom: 2rem;
-            font-size: 0.9rem;
-            border-left: 3px solid #238636;
-            padding-left: 0.8rem;
-        }
-        .status-bar {
-            display: flex;
-            gap: 2rem;
-            padding: 0.8rem 1rem;
-            background: #0d1117;
-            border-radius: 40px;
-            margin-bottom: 2rem;
-        }
-        .led-group { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
-        .led {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: #333; transition: 0.2s;
-        }
-        .led-green { background: #2ea043; box-shadow: 0 0 6px #2ea043; }
-        .led-red { background: #f85149; box-shadow: 0 0 6px #f85149; }
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #30363d;
-            margin-bottom: 1.5rem;
-        }
-        .tab {
-            padding: 0.6rem 1.2rem;
-            cursor: pointer;
-            opacity: 0.7;
-            font-weight: 500;
-        }
-        .tab.active {
-            opacity: 1;
-            color: #2ea043;
-            border-bottom: 2px solid #2ea043;
-        }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .form-group { margin-bottom: 1.2rem; }
-        label {
-            display: block;
-            margin-bottom: 0.4rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        input, textarea, select {
-            width: 100%;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 0.7rem 1rem;
-            color: #e6edf3;
-            font-family: monospace;
-        }
-        textarea { resize: vertical; }
-        button {
-            background: #238636;
-            border: none;
-            border-radius: 40px;
-            padding: 0.8rem 1.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            color: white;
-            margin-top: 0.5rem;
-        }
-        button.secondary { background: #3d444d; }
-        button:hover { background: #2ea043; }
-        .log-panel, .preview-panel {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 16px;
-            margin-top: 1.8rem;
-            overflow: hidden;
-        }
-        .log-header, .preview-header {
-            background: #161b22;
-            padding: 0.6rem 1rem;
-            font-weight: 600;
-            border-bottom: 1px solid #30363d;
-            display: flex;
-            justify-content: space-between;
-        }
-        pre {
-            margin: 0;
-            padding: 1rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 0.75rem;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: monospace;
-        }
-        .upload-area {
-            border: 2px dashed #3d444d;
-            border-radius: 20px;
-            padding: 1.5rem;
-            text-align: center;
-            background: #0d1117;
-            margin-bottom: 1rem;
-            cursor: pointer;
-        }
-        .upload-area:hover { border-color: #2ea043; }
-        .file-name { font-size: 0.8rem; color: #8b949e; margin-top: 0.5rem; }
-        .flex-row { display: flex; gap: 1rem; flex-wrap: wrap; }
-        .flex-row > * { flex: 1; }
-        .settings-actions { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 0.5rem; }
-        hr { border-color: #30363d; margin: 1.5rem 0; }
-        @media (max-width: 600px) {
-            .card { padding: 1.2rem; }
-            .flex-row { flex-direction: column; }
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="card">
-        <h1>⚡ System Pro Auto Push Studio <span class="badge">v3.1 (Fixed Syntax)</span></h1>
-        <div class="sub">Upload HTML → Preview YAML → Push to GitHub → Auto‑build APK</div>
-
-        <div class="status-bar">
-            <div class="led-group"><div id="netLed" class="led"></div> Internet</div>
-            <div class="led-group"><div id="gitLed" class="led"></div> GitHub Auth</div>
-        </div>
-
-        <div class="tabs">
-            <div class="tab active" data-tab="config">⚙️ GitHub Settings</div>
-            <div class="tab" data-tab="html">📄 HTML Content</div>
-        </div>
-
-        <div id="config" class="tab-content active">
-            <div class="form-group">
-                <label>👤 GitHub Username / Owner</label>
-                <input type="text" id="ghUser" placeholder="e.g., faisalzamanfaisalzaman786-ux">
-            </div>
-            <div class="form-group">
-                <label>📁 Repository Name</label>
-                <input type="text" id="ghRepo" placeholder="e.g., System-Pro-v2">
-            </div>
-            <div class="form-group">
-                <label>🔑 GitHub Token (classic with <code>repo</code> scope)</label>
-                <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
-            </div>
-            <div class="flex-row">
-                <div class="form-group">
-                    <label>📱 App Name (optional)</label>
-                    <input type="text" id="appName" placeholder="Auto from HTML title">
-                </div>
-                <div class="form-group">
-                    <label>📦 Package ID (optional)</label>
-                    <input type="text" id="pkgID" placeholder="com.example.app">
-                </div>
-            </div>
-            <div class="settings-actions">
-                <button id="saveSettingsBtn" class="secondary" style="background:#2ea043;">💾 Save Settings</button>
-                <button id="clearSettingsBtn" class="secondary">🗑️ Clear Settings</button>
-            </div>
-        </div>
-
-        <div id="html" class="tab-content">
-            <div class="upload-area" id="uploadArea">
-                <div style="font-size:2rem;">📂</div>
-                <div>Drag & drop or click to select HTML file</div>
-                <div class="file-name" id="fileName">No file selected</div>
-                <input type="file" id="htmlFile" accept=".html,.htm" style="display:none;">
-            </div>
-            <div class="form-group">
-                <label>✏️ Or paste your HTML code directly</label>
-                <textarea id="htmlCode" rows="12" placeholder="<html>...</html>"></textarea>
-            </div>
-        </div>
-
-        <div class="flex-row" style="gap:1rem; margin-top:1rem;">
-            <button id="previewBtn" class="secondary" style="flex:1;">🔍 Show YAML Preview</button>
-            <button id="pushBtn" style="flex:1;">🚀 Push Workflow</button>
-        </div>
-
-        <div id="previewPanel" class="preview-panel" style="display:none;">
-            <div class="preview-header">
-                <span>📄 Generated YAML (main.yml)</span>
-                <button id="copyPreviewBtn" class="secondary" style="padding:0.2rem 0.8rem; margin:0;">Copy</button>
-            </div>
-            <pre id="yamlPreview"></pre>
-        </div>
-
-        <div class="log-panel">
-            <div class="log-header">
-                <span>📋 Status & Logs</span>
-                <span id="logTimestamp"></span>
-            </div>
-            <pre id="logOutput">Ready. Fill in your GitHub details and HTML content.</pre>
-        </div>
-        <hr>
-        <div style="font-size:0.7rem; color:#8b949e; text-align:center;">
-            💡 Token needs <strong>repo</strong> and <strong>workflow</strong> scopes.<br>
-            ⚠️ <strong>Fixed YAML syntax:</strong> the HTML content is now safely embedded using a unique heredoc marker.<br>
-            ✅ Use the preview to verify before pushing.
-        </div>
-    </div>
-</div>
-
-<script>
-    // DOM elements
-    const ghUser = document.getElementById('ghUser');
-    const ghRepo = document.getElementById('ghRepo');
-    const ghToken = document.getElementById('ghToken');
-    const appNameInput = document.getElementById('appName');
-    const pkgInput = document.getElementById('pkgID');
-    const htmlCodeArea = document.getElementById('htmlCode');
-    const fileInput = document.getElementById('htmlFile');
-    const uploadArea = document.getElementById('uploadArea');
-    const fileNameSpan = document.getElementById('fileName');
-    const pushBtn = document.getElementById('pushBtn');
-    const previewBtn = document.getElementById('previewBtn');
-    const previewPanel = document.getElementById('previewPanel');
-    const yamlPreview = document.getElementById('yamlPreview');
-    const copyPreviewBtn = document.getElementById('copyPreviewBtn');
-    const logOutput = document.getElementById('logOutput');
-    const logTimestamp = document.getElementById('logTimestamp');
-    const netLed = document.getElementById('netLed');
-    const gitLed = document.getElementById('gitLed');
-    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-    const clearSettingsBtn = document.getElementById('clearSettingsBtn');
-
-    let currentHtml = null;
-
-    // ========== LOCALSTORAGE ==========
-    function loadSettings() {
-        const saved = localStorage.getItem('autoPushStudio');
-        if (saved) {
-            try {
-                const data = JSON.parse(saved);
-                ghUser.value = data.ghUser || '';
-                ghRepo.value = data.ghRepo || '';
-                ghToken.value = data.ghToken || '';
-                appNameInput.value = data.appName || '';
-                pkgInput.value = data.pkgID || '';
-                if (data.htmlContent) {
-                    currentHtml = data.htmlContent;
-                    htmlCodeArea.value = currentHtml;
-                    fileNameSpan.textContent = 'Restored from storage';
-                }
-                log('📀 Settings loaded from browser storage.', false);
-            } catch(e) { console.warn(e); }
-        }
-    }
-    function saveSettings() {
-        const data = {
-            ghUser: ghUser.value,
-            ghRepo: ghRepo.value,
-            ghToken: ghToken.value,
-            appName: appNameInput.value,
-            pkgID: pkgInput.value,
-            htmlContent: currentHtml || ''
-        };
-        localStorage.setItem('autoPushStudio', JSON.stringify(data));
-        log('💾 Settings saved.', false);
-    }
-    function clearSettings() {
-        localStorage.removeItem('autoPushStudio');
-        ghUser.value = '';
-        ghRepo.value = '';
-        ghToken.value = '';
-        appNameInput.value = '';
-        pkgInput.value = '';
-        htmlCodeArea.value = '';
-        currentHtml = null;
-        fileNameSpan.textContent = 'No file selected';
-        log('🗑️ All settings cleared.', false);
-    }
-
-    // Internet & Auth
-    function updateNetLed() { netLed.className = navigator.onLine ? 'led led-green' : 'led led-red'; }
-    window.addEventListener('online', updateNetLed);
-    window.addEventListener('offline', updateNetLed);
-    updateNetLed();
-
-    async function checkGitHubAuth() {
-        const token = ghToken.value.trim();
-        if (!token) { gitLed.className = 'led led-red'; return; }
-        try {
-            const res = await fetch('https://api.github.com/user', { headers: { 'Authorization': \`token \${token}\` } });
-            gitLed.className = res.ok ? 'led led-green' : 'led led-red';
-        } catch { gitLed.className = 'led led-red'; }
-    }
-    ghToken.addEventListener('input', checkGitHubAuth);
-    ghUser.addEventListener('input', checkGitHubAuth);
-    checkGitHubAuth();
-
-    // File handling
-    function handleFile(file) {
-        if (!file || !file.name.match(/\.html?\$/i)) {
-            log('⚠️ Please select a valid .html file', true);
-            return;
-        }
-        fileNameSpan.textContent = file.name;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            currentHtml = e.target.result;
-            htmlCodeArea.value = currentHtml;
-            log(\`✅ Loaded HTML from \${file.name} (\${currentHtml.length} bytes)\`);
-        };
-        reader.onerror = () => log('❌ Failed to read file', true);
-        reader.readAsText(file);
-    }
-    uploadArea.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]); });
-    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = '#2ea043'; });
-    uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = '#3d444d'; });
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = '#3d444d';
-        const file = e.dataTransfer.files[0];
-        if (file && file.name.match(/\.html?\$/i)) {
-            handleFile(file);
-            fileInput.files = e.dataTransfer.files;
-        } else { log('❌ Please drop an HTML file', true); }
-    });
-    htmlCodeArea.addEventListener('input', () => {
-        currentHtml = htmlCodeArea.value;
-        if (currentHtml.trim()) fileNameSpan.textContent = 'Custom HTML entered';
-    });
-
-    function log(msg, isError = false) {
-        const time = new Date().toLocaleTimeString();
-        logTimestamp.textContent = time;
-        logOutput.textContent += (logOutput.textContent ? '\n' : '') + \`[\${time}] \${msg}\`;
-        if (isError) console.error(msg);
-        else console.log(msg);
-    }
-    function clearLog() { logOutput.textContent = ''; }
-
-    // Generate YAML with safe heredoc
-    function generateYAML(htmlContent, appName, packageName) {
-        // Use a delimiter that is extremely unlikely to appear in normal HTML
-        const HEREDOC_DELIM = 'HTML_CONTENT_EOF_MARKER_ESCAPED';
-        // Escape any occurrence of that delimiter inside the HTML
-        const safeHtml = htmlContent.replace(new RegExp(HEREDOC_DELIM, 'g'), 'HTML_CONTENT_EOF_MARKER_ESCAPED_ESCAPED')
-                                    .replace(/\`/g, '\\\`')
-                                    .replace(/\\$/g, '\\\$');
-        return \`name: WebView APK Builder
-
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
           java-version: '17'
-          distribution: 'temurin'
 
-      - name: Create Android App Structure
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Cordova project
         run: |
-          mkdir -p app/src/main/java/\${packageName.replace(/\./g, '/')}
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          cordova create app "${{ github.event.inputs.package_name }}" "${{ github.event.inputs.app_name }}"
+          cd app
+          cordova platform add android
 
-          cat <<'\${HEREDOC_DELIM}' > app/src/main/assets/index.html
-\${safeHtml}
-\${HEREDOC_DELIM}
-
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-<?xml version="1.0" encoding="utf-8"?>
-<WebView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/webview"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent" />
-EOF
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="\${packageName}">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <application
-        android:label="\${appName}"
-        android:usesCleartextTraffic="true">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
-
-          cat <<'EOF' > app/src/main/java/\${packageName.replace(/\./g, '/')}/MainActivity.java
-package \${packageName};
-import android.app.Activity;
-import android.os.Bundle;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-public class MainActivity extends Activity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        WebView webView = findViewById(R.id.webview);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl("file:///android_asset/index.html");
-    }
-}
-EOF
-
-          cat <<'EOF' > app/src/main/res/values/strings.xml
-<resources>
-    <string name="app_name">\${appName}</string>
-</resources>
-EOF
-
-      - name: Create Gradle Build Scripts
+      - name: Prepare web content (Picking from Workflows)
         run: |
-          echo "include ':app'" > settings.gradle
-          cat <<'EOF' > build.gradle
-buildscript {
-    repositories { google(); mavenCentral() }
-    dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-}
-allprojects { repositories { google(); mavenCentral() } }
-EOF
+          cat > prepare_content.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          TARGET_DIR="app/www"
+          rm -rf "$TARGET_DIR"/*
 
-          cat <<'EOF' > app/build.gradle
-apply plugin: 'com.android.application'
-android {
-    namespace '\${packageName}'
-    compileSdk 33
-    buildToolsVersion "33.0.1"
+          # 1. اگر صارف نے URL دیا ہو تو اسے استعمال کریں
+          if [ -n "$1" ]; then
+            echo "Downloading from URL: $1"
+            wget -r -np -nH --cut-dirs=1 -P "$TARGET_DIR" "$1"
+          
+          # 2. اگر ورک فلو فولڈر میں Index.html موجود ہو (جیسا کہ آپ کی تصویر میں ہے)
+          elif [ -f ".github/workflows/Index.html" ]; then
+            echo "Index.html found in workflows folder. Copying..."
+            cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
+            
+            # اگر وہاں کوئی CSS یا JS فائلز بھی ہوں تو وہ بھی کاپی ہو جائیں گی
+            cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
+            cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
+          
+          # 3. اگر کچھ نہ ملے تو یہ ڈیفالٹ میسج دکھائے
+          else
+            echo "No file found. Creating fallback HTML."
+            echo "<html><body><h1 style='text-align:center;'>System Pro Ready</h1></body></html>" > "$TARGET_DIR/index.html"
+          fi
+          EOF
+          chmod +x prepare_content.sh
+          ./prepare_content.sh "${{ github.event.inputs.app_url }}"
 
-    defaultConfig {
-        applicationId "\${packageName}"
-        minSdk 21
-        targetSdk 33
-        versionCode 1
-        versionName "1.0"
-    }
+      - name: Configure AndroidManifest
+        run: |
+          cd app/platforms/android/app/src/main
+          sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
 
-    buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-        }
-    }
-}
-EOF
+      - name: Build release AAB
+        run: |
+          cd app
+          cordova build android --release -- --packageType=bundle
 
-      - name: Setup Gradle 8.2
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
+      - name: Sign AAB
+        run: |
+          # سائننگ کا عمل یہاں جاری رہے گا جیسا کہ پہلے تھا
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+            jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+              -keystore keystore.jks \
+              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+              -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
+              app/platforms/android/app/build/outputs/bundle/release/app-release.aab \
+              "${{ secrets.KEY_ALIAS }}"
+          else
+            echo "No secrets found. Skipping signing."
+          fi
 
-      - name: Clean Previous Build
-        run: gradle clean
-
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug
-
-      - name: Upload APK
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: WebView-App-APK
-          path: app/build/outputs/apk/debug/*.apk
-\`;
-    }
-
-    // Show preview
-    function showPreview() {
-        if (!currentHtml) {
-            log('⚠️ No HTML content. Please upload or paste HTML first.', true);
-            return;
-        }
-        let appName = appNameInput.value.trim();
-        let packageName = pkgInput.value.trim();
-        if (!appName) {
-            const match = currentHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
-            appName = match ? match[1].trim() : 'WebApp';
-            if (appName.length > 30) appName = appName.slice(0,30);
-        }
-        if (!packageName) {
-            const base = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            packageName = base ? \`com.webview.\${base}\` : 'com.webview.app';
-        }
-        const yaml = generateYAML(currentHtml, appName, packageName);
-        yamlPreview.textContent = yaml;
-        previewPanel.style.display = 'block';
-    }
-
-    copyPreviewBtn.addEventListener('click', () => {
-        if (yamlPreview.textContent) {
-            navigator.clipboard.writeText(yamlPreview.textContent).then(() => {
-                log('📋 YAML preview copied to clipboard.', false);
-            }).catch(() => log('❌ Could not copy.', true));
-        }
-    });
-
-    // Push to GitHub
-    async function pushToGitHub() {
-        const owner = ghUser.value.trim();
-        const repo = ghRepo.value.trim();
-        const token = ghToken.value.trim();
-        let appName = appNameInput.value.trim();
-        let packageName = pkgInput.value.trim();
-        const html = currentHtml;
-
-        if (!owner || !repo) {
-            log('❌ GitHub username and repository name are required.', true);
-            return;
-        }
-        if (!token) {
-            log('❌ GitHub token is required.', true);
-            return;
-        }
-        if (!html || html.trim() === '') {
-            log('❌ No HTML content provided.', true);
-            return;
-        }
-
-        if (!appName) {
-            const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-            appName = match ? match[1].trim() : 'WebApp';
-            if (appName.length > 30) appName = appName.slice(0,30);
-            log(\`ℹ️ App name auto‑set to: \${appName}\`);
-        }
-        if (!packageName) {
-            const base = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            packageName = base ? \`com.webview.\${base}\` : 'com.webview.app';
-            log(\`ℹ️ Package auto‑set to: \${packageName}\`);
-        }
-
-        const yaml = generateYAML(html, appName, packageName);
-        const path = '.github/workflows/main.yml';
-        const apiUrl = \`https://api.github.com/repos/\${owner}/\${repo}/contents/\${path}\`;
-        let sha = '';
-
-        try {
-            const getRes = await fetch(apiUrl, { headers: { 'Authorization': \`token \${token}\` } });
-            if (getRes.ok) {
-                const fileData = await getRes.json();
-                sha = fileData.sha;
-                log(\`📄 Existing workflow found (SHA: \${sha.substring(0,7)}), will update.\`);
-            } else if (getRes.status === 404) {
-                log(\`📁 Creating new workflow file.\`);
-            } else {
-                const err = await getRes.json();
-                throw new Error(\`Cannot access repo: \${err.message}\`);
-            }
-        } catch (err) {
-            log(\`❌ Error checking repository: \${err.message}\`, true);
-            return;
-        }
-
-        const encoder = new TextEncoder();
-        const data = encoder.encode(yaml);
-        const base64Content = btoa(String.fromCharCode(...data));
-
-        try {
-            const putRes = await fetch(apiUrl, {
-                method: 'PUT',
-                headers: { 'Authorization': \`token \${token}\`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: \`Update WebView APK workflow for "\${appName}"\`,
-                    content: base64Content,
-                    sha: sha || undefined
-                })
-            });
-            if (putRes.ok) {
-                log(\`✅ Success! Workflow pushed/updated.\`);
-                log(\`🔗 View your repo: https://github.com/\${owner}/\${repo}\`);
-                log(\`⚙️ Actions: https://github.com/\${owner}/\${repo}/actions\`);
-                log(\`⏳ Build will start automatically if default branch is "main".\`);
-            } else {
-                const err = await putRes.json();
-                throw new Error(\`GitHub API: \${err.message}\`);
-            }
-        } catch (err) {
-            log(\`❌ Push failed: \${err.message}\`, true);
-        }
-    }
-
-    pushBtn.addEventListener('click', () => {
-        clearLog();
-        log(\`🚀 Starting push to GitHub...\`);
-        pushToGitHub();
-    });
-    previewBtn.addEventListener('click', showPreview);
-    saveSettingsBtn.addEventListener('click', saveSettings);
-    clearSettingsBtn.addEventListener('click', clearSettings);
-
-    // Tab switching
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            const targetId = tab.getAttribute('data-tab');
-            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-            document.getElementById(targetId).classList.add('active');
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-        });
-    });
-
-    // Load settings
-    loadSettings();
-    if (htmlCodeArea.value) {
-        currentHtml = htmlCodeArea.value;
-        if (currentHtml.trim()) fileNameSpan.textContent = 'Restored from storage';
-    }
-</script>
-</body>
-</html>
-HTML_CONTENT_EOF_MARKER
-
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-<?xml version="1.0" encoding="utf-8"?>
-<WebView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/webview"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent" />
-EOF
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="Com.faisal.clock">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <application
-        android:label="clock"
-        android:usesCleartextTraffic="true">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
-
-          cat <<'EOF' > app/src/main/java/Com/faisal/clock/MainActivity.java
-package Com.faisal.clock;
-import android.app.Activity;
-import android.os.Bundle;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-public class MainActivity extends Activity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        WebView webView = findViewById(R.id.webview);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl("file:///android_asset/index.html");
-    }
-}
-EOF
-
-          cat <<'EOF' > app/src/main/res/values/strings.xml
-<resources>
-    <string name="app_name">clock</string>
-</resources>
-EOF
-
-      - name: Create Gradle Build Scripts
-        run: |
-          echo "include ':app'" > settings.gradle
-          cat <<'EOF' > build.gradle
-buildscript {
-    repositories { google(); mavenCentral() }
-    dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-}
-allprojects { repositories { google(); mavenCentral() } }
-EOF
-
-          cat <<'EOF' > app/build.gradle
-apply plugin: 'com.android.application'
-android {
-    namespace 'Com.faisal.clock'
-    compileSdk 33
-    buildToolsVersion "33.0.1"
-
-    defaultConfig {
-        applicationId "Com.faisal.clock"
-        minSdk 21
-        targetSdk 33
-        versionCode 1
-        versionName "1.0"
-    }
-
-    buildTypes {
-        debug {
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-        }
-    }
-}
-EOF
-
-      - name: Setup Gradle 8.2
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
-
-      - name: Clean Previous Build
-        run: gradle clean
-
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: WebView-App-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: system-pro-v2-aab
+          path: app/platforms/android/app/build/outputs/bundle/release/app-release.aab
