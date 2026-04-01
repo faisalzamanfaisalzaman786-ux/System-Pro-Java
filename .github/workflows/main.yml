@@ -1,4 +1,4 @@
-name: Build System Pro (Total Crash Fix)
+name: Build System Pro (No-Crash Edition)
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Create Project and Add Platform
+      - name: Create Project and Configure
         run: |
           APP_NAME="${{ github.event.inputs.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.inputs.package_name || 'com.systempro.app' }}"
@@ -48,19 +48,17 @@ jobs:
           cd app
           cordova platform add android
           
-          # کریش سے بچنے کے لیے ضروری پلگ انز
-          cordova plugin add cordova-plugin-androidx-adapter
-          
-          # Config.xml میں سیکیورٹی سیٹنگز
+          # کریش روکنے کے لیے جدید اینڈرائیڈ ترتیبات (Scheme Fix)
+          # یہ اینڈرائیڈ کو بتاتا ہے کہ فائلوں کو 'app://localhost' کے طور پر لوڈ کرے
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
-          # تمام ڈومینز کو رسائی دینا
-          sed -i '/<\/widget>/i \    <access origin="*" />\n    <allow-intent href="*" />\n    <allow-navigation href="*" />' config.xml
+          
+          # سیکیورٹی اور نیویگیشن رولز کا اضافہ
+          sed -i '/<\/widget>/i \    <preference name="Scheme" value="app" />\n    <preference name="Hostname" value="localhost" />\n    <access origin="*" />\n    <allow-navigation href="*" />\n    <allow-intent href="*" />' config.xml
 
-      - name: Fix Web Content & Icon
+      - name: Handle Icon & Web Assets
         run: |
           TARGET_DIR="app/www"
-          # آئیکن ہینڈل کرنا
           RAW_DATA="${{ github.event.inputs.icon_base64 }}"
           if [ -n "$RAW_DATA" ]; then
             CLEAN_DATA=$(echo "$RAW_DATA" | sed 's/^data:image\/[^;]*;base64,//')
@@ -68,20 +66,20 @@ jobs:
             sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' app/config.xml
           fi
           
-          # اپنی ویب فائلیں کاپی کرنا
+          # اپنی انڈیکس فائل کو محفوظ کرنا
           if [ -f ".github/workflows/Index.html" ]; then
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
             cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
             cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           fi
 
-      - name: Final Android Security Patch
+      - name: Android Manifest Patch
         run: |
+          # کریش سے بچاؤ کے لیے ہارڈ ویئر ایکسلریشن اور نیٹ ورک اجازت
           FILE="app/platforms/android/app/src/main/AndroidManifest.xml"
-          # نیٹ ورک اور کریش پروٹیکشن
-          sed -i '/<application / s|>| android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:requestLegacyExternalStorage="true">|' $FILE
+          sed -i '/<application / s|>| android:usesCleartextTraffic="true" android:hardwareAccelerated="true">|' $FILE
 
-      - name: Build and Sign Final APK
+      - name: Build and Sign APK
         run: |
           cd app
           cordova build android --release -- --packageType=apk
@@ -90,13 +88,13 @@ jobs:
           FINAL_APK="../SystemPro-Final.apk"
           BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
           
-          # Zipalign + Signing
+          # Zipalign اور نئی سائننگ
           $BUILD_TOOLS/zipalign -f -v 4 "$UNSIGNED_APK" aligned.apk
-          keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SystemPro"
-          $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" aligned.apk
+          keytool -genkey -v -keystore final.keystore -alias appkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SystemPro"
+          $BUILD_TOOLS/apksigner sign --ks final.keystore --ks-pass pass:123456 --out "$FINAL_APK" aligned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: "System-Pro-Crash-Fixed"
+          name: "SystemPro-NoCrash"
           path: SystemPro-Final.apk
