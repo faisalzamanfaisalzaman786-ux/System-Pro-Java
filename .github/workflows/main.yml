@@ -1,4 +1,4 @@
-name: Build System Pro (Crash Fixed)
+name: Build System Pro (Total Crash Fix)
 
 on:
   push:
@@ -26,6 +26,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,73 +40,63 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Create Cordova project
+      - name: Create Project and Add Platform
         run: |
           APP_NAME="${{ github.event.inputs.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.inputs.package_name || 'com.systempro.app' }}"
           cordova create app "$PKG_NAME" "$APP_NAME"
           cd app
           cordova platform add android
-          # Config.xml کی بنیادی ترتیبات
+          
+          # کریش سے بچنے کے لیے ضروری پلگ انز
+          cordova plugin add cordova-plugin-androidx-adapter
+          
+          # Config.xml میں سیکیورٹی سیٹنگز
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
+          # تمام ڈومینز کو رسائی دینا
+          sed -i '/<\/widget>/i \    <access origin="*" />\n    <allow-intent href="*" />\n    <allow-navigation href="*" />' config.xml
 
-      - name: Handle Custom Icon
+      - name: Fix Web Content & Icon
         run: |
+          TARGET_DIR="app/www"
+          # آئیکن ہینڈل کرنا
           RAW_DATA="${{ github.event.inputs.icon_base64 }}"
           if [ -n "$RAW_DATA" ]; then
             CLEAN_DATA=$(echo "$RAW_DATA" | sed 's/^data:image\/[^;]*;base64,//')
-            echo "$CLEAN_DATA" | base64 -d > app/www/icon.png
-            cd app
-            sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
+            echo "$CLEAN_DATA" | base64 -d > "$TARGET_DIR/icon.png"
+            sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' app/config.xml
           fi
-
-      - name: Prepare Web Content (Anti-Crash Fix)
-        run: |
-          TARGET_DIR="app/www"
-          # صرف انڈیکس فائل کو تبدیل کریں، کورڈووا کی اپنی ضروری فائلوں کو نہ چھیڑیں
+          
+          # اپنی ویب فائلیں کاپی کرنا
           if [ -f ".github/workflows/Index.html" ]; then
-            # اپنی انڈیکس فائل کاپی کریں لیکن اس بات کو یقینی بنائیں کہ وہ لوکل فائلوں کو سپورٹ کرے
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
-            # سی ایس ایس اور جے ایس فائلیں اگر موجود ہوں
             cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
             cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           fi
 
-      - name: Configure AndroidManifest & Network Security
+      - name: Final Android Security Patch
         run: |
-          cd app/platforms/android/app/src/main
-          # نیٹ ورک ٹریفک اور کریش سے بچاؤ کی سیٹنگز
-          sed -i '/<application / s|>| android:usesCleartextTraffic="true" android:hardwareAccelerated="true">|' AndroidManifest.xml
+          FILE="app/platforms/android/app/src/main/AndroidManifest.xml"
+          # نیٹ ورک اور کریش پروٹیکشن
+          sed -i '/<application / s|>| android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:requestLegacyExternalStorage="true">|' $FILE
 
-      - name: Build and Sign APK
+      - name: Build and Sign Final APK
         run: |
           cd app
           cordova build android --release -- --packageType=apk
           
           UNSIGNED_APK="platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          ALIGNED_APK="../app-aligned.apk"
           FINAL_APK="../SystemPro-Final.apk"
           BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
           
-          # Zipalign
-          $BUILD_TOOLS/zipalign -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-          
-          # Signing (Debug Key for immediate fix)
-          keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Test"
-          $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" "$ALIGNED_APK"
+          # Zipalign + Signing
+          $BUILD_TOOLS/zipalign -f -v 4 "$UNSIGNED_APK" aligned.apk
+          keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SystemPro"
+          $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" aligned.apk
 
-      - name: Upload Fixed APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-Fixed"
+          name: "System-Pro-Crash-Fixed"
           path: SystemPro-Final.apk
