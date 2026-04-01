@@ -53,20 +53,17 @@ jobs:
         run: |
           cd app/www
           rm -rf *
-          
-          # اگر صارف نے URL دیا ہے تو اسے ڈاؤن لوڈ کریں
+          # اگر URL دیا گیا ہے تو اسے ترجیح دیں
           if [ -n "${{ github.event.inputs.app_url }}" ]; then
             echo "Downloading from URL: ${{ github.event.inputs.app_url }}"
             wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
           else
-            # چیک کریں کہ ریپوزٹری میں index.html موجود ہے؟
+            # ورنہ ریپوزٹری میں موجود فائلوں کو استعمال کریں
             if [ -f "$GITHUB_WORKSPACE/index.html" ]; then
               echo "Using project files from repository"
               cp -r "$GITHUB_WORKSPACE"/* .
-              # اگر assets فولڈر ہو تو وہ بھی کاپی ہو جائے گا
             else
               echo "No project files found. Using built-in HTML."
-              # یہاں ڈیفالٹ HTML بنائیں (پچھلے والا)
               cat > index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ur">
