@@ -64,72 +64,71 @@ jobs:
               cp -r "$GITHUB_WORKSPACE"/* .
             else
               echo "No project files found. Using built-in HTML."
-              cat > index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="ur">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>${{ github.event.inputs.app_name }}</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .card {
-            max-width: 500px;
-            width: 100%;
-            background: white;
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
-        .header {
-            background: linear-gradient(135deg, #4a00e0, #8e2de2);
-            padding: 30px 20px;
-            text-align: center;
-            color: white;
-        }
-        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }
-        .form-container { padding: 24px 20px 32px; }
-        button {
-            width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #4a00e0, #8e2de2);
-            border: none;
-            border-radius: 40px;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 12px;
-        }
-        @media (max-width: 480px) {
-            .header h1 { font-size: 1.5rem; }
-            .form-container { padding: 20px 16px 28px; }
-        }
-    </style>
-</head>
-<body>
-<div class="card">
-    <div class="header">
-        <h1>📱 ${{ github.event.inputs.app_name }}</h1>
-        <p>پلے اسٹور کے لیے تیار</p>
-    </div>
-    <div class="form-container">
-        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>
-        <button onclick="alert('مبارک ہو! ایپ کامیابی سے چل رہی ہے۔')">ٹیسٹ کریں</button>
-    </div>
-</div>
-</body>
-</html>
-EOF
+              # built-in HTML بغیر here-document کے (echo کے ذریعے)
+              echo '<!DOCTYPE html>' > index.html
+              echo '<html lang="ur">' >> index.html
+              echo '<head>' >> index.html
+              echo '    <meta charset="UTF-8">' >> index.html
+              echo '    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">' >> index.html
+              echo '    <title>${{ github.event.inputs.app_name }}</title>' >> index.html
+              echo '    <style>' >> index.html
+              echo '        * { margin:0; padding:0; box-sizing:border-box; }' >> index.html
+              echo '        body {' >> index.html
+              echo '            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' >> index.html
+              echo '            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;' >> index.html
+              echo '            min-height: 100vh;' >> index.html
+              echo '            display: flex;' >> index.html
+              echo '            justify-content: center;' >> index.html
+              echo '            align-items: center;' >> index.html
+              echo '            padding: 20px;' >> index.html
+              echo '        }' >> index.html
+              echo '        .card {' >> index.html
+              echo '            max-width: 500px;' >> index.html
+              echo '            width: 100%;' >> index.html
+              echo '            background: white;' >> index.html
+              echo '            border-radius: 24px;' >> index.html
+              echo '            overflow: hidden;' >> index.html
+              echo '            box-shadow: 0 20px 40px rgba(0,0,0,0.1);' >> index.html
+              echo '        }' >> index.html
+              echo '        .header {' >> index.html
+              echo '            background: linear-gradient(135deg, #4a00e0, #8e2de2);' >> index.html
+              echo '            padding: 30px 20px;' >> index.html
+              echo '            text-align: center;' >> index.html
+              echo '            color: white;' >> index.html
+              echo '        }' >> index.html
+              echo '        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }' >> index.html
+              echo '        .form-container { padding: 24px 20px 32px; }' >> index.html
+              echo '        button {' >> index.html
+              echo '            width: 100%;' >> index.html
+              echo '            padding: 16px;' >> index.html
+              echo '            background: linear-gradient(135deg, #4a00e0, #8e2de2);' >> index.html
+              echo '            border: none;' >> index.html
+              echo '            border-radius: 40px;' >> index.html
+              echo '            color: white;' >> index.html
+              echo '            font-size: 1.1rem;' >> index.html
+              echo '            font-weight: bold;' >> index.html
+              echo '            cursor: pointer;' >> index.html
+              echo '            margin-top: 12px;' >> index.html
+              echo '        }' >> index.html
+              echo '        @media (max-width: 480px) {' >> index.html
+              echo '            .header h1 { font-size: 1.5rem; }' >> index.html
+              echo '            .form-container { padding: 20px 16px 28px; }' >> index.html
+              echo '        }' >> index.html
+              echo '    </style>' >> index.html
+              echo '</head>' >> index.html
+              echo '<body>' >> index.html
+              echo '<div class="card">' >> index.html
+              echo '    <div class="header">' >> index.html
+              echo '        <h1>📱 ${{ github.event.inputs.app_name }}</h1>' >> index.html
+              echo '        <p>پلے اسٹور کے لیے تیار</p>' >> index.html
+              echo '    </div>' >> index.html
+              echo '    <div class="form-container">' >> index.html
+              echo '        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>' >> index.html
+              echo '        <button onclick="alert(\'مبارک ہو! ایپ کامیابی سے چل رہی ہے۔\')">ٹیسٹ کریں</button>' >> index.html
+              echo '    </div>' >> index.html
+              echo '</div>' >> index.html
+              echo '</body>' >> index.html
+              echo '</html>' >> index.html
             fi
           fi
 
