@@ -1,4 +1,4 @@
-name: Build System Pro (Final Fix)
+name: Build System Pro (Crash Fixed)
 
 on:
   push:
@@ -50,6 +50,7 @@ jobs:
           cordova create app "$PKG_NAME" "$APP_NAME"
           cd app
           cordova platform add android
+          # Config.xml کی بنیادی ترتیبات
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
 
@@ -63,41 +64,43 @@ jobs:
             sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
           fi
 
-      - name: Prepare web content
+      - name: Prepare Web Content (Anti-Crash Fix)
         run: |
           TARGET_DIR="app/www"
-          find "$TARGET_DIR" -type f ! -name 'icon.png' -delete
+          # صرف انڈیکس فائل کو تبدیل کریں، کورڈووا کی اپنی ضروری فائلوں کو نہ چھیڑیں
           if [ -f ".github/workflows/Index.html" ]; then
+            # اپنی انڈیکس فائل کاپی کریں لیکن اس بات کو یقینی بنائیں کہ وہ لوکل فائلوں کو سپورٹ کرے
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
+            # سی ایس ایس اور جے ایس فائلیں اگر موجود ہوں
+            cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
+            cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           fi
 
-      - name: Build Release APK
+      - name: Configure AndroidManifest & Network Security
+        run: |
+          cd app/platforms/android/app/src/main
+          # نیٹ ورک ٹریفک اور کریش سے بچاؤ کی سیٹنگز
+          sed -i '/<application / s|>| android:usesCleartextTraffic="true" android:hardwareAccelerated="true">|' AndroidManifest.xml
+
+      - name: Build and Sign APK
         run: |
           cd app
           cordova build android --release -- --packageType=apk
-
-      - name: Sign APK (Strong Fix)
-        run: |
-          UNSIGNED_APK="app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          ALIGNED_APK="app-aligned.apk"
-          FINAL_APK="SystemPro-Final.apk"
+          
+          UNSIGNED_APK="platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED_APK="../app-aligned.apk"
+          FINAL_APK="../SystemPro-Final.apk"
           BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
           
-          # 1. Zipalign
+          # Zipalign
           $BUILD_TOOLS/zipalign -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
           
-          # 2. Key Generation (اگر سیکرٹس نہ ہوں تو)
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Generating temporary key for testing..."
-            keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Test"
-            $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" "$ALIGNED_APK"
-          else
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my.keystore
-            $BUILD_TOOLS/apksigner sign --ks my.keystore --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" --ks-key-alias "${{ secrets.KEY_ALIAS }}" --out "$FINAL_APK" "$ALIGNED_APK"
-          fi
+          # Signing (Debug Key for immediate fix)
+          keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Test"
+          $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" "$ALIGNED_APK"
 
-      - name: Upload APK
+      - name: Upload Fixed APK
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-APK"
+          name: "${{ github.event.inputs.app_name }}-Fixed"
           path: SystemPro-Final.apk
