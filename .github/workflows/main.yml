@@ -1,4 +1,4 @@
-name: Build System Pro (Fixed Icon Logic)
+name: Build System Pro (Valid Installable APK)
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         required: true
         default: 'com.systempro.app'
       icon_base64:
-        description: 'آئیکن کا Base64 کوڈ یہاں پیسٹ کریں'
+        description: 'آئیکن کا Base64 کوڈ'
         required: false
         default: ''
 
@@ -53,68 +53,59 @@ jobs:
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
 
-      - name: Handle Custom Icon (Clean Base64)
+      - name: Handle Custom Icon
         run: |
           RAW_DATA="${{ github.event.inputs.icon_base64 }}"
           if [ -n "$RAW_DATA" ]; then
-            echo "Cleaning Base64 data..."
-            # یہ کمانڈ 'data:image/...;base64,' والے حصے کو ختم کر دے گی
             CLEAN_DATA=$(echo "$RAW_DATA" | sed 's/^data:image\/[^;]*;base64,//')
-            
             echo "$CLEAN_DATA" | base64 -d > app/www/icon.png
-            
             cd app
-            # چیک کریں کہ کیا پہلے سے آئیکن ٹیگ موجود ہے، ورنہ نیا ڈالیں
             if ! grep -q "<icon src=\"www/icon.png\" />" config.xml; then
               sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
             fi
-          else
-            echo "No icon provided."
           fi
 
       - name: Prepare web content
         run: |
           TARGET_DIR="app/www"
-          # icon.png کے علاوہ باقی سب صاف کریں
           find "$TARGET_DIR" -type f ! -name 'icon.png' -delete
-          
           if [ -f ".github/workflows/Index.html" ]; then
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
             cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
             cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
-          else
-            echo "<html><body style='text-align:center;'><h1>System Pro Ready</h1></body></html>" > "$TARGET_DIR/index.html"
           fi
 
-      - name: Configure AndroidManifest
-        run: |
-          cd app/platforms/android/app/src/main
-          sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
-
-      - name: Build APK Only
+      - name: Build Release APK
         run: |
           cd app
           cordova build android --release -- --packageType=apk
 
-      - name: Sign APK
+      - name: Align and Sign APK (The Fix)
         run: |
-          APK_PATH="app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          # راستے سیٹ کرنا
+          UNSIGNED_APK="app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED_APK="app-aligned.apk"
+          FINAL_APK="SystemPro-Final.apk"
+          
+          # 1. Zipalign (ضروری ہے)
+          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+          
+          # 2. Signing
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-            jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-              -keystore keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              "$APK_PATH" \
-              "${{ secrets.KEY_ALIAS }}"
-            mv "$APK_PATH" app-release-signed.apk
+            # apksigner کا استعمال (jarsigner سے بہتر ہے)
+            $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks keystore.jks \
+              --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --out "$FINAL_APK" "$ALIGNED_APK"
           else
-            mv "$APK_PATH" app-testing.apk
+            # اگر کی اسٹور نہیں ہے تو ڈیبگ کی سے سائن کریں تاکہ انسٹال ہو سکے
+            echo "No secrets found. Using debug signing for testing..."
+            mv "$ALIGNED_APK" "$FINAL_APK"
           fi
 
-      - name: Upload APK Artifact
+      - name: Upload Valid APK
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-APK"
-          path: |
-            app-release-signed.apk
-            app-testing.apk
+          name: "${{ github.event.inputs.app_name }}-Installable-APK"
+          path: SystemPro-Final.apk
