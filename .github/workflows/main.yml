@@ -1,4 +1,4 @@
-name: Build System Pro (APK with Custom Icon)
+name: Build System Pro (Fixed Icon Logic)
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         required: true
         default: 'com.systempro.app'
       icon_base64:
-        description: 'آئیکن کا Base64 کوڈ یہاں پیسٹ کریں (اختیاری)'
+        description: 'آئیکن کا Base64 کوڈ یہاں پیسٹ کریں'
         required: false
         default: ''
 
@@ -47,34 +47,35 @@ jobs:
         run: |
           APP_NAME="${{ github.event.inputs.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.inputs.package_name || 'com.systempro.app' }}"
-          
           cordova create app "$PKG_NAME" "$APP_NAME"
           cd app
           cordova platform add android
-          
-          # Config.xml میں نام اور آئی ڈی سیٹ کریں
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
 
-      - name: Handle Custom Icon (Base64)
+      - name: Handle Custom Icon (Clean Base64)
         run: |
-          ICON_DATA="${{ github.event.inputs.icon_base64 }}"
-          if [ -n "$ICON_DATA" ]; then
-            echo "Custom icon found. Converting Base64 to image..."
-            # Base64 کو تصویر میں تبدیل کر کے app/www/icon.png کے طور پر محفوظ کرنا
-            echo "$ICON_DATA" | base64 -d > app/www/icon.png
+          RAW_DATA="${{ github.event.inputs.icon_base64 }}"
+          if [ -n "$RAW_DATA" ]; then
+            echo "Cleaning Base64 data..."
+            # یہ کمانڈ 'data:image/...;base64,' والے حصے کو ختم کر دے گی
+            CLEAN_DATA=$(echo "$RAW_DATA" | sed 's/^data:image\/[^;]*;base64,//')
             
-            # config.xml میں آئیکن کا ٹیگ شامل کرنا
+            echo "$CLEAN_DATA" | base64 -d > app/www/icon.png
+            
             cd app
-            sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
+            # چیک کریں کہ کیا پہلے سے آئیکن ٹیگ موجود ہے، ورنہ نیا ڈالیں
+            if ! grep -q "<icon src=\"www/icon.png\" />" config.xml; then
+              sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
+            fi
           else
-            echo "No custom icon provided. Using default."
+            echo "No icon provided."
           fi
 
       - name: Prepare web content
         run: |
           TARGET_DIR="app/www"
-          # صرف index.html وغیرہ صاف کریں، icon.png کو محفوظ رکھیں
+          # icon.png کے علاوہ باقی سب صاف کریں
           find "$TARGET_DIR" -type f ! -name 'icon.png' -delete
           
           if [ -f ".github/workflows/Index.html" ]; then
