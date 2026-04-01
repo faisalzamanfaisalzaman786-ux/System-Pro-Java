@@ -1,4 +1,4 @@
-name: Build System Pro (Fixed Inputs)
+name: Build System Pro (Only APK)
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
 
       - name: Create Cordova project
         run: |
-          # یہاں ہم چیک کر رہے ہیں کہ اگر ان پٹ خالی ہے تو ڈیفالٹ نام استعمال کریں
+          # ان پٹ چیک کریں، اگر خالی ہو تو ڈیفالٹ استعمال کریں
           APP_NAME="${{ github.event.inputs.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.inputs.package_name || 'com.systempro.app' }}"
           
@@ -49,7 +49,7 @@ jobs:
           cd app
           cordova platform add android
           
-          # Config.xml کو اپ ڈیٹ کریں
+          # Config.xml میں نام اور آئی ڈی سیٹ کریں
           sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
           sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
 
@@ -58,11 +58,12 @@ jobs:
           TARGET_DIR="app/www"
           rm -rf "$TARGET_DIR"/*
           if [ -f ".github/workflows/Index.html" ]; then
+            echo "Copying Index.html from workflows..."
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
             cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
             cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           else
-            echo "<html><body><h1>System Pro Ready</h1></body></html>" > "$TARGET_DIR/index.html"
+            echo "<html><body style='text-align:center;'><h1>System Pro APK Ready</h1></body></html>" > "$TARGET_DIR/index.html"
           fi
 
       - name: Configure AndroidManifest
@@ -70,40 +71,35 @@ jobs:
           cd app/platforms/android/app/src/main
           sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
 
-      - name: Build AAB and APK
+      - name: Build APK Only
         run: |
           cd app
-          # اب یہ کمانڈ ایرر نہیں دے گی
-          cordova build android --release -- --packageType=bundle
+          # صرف اے پی کے بنانا
           cordova build android --release -- --packageType=apk
 
-      - name: Sign and Finalize
+      - name: Sign APK
         run: |
+          APK_PATH="app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
             
             jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
               -keystore keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
               -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              app/platforms/android/app/build/outputs/bundle/release/app-release.aab \
-              "${{ secrets.KEY_ALIAS }}"
-            
-            jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-              -keystore keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk \
+              "$APK_PATH" \
               "${{ secrets.KEY_ALIAS }}"
               
-            mv app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk app-release-signed.apk
+            mv "$APK_PATH" app-release-signed.apk
           else
-            mv app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk app-testing.apk
+            echo "No secrets found. Renaming to testing apk."
+            mv "$APK_PATH" app-testing.apk
           fi
 
-      - name: Upload Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "System-Pro-Builds"
+          name: "System-Pro-APK"
           path: |
-            app/platforms/android/app/build/outputs/bundle/release/app-release.aab
             app-release-signed.apk
             app-testing.apk
