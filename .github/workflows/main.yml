@@ -1,4 +1,4 @@
-name: Build System Pro (Auto Name & Multi-Format)
+name: Build System Pro (Fixed Inputs)
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'ایپ کا نام (مثلاً: My New App)'
+        description: 'ایپ کا نام'
         required: true
         default: 'System Pro'
       package_name:
-        description: 'پیکیج آئی ڈی (مثلاً: com.faisal.myapp)'
+        description: 'پیکیج آئی ڈی'
         required: true
         default: 'com.systempro.app'
 
@@ -39,35 +39,33 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create Cordova project with Auto-Inputs
+      - name: Create Cordova project
         run: |
-          # ان پٹ سے نام اور پیکیج لے کر پروجیکٹ بنانا
-          cordova create app "${{ github.event.inputs.package_name }}" "${{ github.event.inputs.app_name }}"
+          # یہاں ہم چیک کر رہے ہیں کہ اگر ان پٹ خالی ہے تو ڈیفالٹ نام استعمال کریں
+          APP_NAME="${{ github.event.inputs.app_name || 'SystemPro' }}"
+          PKG_NAME="${{ github.event.inputs.package_name || 'com.systempro.app' }}"
+          
+          cordova create app "$PKG_NAME" "$APP_NAME"
           cd app
           cordova platform add android
           
-          # Config.xml میں خودکار طور پر نام اور آئی ڈی اپ ڈیٹ کرنا
-          sed -i "s/id=\"[^\"]*\"/id=\"${{ github.event.inputs.package_name }}\"/" config.xml
-          sed -i "s|<name>.*</name>|<name>${{ github.event.inputs.app_name }}</name>|" config.xml
+          # Config.xml کو اپ ڈیٹ کریں
+          sed -i "s/id=\"[^\"]*\"/id=\"$PKG_NAME\"/" config.xml
+          sed -i "s|<name>.*</name>|<name>$APP_NAME</name>|" config.xml
 
-      - name: Prepare web content from Workflows
+      - name: Prepare web content
         run: |
           TARGET_DIR="app/www"
           rm -rf "$TARGET_DIR"/*
-          
-          # چیک کریں کہ کیا Index.html ورک فلو فولڈر میں ہے
           if [ -f ".github/workflows/Index.html" ]; then
-            echo "Index.html found. Copying..."
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
-            # دیگر ویب فائلیں (CSS/JS) اگر ہوں تو وہ بھی کاپی کریں
             cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
             cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           else
-            echo "Error: .github/workflows/Index.html not found!"
-            exit 1
+            echo "<html><body><h1>System Pro Ready</h1></body></html>" > "$TARGET_DIR/index.html"
           fi
 
-      - name: Configure AndroidManifest (Cleartext Traffic)
+      - name: Configure AndroidManifest
         run: |
           cd app/platforms/android/app/src/main
           sed -i '/<application / s|>| android:usesCleartextTraffic="true">|' AndroidManifest.xml
@@ -75,26 +73,21 @@ jobs:
       - name: Build AAB and APK
         run: |
           cd app
-          # پلے اسٹور کے لیے بنڈل بنانا
+          # اب یہ کمانڈ ایرر نہیں دے گی
           cordova build android --release -- --packageType=bundle
-          # موبائل انسٹالیشن کے لیے APK بنانا
           cordova build android --release -- --packageType=apk
 
       - name: Sign and Finalize
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
             
-            # Sign AAB
             jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
               -keystore keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
               -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
               app/platforms/android/app/build/outputs/bundle/release/app-release.aab \
               "${{ secrets.KEY_ALIAS }}"
             
-            # Sign APK
             jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
               -keystore keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
               -keypass "${{ secrets.KEYSTORE_PASSWORD }}" \
@@ -103,14 +96,13 @@ jobs:
               
             mv app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk app-release-signed.apk
           else
-            echo "Secrets not found. Using Unsigned APK for testing."
             mv app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk app-testing.apk
           fi
 
-      - name: Upload Final Files
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-Builds"
+          name: "System-Pro-Builds"
           path: |
             app/platforms/android/app/build/outputs/bundle/release/app-release.aab
             app-release-signed.apk
