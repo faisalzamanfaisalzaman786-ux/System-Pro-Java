@@ -49,88 +49,97 @@ jobs:
           cd app
           cordova platform add android
 
-      - name: Prepare web content
+      - name: Prepare web content (using a script)
         run: |
+          # Create a helper script to avoid YAML syntax issues
+          cat > prepare_content.sh << 'EOF'
+          #!/bin/bash
+          set -e
           cd app/www
           rm -rf *
-          # اگر URL دیا گیا ہے تو اسے ترجیح دیں
-          if [ -n "${{ github.event.inputs.app_url }}" ]; then
-            echo "Downloading from URL: ${{ github.event.inputs.app_url }}"
-            wget -r -np -nH --cut-dirs=1 -P . "${{ github.event.inputs.app_url }}"
+          # Check for URL input
+          if [ -n "$1" ]; then
+            echo "Downloading from URL: $1"
+            wget -r -np -nH --cut-dirs=1 -P . "$1"
           else
-            # ورنہ ریپوزٹری میں موجود فائلوں کو استعمال کریں
+            # Check if index.html exists in repo root
             if [ -f "$GITHUB_WORKSPACE/index.html" ]; then
               echo "Using project files from repository"
               cp -r "$GITHUB_WORKSPACE"/* .
             else
               echo "No project files found. Using built-in HTML."
-              # built-in HTML بغیر here-document کے (printf کا استعمال)
-              printf '<!DOCTYPE html>\n' > index.html
-              printf '<html lang="ur">\n' >> index.html
-              printf '<head>\n' >> index.html
-              printf '    <meta charset="UTF-8">\n' >> index.html
-              printf '    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">\n' >> index.html
-              printf '    <title>%s</title>\n' "${{ github.event.inputs.app_name }}" >> index.html
-              printf '    <style>\n' >> index.html
-              printf '        * { margin:0; padding:0; box-sizing:border-box; }\n' >> index.html
-              printf '        body {\n' >> index.html
-              printf '            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);\n' >> index.html
-              printf '            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;\n' >> index.html
-              printf '            min-height: 100vh;\n' >> index.html
-              printf '            display: flex;\n' >> index.html
-              printf '            justify-content: center;\n' >> index.html
-              printf '            align-items: center;\n' >> index.html
-              printf '            padding: 20px;\n' >> index.html
-              printf '        }\n' >> index.html
-              printf '        .card {\n' >> index.html
-              printf '            max-width: 500px;\n' >> index.html
-              printf '            width: 100%;\n' >> index.html
-              printf '            background: white;\n' >> index.html
-              printf '            border-radius: 24px;\n' >> index.html
-              printf '            overflow: hidden;\n' >> index.html
-              printf '            box-shadow: 0 20px 40px rgba(0,0,0,0.1);\n' >> index.html
-              printf '        }\n' >> index.html
-              printf '        .header {\n' >> index.html
-              printf '            background: linear-gradient(135deg, #4a00e0, #8e2de2);\n' >> index.html
-              printf '            padding: 30px 20px;\n' >> index.html
-              printf '            text-align: center;\n' >> index.html
-              printf '            color: white;\n' >> index.html
-              printf '        }\n' >> index.html
-              printf '        .header h1 { font-size: 1.8rem; margin-bottom: 8px; }\n' >> index.html
-              printf '        .form-container { padding: 24px 20px 32px; }\n' >> index.html
-              printf '        button {\n' >> index.html
-              printf '            width: 100%;\n' >> index.html
-              printf '            padding: 16px;\n' >> index.html
-              printf '            background: linear-gradient(135deg, #4a00e0, #8e2de2);\n' >> index.html
-              printf '            border: none;\n' >> index.html
-              printf '            border-radius: 40px;\n' >> index.html
-              printf '            color: white;\n' >> index.html
-              printf '            font-size: 1.1rem;\n' >> index.html
-              printf '            font-weight: bold;\n' >> index.html
-              printf '            cursor: pointer;\n' >> index.html
-              printf '            margin-top: 12px;\n' >> index.html
-              printf '        }\n' >> index.html
-              printf '        @media (max-width: 480px) {\n' >> index.html
-              printf '            .header h1 { font-size: 1.5rem; }\n' >> index.html
-              printf '            .form-container { padding: 20px 16px 28px; }\n' >> index.html
-              printf '        }\n' >> index.html
-              printf '    </style>\n' >> index.html
-              printf '</head>\n' >> index.html
-              printf '<body>\n' >> index.html
-              printf '<div class="card">\n' >> index.html
-              printf '    <div class="header">\n' >> index.html
-              printf '        <h1>📱 %s</h1>\n' "${{ github.event.inputs.app_name }}" >> index.html
-              printf '        <p>پلے اسٹور کے لیے تیار</p>\n' >> index.html
-              printf '    </div>\n' >> index.html
-              printf '    <div class="form-container">\n' >> index.html
-              printf '        <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>\n' >> index.html
-              printf '        <button onclick="alert(\'مبارک ہو! ایپ کامیابی سے چل رہی ہے۔\')">ٹیسٹ کریں</button>\n' >> index.html
-              printf '    </div>\n' >> index.html
-              printf '</div>\n' >> index.html
-              printf '</body>\n' >> index.html
-              printf '</html>\n' >> index.html
+              # Create a basic HTML file (you can customize this)
+              cat > index.html << 'INNER_EOF'
+              <!DOCTYPE html>
+              <html lang="ur">
+              <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+                  <title>My Web App</title>
+                  <style>
+                      * { margin:0; padding:0; box-sizing:border-box; }
+                      body {
+                          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                          min-height: 100vh;
+                          display: flex;
+                          justify-content: center;
+                          align-items: center;
+                          padding: 20px;
+                      }
+                      .card {
+                          max-width: 500px;
+                          width: 100%;
+                          background: white;
+                          border-radius: 24px;
+                          overflow: hidden;
+                          box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                      }
+                      .header {
+                          background: linear-gradient(135deg, #4a00e0, #8e2de2);
+                          padding: 30px 20px;
+                          text-align: center;
+                          color: white;
+                      }
+                      .header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+                      .form-container { padding: 24px 20px 32px; }
+                      button {
+                          width: 100%;
+                          padding: 16px;
+                          background: linear-gradient(135deg, #4a00e0, #8e2de2);
+                          border: none;
+                          border-radius: 40px;
+                          color: white;
+                          font-size: 1.1rem;
+                          font-weight: bold;
+                          cursor: pointer;
+                          margin-top: 12px;
+                      }
+                      @media (max-width: 480px) {
+                          .header h1 { font-size: 1.5rem; }
+                          .form-container { padding: 20px 16px 28px; }
+                      }
+                  </style>
+              </head>
+              <body>
+                  <div class="card">
+                      <div class="header">
+                          <h1>📱 My Web App</h1>
+                          <p>پلے اسٹور کے لیے تیار</p>
+                      </div>
+                      <div class="form-container">
+                          <p style="margin-bottom:20px; text-align:center;">یہ ایک نمونہ UI ہے۔ آپ اسے YAML میں تبدیل کر سکتے ہیں۔</p>
+                          <button onclick="alert('مبارک ہو! ایپ کامیابی سے چل رہی ہے۔')">ٹیسٹ کریں</button>
+                      </div>
+                  </div>
+              </body>
+              </html>
+              INNER_EOF
             fi
           fi
+          EOF
+          chmod +x prepare_content.sh
+          ./prepare_content.sh "${{ github.event.inputs.app_url }}"
 
       - name: Configure AndroidManifest for HTTP (if needed)
         run: |
