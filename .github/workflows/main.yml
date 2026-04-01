@@ -1,4 +1,4 @@
-name: Build System Pro (Valid Installable APK)
+name: Build System Pro (Final Fix)
 
 on:
   push:
@@ -60,9 +60,7 @@ jobs:
             CLEAN_DATA=$(echo "$RAW_DATA" | sed 's/^data:image\/[^;]*;base64,//')
             echo "$CLEAN_DATA" | base64 -d > app/www/icon.png
             cd app
-            if ! grep -q "<icon src=\"www/icon.png\" />" config.xml; then
-              sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
-            fi
+            sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' config.xml
           fi
 
       - name: Prepare web content
@@ -71,8 +69,6 @@ jobs:
           find "$TARGET_DIR" -type f ! -name 'icon.png' -delete
           if [ -f ".github/workflows/Index.html" ]; then
             cp ".github/workflows/Index.html" "$TARGET_DIR/index.html"
-            cp .github/workflows/*.css "$TARGET_DIR/" 2>/dev/null || true
-            cp .github/workflows/*.js "$TARGET_DIR/" 2>/dev/null || true
           fi
 
       - name: Build Release APK
@@ -80,32 +76,28 @@ jobs:
           cd app
           cordova build android --release -- --packageType=apk
 
-      - name: Align and Sign APK (The Fix)
+      - name: Sign APK (Strong Fix)
         run: |
-          # راستے سیٹ کرنا
           UNSIGNED_APK="app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk"
           ALIGNED_APK="app-aligned.apk"
           FINAL_APK="SystemPro-Final.apk"
+          BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
           
-          # 1. Zipalign (ضروری ہے)
-          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+          # 1. Zipalign
+          $BUILD_TOOLS/zipalign -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
           
-          # 2. Signing
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-            # apksigner کا استعمال (jarsigner سے بہتر ہے)
-            $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks keystore.jks \
-              --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --out "$FINAL_APK" "$ALIGNED_APK"
+          # 2. Key Generation (اگر سیکرٹس نہ ہوں تو)
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Generating temporary key for testing..."
+            keytool -genkey -v -keystore test.keystore -alias testkey -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Test"
+            $BUILD_TOOLS/apksigner sign --ks test.keystore --ks-pass pass:123456 --out "$FINAL_APK" "$ALIGNED_APK"
           else
-            # اگر کی اسٹور نہیں ہے تو ڈیبگ کی سے سائن کریں تاکہ انسٹال ہو سکے
-            echo "No secrets found. Using debug signing for testing..."
-            mv "$ALIGNED_APK" "$FINAL_APK"
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my.keystore
+            $BUILD_TOOLS/apksigner sign --ks my.keystore --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" --ks-key-alias "${{ secrets.KEY_ALIAS }}" --out "$FINAL_APK" "$ALIGNED_APK"
           fi
 
-      - name: Upload Valid APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-Installable-APK"
+          name: "${{ github.event.inputs.app_name }}-APK"
           path: SystemPro-Final.apk
