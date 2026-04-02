@@ -10,10 +10,10 @@ on:
         description: 'پیکج نیم'
         required: true
       java_code:
-        description: 'Java Code'
+        description: 'MainActivity.java کا کوڈ'
         required: true
       xml_code:
-        description: 'XML Code'
+        description: 'activity_main.xml کا کوڈ'
         required: true
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Deep Clean & Structure
+    - name: 3. Deep Clean & Prep
       run: |
         rm -rf .gradle app/build
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
@@ -37,23 +37,27 @@ jobs:
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-    - name: 4. Secure Injection (No-Fail Logic)
+    - name: 4. Secure Code Writing (JavaScript Engine)
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const pkgPath = "${{ github.event.inputs.pkg_name }}".replace(/\./g, '/');
+          
+          // Java اور XML کوڈ کو بغیر کسی خرابی کے لکھنا
+          fs.writeFileSync(`app/src/main/java/${pkgPath}/MainActivity.java`, process.env.JAVA_CODE);
+          fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, process.env.XML_CODE);
       env:
-        JAVA_DATA: ${{ github.event.inputs.java_code }}
-        XML_DATA: ${{ github.event.inputs.xml_code }}
-      run: |
-        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        
-        # محفوظ طریقے سے کوڈ رائٹنگ
-        echo "$JAVA_DATA" > app/src/main/java/$PKG_PATH/MainActivity.java
-        echo "$XML_DATA" > app/src/main/res/layout/activity_main.xml
+        JAVA_CODE: ${{ github.event.inputs.java_code }}
+        XML_CODE: ${{ github.event.inputs.xml_code }}
 
-        # ریسورس فائلز
+    - name: 5. Generate Resources & Configs
+      run: |
+        # ریسورس فائلز بنانا
         printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: 5. Force Overwrite Configs
-      run: |
+        # build.gradle کنفیگریشن
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -74,6 +78,7 @@ jobs:
         }
         EOF
 
+        # Android Manifest
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -88,12 +93,12 @@ jobs:
         </manifest>
         EOF
 
-    - name: 6. Master Turbo Build
+    - name: 6. Execute Build
       run: |
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon --stacktrace
 
-    - name: 7. Deliver System Pro APK
+    - name: 7. Deliver APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
