@@ -8,7 +8,7 @@ on:
         required: true
         default: 'System Pro App'
       pkg_name:
-        description: 'پیکج نیم'
+        description: 'پیکج نیم (مثلاً com.system.pro)'
         required: true
         default: 'com.systempro.apk'
       java_code:
@@ -31,18 +31,21 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Structure
+    - name: Create Official Android Structure
       run: |
-        PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        mkdir -p app/src/main/java/$PKG_DIR
+        # پیکج نیم کے مطابق ڈائریکٹری بنانا
+        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
+        
+        # تمام ضروری فولڈرز بنانا
+        mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/drawable
+        mkdir -p gradle/wrapper
 
-    - name: Generate Core Files
+    - name: Generate Root Build Files
       run: |
-        echo "android.useAndroidX=true" > gradle.properties
-        echo "include ':app'" > settings.gradle
-        
+        # root build.gradle
         cat << 'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -53,6 +56,15 @@ jobs:
         }
         EOF
 
+        # settings.gradle
+        echo "include ':app'" > settings.gradle
+        
+        # gradle.properties
+        echo "android.useAndroidX=true" > gradle.properties
+
+    - name: Generate App Module Files
+        # app/build.gradle
+      run: |
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -72,29 +84,7 @@ jobs:
         }
         EOF
 
-    - name: Write and Sanitize User Code
-      shell: bash
-      run: |
-        PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        
-        # Java Code لکھنا
-        printf "%s" "${{ github.event.inputs.java_code }}" > app/src/main/java/$PKG_DIR/MainActivity.java
-
-        # XML Code لکھنا (سخت صفائی کے ساتھ)
-        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-        ${{ github.event.inputs.xml_code }}
-        EOF
-        
-        # خودکار ریپیئر: کوٹس اور فارمیٹنگ کی درستی
-        sed -i 's/version=1.0/version="1.0"/g' app/src/main/res/layout/activity_main.xml
-        sed -i 's/encoding=utf-8/encoding="utf-8"/g' app/src/main/res/layout/activity_main.xml
-        # اگر کسی وجہ سے پہلی لائن میں ڈبل کوٹس غائب ہو گئے ہوں
-        sed -i '1s/version=\([^" ]*\)/version="\1"/' app/src/main/res/layout/activity_main.xml
-
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
-
-    - name: Write Manifest
+    - name: Write Android Manifest
       run: |
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
@@ -102,8 +92,11 @@ jobs:
             <application
                 android:allowBackup="true"
                 android:label="@string/app_name"
-                android:theme="@style/Theme.SystemPro">
-                <activity android:name=".MainActivity" android:exported="true">
+                android:supportsRtl="true"
+                android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
@@ -113,13 +106,27 @@ jobs:
         </manifest>
         EOF
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: 8.5
+    - name: Write Java and XML Code
+      shell: bash
+      run: |
+        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
+        
+        # MainActivity.java لکھنا
+        printf "%s" "${{ github.event.inputs.java_code }}" > app/src/main/java/$PKG_PATH/MainActivity.java
+
+        # Layout XML لکھنا
+        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+        ${{ github.event.inputs.xml_code }}
+        EOF
+
+        # Strings.xml
+        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
+
+    - name: Setup Gradle wrapper
+      run: gradle wrapper --gradle-version 8.5
 
     - name: Build APK
-      run: gradle assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
