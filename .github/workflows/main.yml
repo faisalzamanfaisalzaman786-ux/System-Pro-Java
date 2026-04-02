@@ -2,9 +2,6 @@ name: System Pro Build Engine
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -21,15 +18,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant Execute Permission
-        run: chmod +x ./Data/gradlew
+      - name: Locate and Grant Permission
+        run: |
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew file not found anywhere in the repository!"
+            exit 1
+          fi
+          echo "Found gradlew at: $GRADLEW_PATH"
+          chmod +x "$GRADLEW_PATH"
+          echo "GRADLEW_PATH=$GRADLEW_PATH" >> $GITHUB_ENV
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
-        working-directory: ./Data
+        run: |
+          DIR_PATH=$(dirname $GRADLEW_PATH)
+          cd $DIR_PATH
+          ./gradlew assembleDebug
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Build
-          path: Data/app/build/outputs/apk/debug/*.apk
+          path: "**/build/outputs/apk/debug/*.apk"
