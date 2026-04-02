@@ -25,28 +25,53 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Create Professional Folder Structure
+    - name: 3. Clean & Create Folder Structure
       run: |
-        rm -rf app settings.gradle build.gradle gradlew gradle gradle.properties
+        # پرانی فائلیں ہٹائیں لیکن gradlew کو نہیں چھوئیں گے
+        rm -rf app settings.gradle build.gradle gradle.properties
         PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
         mkdir -p "$PKG_PATH"
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
-        echo "✅ فولڈر تیار ہے!"
+        echo "✅ فولڈر تیار ہے"
 
-    - name: 4. Create App Files
+    - name: 4. Create Gradle Configuration (with pluginManagement)
       run: |
-        # 🟢 یہ وہ فائل ہے جس کی وجہ سے بلڈ فیل ہوا تھا
-        echo "android.useAndroidX=true" > gradle.properties
-        echo "android.enableJetifier=true" >> gradle.properties
+        # AndroidX support
+        cat << EOF > gradle.properties
+        android.useAndroidX=true
+        android.enableJetifier=true
+        EOF
 
-        echo "include ':app'" > settings.gradle
-        
+        # ✅ درست settings.gradle (pluginManagement ضروری)
+        cat << EOF > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        include ':app'
+        EOF
+
+        # ✅ app/build.gradle (پلگِن کا ورژن شامل)
         cat << EOF > app/build.gradle
-        plugins { id 'com.android.application' version '8.2.0' }
+        plugins {
+            id 'com.android.application' version '8.2.0'
+        }
+
         android {
             namespace '${{ github.event.inputs.pkg_name }}'
             compileSdk 34
+
             defaultConfig {
                 applicationId '${{ github.event.inputs.pkg_name }}'
                 minSdk 24
@@ -55,12 +80,17 @@ jobs:
                 versionName '1.0'
             }
         }
+
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
         }
         EOF
 
+    - name: 5. Create MainActivity & Manifest
+      run: |
         PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
+        
+        # MainActivity (ڈائنامک ٹیکسٹ کلاک)
         cat << EOF > "$PKG_PATH/MainActivity.java"
         package ${{ github.event.inputs.pkg_name }};
         import android.os.Bundle;
@@ -85,6 +115,7 @@ jobs:
         }
         EOF
 
+        # AndroidManifest.xml
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -99,13 +130,20 @@ jobs:
         </manifest>
         EOF
 
-    - name: 5. Build APK
+    - name: 6. Build APK using existing gradlew
       run: |
-        gradle wrapper --gradle-version 8.2
+        # اگر gradlew موجود نہ ہو تو خود بنا لیں (لیکن ریپوزٹری میں ہونا چاہیے)
+        if [ ! -f "gradlew" ]; then
+          echo "⚠️ gradlew نہیں ملا، نیا wrapper ڈاؤن لوڈ کیا جا رہا ہے"
+          curl -L https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+          echo '#!/bin/bash' > gradlew
+          echo 'exec java -cp "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
+          chmod +x gradlew
+        fi
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon
 
-    - name: 6. Upload APK
+    - name: 7. Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
