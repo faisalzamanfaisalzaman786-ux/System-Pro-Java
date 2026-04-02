@@ -18,14 +18,18 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: gradle
 
-    - name: Create Native Android Structure
+    - name: Create Native Project Structure
       run: |
         mkdir -p app/src/main/java/com/systempro/app
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-        # Project level build.gradle
+        # Settings
+        echo "include ':app'" > settings.gradle
+
+        # Root Build File
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -36,49 +40,51 @@ jobs:
         }
         EOF
 
-        # settings.gradle
-        echo "include ':app'" > settings.gradle
-
-        # App level build.gradle
+        # App Build File
         cat <<EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
             namespace 'com.systempro.app'
-            compileSdk 33
+            compileSdk 34
             defaultConfig {
                 applicationId "com.systempro.app"
                 minSdk 24
-                targetSdk 33
+                targetSdk 34
                 versionCode 1
                 versionName "1.0"
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
             }
         }
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.5.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            implementation 'com.google.android.material:material:1.9.0'
         }
         EOF
 
-        # UI Design
+        # XML Layout
         cat <<EOF > app/src/main/res/layout/activity_main.xml
         <?xml version="1.0" encoding="utf-8"?>
-        <LinearLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
+        <FrameLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="#121212">
+            android:background="#000000">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="System Pro"
+                android:layout_gravity="center"
+                android:text="SYSTEM PRO\nNATIVE BUILD SUCCESS"
                 android:textColor="#00FF00"
-                android:textSize="30sp" />
-        </LinearLayout>
+                android:gravity="center"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </FrameLayout>
         EOF
 
-        # Java Logic
+        # Java File
         cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
         package com.systempro.app;
         import android.os.Bundle;
@@ -109,16 +115,16 @@ jobs:
         </manifest>
         EOF
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: 8.4  # یہاں ہم ورژن کو 8.4 پر فکس کر رہے ہیں
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.1.1
 
-    - name: Build APK
-      run: gradle assembleDebug
+    - name: Build APK with Gradlew
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: System-Pro-Native-APK
+        name: System-Pro-v2-Native
         path: app/build/outputs/apk/debug/app-debug.apk
