@@ -21,7 +21,6 @@ jobs:
 
     - name: Create Native Android Structure
       run: |
-        # ضروری فولڈرز کی تخلیق
         mkdir -p app/src/main/java/com/systempro/app
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
@@ -30,7 +29,7 @@ jobs:
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
         }
         allprojects {
             repositories { google(); mavenCentral() }
@@ -45,40 +44,41 @@ jobs:
         plugins { id 'com.android.application' }
         android {
             namespace 'com.systempro.app'
-            compileSdk 34
+            compileSdk 33
             defaultConfig {
                 applicationId "com.systempro.app"
                 minSdk 24
-                targetSdk 34
+                targetSdk 33
                 versionCode 1
                 versionName "1.0"
             }
         }
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'com.google.android.material:material:1.5.0'
             implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
         }
         EOF
 
-        # Layout XML (UI Design)
+        # UI Design
         cat <<EOF > app/src/main/res/layout/activity_main.xml
         <?xml version="1.0" encoding="utf-8"?>
-        <RelativeLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
+        <LinearLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
             android:background="#121212">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="System Pro Native App"
+                android:text="System Pro"
                 android:textColor="#00FF00"
-                android:textSize="24sp"
-                android:layout_centerInParent="true" />
-        </RelativeLayout>
+                android:textSize="30sp" />
+        </LinearLayout>
         EOF
 
-        # Java Code (Logic)
+        # Java Logic
         cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
         package com.systempro.app;
         import android.os.Bundle;
@@ -93,7 +93,7 @@ jobs:
         }
         EOF
 
-        # Android Manifest
+        # Manifest
         cat <<EOF > app/src/main/AndroidManifest.xml
         <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
             <application
@@ -109,10 +109,15 @@ jobs:
         </manifest>
         EOF
 
-    - name: Build with Gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.4  # یہاں ہم ورژن کو 8.4 پر فکس کر رہے ہیں
+
+    - name: Build APK
       run: gradle assembleDebug
 
-    - name: Upload Native APK
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: System-Pro-Native-APK
