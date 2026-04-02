@@ -18,25 +18,68 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Locate and Grant Permission
+      - name: Create Professional Folder Structure
         run: |
-          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew file not found anywhere in the repository!"
-            exit 1
-          fi
-          echo "Found gradlew at: $GRADLEW_PATH"
-          chmod +x "$GRADLEW_PATH"
-          echo "GRADLEW_PATH=$GRADLEW_PATH" >> $GITHUB_ENV
+          mkdir -p Data/app/src/main/res/layout
+          mkdir -p Data/app/src/main/java/com/system/pro
+          
+          # Create basic build.gradle for the project
+          cat <<EOF > Data/build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:8.1.0" }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          # Create settings.gradle
+          echo "include ':app'" > Data/settings.gradle
+
+          # Create app level build.gradle
+          cat <<EOF > Data/app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # Create Android Manifest
+          cat <<EOF > Data/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@android:style/Theme.Material.Light">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+        working-directory: ./Data
+
+      - name: Grant Execute Permission
+        run: chmod +x ./Data/gradlew
 
       - name: Build Debug APK
-        run: |
-          DIR_PATH=$(dirname $GRADLEW_PATH)
-          cd $DIR_PATH
-          ./gradlew assembleDebug
+        run: ./gradlew assembleDebug
+        working-directory: ./Data
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Build
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: "Data/app/build/outputs/apk/debug/*.apk"
