@@ -40,38 +40,73 @@ jobs:
 
     - name: Generate Build Files
       run: |
-        # Gradle Files
         echo "android.useAndroidX=true" > gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         echo "include ':app'" > settings.gradle
 
-        # Root build.gradle
-        printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+        cat <<'EOF' > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+        }
+        allprojects {
+            repositories { google(); mavenCentral() }
+        }
+        EOF
 
-        # App build.gradle
-        printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '${{ github.event.inputs.pkg_name }}'\n    compileSdk 34\n    defaultConfig {\n        applicationId '${{ github.event.inputs.pkg_name }}'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'\n}" > app/build.gradle
+        cat <<EOF > app/build.gradle
+        plugins { id 'com.android.application' }
+        android {
+            namespace '${{ github.event.inputs.pkg_name }}'
+            compileSdk 34
+            defaultConfig {
+                applicationId '${{ github.event.inputs.pkg_name }}'
+                minSdk 24
+                targetSdk 34
+                versionCode 1
+                versionName '1.0'
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.11.0'
+        }
+        EOF
 
-    - name: Write User Code and Resources
+    - name: Write User Code
+      env:
+        JAVA_INPUT: ${{ github.event.inputs.java_code }}
+        XML_INPUT: ${{ github.event.inputs.xml_code }}
       run: |
-        # Write Java Code
         PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        cat <<'EOF' > app/src/main/java/$PKG_DIR/MainActivity.java
-        ${{ github.event.inputs.java_code }}
-        EOF
+        # محفوظ طریقے سے کوڈ فائل میں لکھنا
+        echo "$JAVA_INPUT" > app/src/main/java/$PKG_DIR/MainActivity.java
+        echo "$XML_INPUT" > app/src/main/res/layout/activity_main.xml
 
-        # Write XML Layout
-        cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-        ${{ github.event.inputs.xml_code }}
-        EOF
-
-        # Write Values
+    - name: Write Resources
+      run: |
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: Generate Secure Android Manifest
+    - name: Generate Android Manifest
       run: |
-        # مینی فیسٹ فائل کو محفوظ طریقے سے بنانا
-        printf '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <application\n        android:label="@string/app_name"\n        android:theme="@style/Theme.SystemPro">\n        <activity\n            android:name=".MainActivity"\n            android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+        cat <<EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
+            <application
+                android:label="@string/app_name"
+                android:theme="@style/Theme.SystemPro">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
