@@ -20,7 +20,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: 1. Checkout Repository
+    - name: 1. Checkout
       uses: actions/checkout@v4
 
     - name: 2. Set up JDK 17
@@ -31,31 +31,28 @@ jobs:
 
     - name: 3. Deep Clean & Structure
       run: |
-        # پرانی فائلوں کی مکمل صفائی
         rm -rf .gradle app/build
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-    - name: 4. Inject Code
+    - name: 4. Secure Injection (No-Fail Logic)
+      env:
+        JAVA_DATA: ${{ github.event.inputs.java_code }}
+        XML_DATA: ${{ github.event.inputs.xml_code }}
       run: |
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         
-        # Java اور XML فائلز لکھنا
-        cat << 'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
-        ${{ github.event.inputs.java_code }}
-        EOF
+        # محفوظ طریقے سے کوڈ رائٹنگ
+        echo "$JAVA_DATA" > app/src/main/java/$PKG_PATH/MainActivity.java
+        echo "$XML_DATA" > app/src/main/res/layout/activity_main.xml
 
-        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-        ${{ github.event.inputs.xml_code }}
-        EOF
-
-        # ریسورسز بنانا
+        # ریسورس فائلز
         printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: 5. Manifest & Build Engine
+    - name: 5. Force Overwrite Configs
       run: |
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
@@ -91,12 +88,12 @@ jobs:
         </manifest>
         EOF
 
-    - name: 6. Turbo Build
+    - name: 6. Master Turbo Build
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
-    - name: 7. Upload APK (Fixed Path)
+    - name: 7. Deliver System Pro APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
