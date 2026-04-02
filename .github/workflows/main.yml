@@ -1,4 +1,4 @@
-name: System Pro HTML to APK
+name: System Pro Native APK Builder
 
 on:
   push:
@@ -19,53 +19,86 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Android Project Structure
+    - name: Create Native Android Structure
       run: |
-        # پروجیکٹ کے بنیادی فولڈرز بنانا
-        mkdir -p app/src/main/assets
-        mkdir -p app/src/main/java/com/systempro/webapp
-        mkdir -p gradle/wrapper
+        # ضروری فولڈرز کی تخلیق
+        mkdir -p app/src/main/java/com/systempro/app
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
 
-        # Gradle کی بنیادی فائلیں بنانا
-        echo "include ':app'" > settings.gradle
-        
+        # Project level build.gradle
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
         }
         allprojects {
             repositories { google(); mavenCentral() }
         }
         EOF
 
+        # settings.gradle
+        echo "include ':app'" > settings.gradle
+
+        # App level build.gradle
         cat <<EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
-            namespace 'com.systempro.webapp'
-            compileSdk 33
+            namespace 'com.systempro.app'
+            compileSdk 34
             defaultConfig {
-                applicationId "com.systempro.webapp"
+                applicationId "com.systempro.app"
                 minSdk 24
-                targetSdk 33
+                targetSdk 34
                 versionCode 1
                 versionName "1.0"
             }
         }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+        }
         EOF
 
-        # اگر آپ کی ریپوزٹری میں index.html نہیں ہے تو ایک عارضی فائل بنانا
-        if [ ! -f "index.html" ]; then
-          echo "<h1>System Pro: Hello from HTML</h1>" > app/src/main/assets/index.html
-        else
-          cp index.html app/src/main/assets/
-        fi
+        # Layout XML (UI Design)
+        cat <<EOF > app/src/main/res/layout/activity_main.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <RelativeLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#121212">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="System Pro Native App"
+                android:textColor="#00FF00"
+                android:textSize="24sp"
+                android:layout_centerInParent="true" />
+        </RelativeLayout>
+        EOF
 
-        # Android Manifest بنانا
+        # Java Code (Logic)
+        cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
+        package com.systempro.app;
+        import android.os.Bundle;
+        import androidx.appcompat.app.AppCompatActivity;
+
+        public class MainActivity extends AppCompatActivity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                setContentView(R.layout.activity_main);
+            }
+        }
+        EOF
+
+        # Android Manifest
         cat <<EOF > app/src/main/AndroidManifest.xml
         <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
-            <uses-permission android:name="android.permission.INTERNET" />
-            <application android:label="System Pro App">
+            <application
+                android:label="System Pro"
+                android:theme="@style/Theme.AppCompat.NoActionBar">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -76,33 +109,11 @@ jobs:
         </manifest>
         EOF
 
-        # Java MainActivity بنانا (WebView لوڈ کرنے کے لیے)
-        cat <<EOF > app/src/main/java/com/systempro/webapp/MainActivity.java
-        package com.systempro.webapp;
-        import android.app.Activity;
-        import android.os.Bundle;
-        import android.webkit.WebView;
+    - name: Build with Gradle
+      run: gradle assembleDebug
 
-        public class MainActivity extends Activity {
-            @Override
-            protected void onCreate(Bundle savedInstanceState) {
-                super.onCreate(savedInstanceState);
-                WebView webView = new WebView(this);
-                webView.getSettings().setJavaScriptEnabled(true);
-                webView.loadUrl("file:///android_asset/index.html");
-                setContentView(webView);
-            }
-        }
-        EOF
-
-    - name: Initialize Gradle Wrapper
-      run: gradle wrapper --gradle-version 8.1.1
-
-    - name: Build APK
-      run: ./gradlew assembleDebug
-
-    - name: Upload APK
+    - name: Upload Native APK
       uses: actions/upload-artifact@v4
       with:
-        name: System-Pro-Release-APK
+        name: System-Pro-Native-APK
         path: app/build/outputs/apk/debug/app-debug.apk
