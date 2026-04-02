@@ -18,18 +18,19 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
-
+        # یہاں سے کیشے ہٹا دیا گیا ہے تاکہ ایرر نہ آئے
+        
     - name: Create Native Project Structure
       run: |
+        # تمام ضروری فولڈرز بنانا
         mkdir -p app/src/main/java/com/systempro/app
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-        # Settings
+        # 1. Settings File
         echo "include ':app'" > settings.gradle
 
-        # Root Build File
+        # 2. Project level build.gradle
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -40,7 +41,7 @@ jobs:
         }
         EOF
 
-        # App Build File
+        # 3. App level build.gradle
         cat <<EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -53,11 +54,6 @@ jobs:
                 versionCode 1
                 versionName "1.0"
             }
-            buildTypes {
-                release {
-                    minifyEnabled false
-                }
-            }
         }
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -65,31 +61,28 @@ jobs:
         }
         EOF
 
-        # XML Layout
+        # 4. XML Layout
         cat <<EOF > app/src/main/res/layout/activity_main.xml
         <?xml version="1.0" encoding="utf-8"?>
-        <FrameLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
+        <LinearLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#000000">
+            android:background="#000000"
+            android:gravity="center">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="SYSTEM PRO\nNATIVE BUILD SUCCESS"
+                android:text="SYSTEM PRO BUILD SUCCESS"
                 android:textColor="#00FF00"
-                android:gravity="center"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-        </FrameLayout>
+                android:textSize="20sp" />
+        </LinearLayout>
         EOF
 
-        # Java File
+        # 5. Java MainActivity
         cat <<EOF > app/src/main/java/com/systempro/app/MainActivity.java
         package com.systempro.app;
         import android.os.Bundle;
         import androidx.appcompat.app.AppCompatActivity;
-
         public class MainActivity extends AppCompatActivity {
             @Override
             protected void onCreate(Bundle savedInstanceState) {
@@ -99,12 +92,10 @@ jobs:
         }
         EOF
 
-        # Manifest
+        # 6. Android Manifest
         cat <<EOF > app/src/main/AndroidManifest.xml
         <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
-            <application
-                android:label="System Pro"
-                android:theme="@style/Theme.AppCompat.NoActionBar">
+            <application android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -115,16 +106,16 @@ jobs:
         </manifest>
         EOF
 
-    - name: Generate Gradle Wrapper
-      run: gradle wrapper --gradle-version 8.1.1
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.4
 
-    - name: Build APK with Gradlew
-      run: |
-        chmod +x gradlew
-        ./gradlew assembleDebug
+    - name: Build APK
+      run: gradle assembleDebug
 
-    - name: Upload APK
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: System-Pro-v2-Native
+        name: SystemPro-Final-APK
         path: app/build/outputs/apk/debug/app-debug.apk
