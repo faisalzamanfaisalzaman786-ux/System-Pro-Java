@@ -7,10 +7,10 @@ on:
         description: 'ایپ کا نام'
         required: true
       pkg_name:
-        description: 'پیکج نیم (مثلاً com.example.pro)'
+        description: 'پیکج نیم'
         required: true
       java_code:
-        description: 'MainActivity.java کا مکمل کوڈ'
+        description: 'MainActivity.java کا کوڈ'
         required: true
       xml_code:
         description: 'activity_main.xml کا کوڈ'
@@ -29,7 +29,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Full Reset & Path Setup
+    - name: 3. Smart Path & XML Cleanup
       uses: actions/github-script@v7
       with:
         script: |
@@ -37,36 +37,31 @@ jobs:
           const pkg = "${{ github.event.inputs.pkg_name }}";
           const pkgPath = pkg.replace(/\./g, '/');
           
-          // پرانے تمام لاجک کو صاف کرنا
-          if (fs.existsSync('app/build.gradle')) fs.unlinkSync('app/build.gradle');
+          // پرانے اسٹرکچر کی صفائی
+          fs.rmSync('app/src/main', { recursive: true, force: true });
           
-          // نئے فولڈرز بنانا
+          // درست ڈائریکٹریز بنانا
           fs.mkdirSync(`app/src/main/java/${pkgPath}`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/layout`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/values`, { recursive: true });
           
-          // کوڈ انجکشن
+          // Java کوڈ لکھنا
           fs.writeFileSync(`app/src/main/java/${pkgPath}/MainActivity.java`, process.env.JAVA_CODE);
-          fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, process.env.XML_CODE);
+          
+          // XML کوڈ کو صاف کرنا (تاکہ کوئی ادھورا ٹیگ بلڈ خراب نہ کرے)
+          let xml = process.env.XML_CODE.trim();
+          if (!xml.startsWith('<?xml')) {
+              xml = '<?xml version="1.0" encoding="utf-8"?>\n' + xml;
+          }
+          fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, xml);
       env:
         JAVA_CODE: ${{ github.event.inputs.java_code }}
         XML_CODE: ${{ github.event.inputs.xml_code }}
 
-    - name: 4. Re-Generate Core Configs
+    - name: 4. Build Configuration
       run: |
-        # settings.gradle کو بالکل نیا بنانا تاکہ کوئی پرانا پروجیکٹ لنک نہ رہے
+        # settings.gradle
         echo "include ':app'" > settings.gradle
-
-        # Root build.gradle
-        cat << EOF > build.gradle
-        buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-        }
-        allprojects {
-            repositories { google(); mavenCentral() }
-        }
-        EOF
 
         # App build.gradle
         cat << EOF > app/build.gradle
@@ -85,15 +80,14 @@ jobs:
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
         }
         EOF
 
-        # Manifest
+        # Manifest (بغیر کسی اضافی تھیم کے تاکہ کریش نہ ہو)
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:label="${{ github.event.inputs.app_name }}" android:allowBackup="true" android:supportsRtl="true">
+            <application android:label="${{ github.event.inputs.app_name }}" android:allowBackup="true">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -104,12 +98,12 @@ jobs:
         </manifest>
         EOF
 
-    - name: 5. Execute Fresh Build
+    - name: 5. Force Build (Clean Start)
       run: |
         chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --stacktrace
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
-    - name: 6. Deliver APK
+    - name: 6. Get APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
