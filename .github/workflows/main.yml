@@ -1,38 +1,40 @@
-name: System Pro Physical Engine
+name: System Pro Build Engine
 
+# یہ سیکشن مینوئل رن کا بٹن (Run workflow) ظاہر کرے گا
 on:
-  workflow_dispatch: # یہ بٹن لائے گا
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  create-structure:
+  build_job:
+    name: Compiling System Pro APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # یہ لائن ضروری ہے تاکہ انجن فائلز لکھ سکے
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Powerful Folder Structure
-        run: |
-          # فزیکل فولڈرز بنانا
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p scripts
-          mkdir -p libs
-          
-          # بنیادی فائلز بنانا اگر موجود نہ ہوں
-          touch app/src/main/AndroidManifest.xml
-          touch app/build.gradle
-          touch scripts/package_updater.py
-          
-          echo "Structure Created Successfully"
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Commit and Push Changes
-        run: |
-          git config --global user.name "System Pro Engine"
-          git config --global user.email "engine@systempro.com"
-          git add .
-          git commit -m "System Pro: Physical Folder Structure Deployed" || echo "No changes to commit"
-          git push
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        # اگر آپ کے ڈیٹا فولڈر میں کوئی خاص اسکرپٹ ہے تو یہاں اس کا پاتھ دیں
+        # run: chmod +x ./Data/your-script.sh
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
