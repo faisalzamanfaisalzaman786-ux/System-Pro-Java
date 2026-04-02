@@ -1,6 +1,5 @@
 name: System Pro Build Engine
 
-# یہ سیکشن مینوئل رن کا بٹن (Run workflow) ظاہر کرے گا
 on:
   workflow_dispatch:
   push:
@@ -8,33 +7,30 @@ on:
       - main
 
 jobs:
-  build_job:
-    name: Compiling System Pro APK
+  build:
+    name: Compiling APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Grant Execute Permission
+        run: chmod +x ./Data/gradlew
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        # اگر آپ کے ڈیٹا فولڈر میں کوئی خاص اسکرپٹ ہے تو یہاں اس کا پاتھ دیں
-        # run: chmod +x ./Data/your-script.sh
-
-      - name: Build with Gradle
+      - name: Build Debug APK
         run: ./gradlew assembleDebug
+        working-directory: ./Data
 
-      - name: Upload APK Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-Build
+          path: Data/app/build/outputs/apk/debug/*.apk
