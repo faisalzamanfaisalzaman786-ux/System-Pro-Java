@@ -27,32 +27,21 @@ jobs:
 
     - name: 3. Create Professional Folder Structure
       run: |
-        # پرانی فائلوں کی صفائی
-        rm -rf app settings.gradle build.gradle gradlew gradle
-        
-        # پیکج پاتھ بنانا
+        rm -rf app settings.gradle build.gradle gradlew gradle gradle.properties
         PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
-        
-        # فولڈر اسٹرکچر بنانا
         mkdir -p "$PKG_PATH"
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
-        
-        echo "✅ فولڈر اسٹرکچر تیار ہے!"
+        echo "✅ فولڈر تیار ہے!"
 
     - name: 4. Create App Files
       run: |
-        # 1. settings.gradle
-        cat << EOF > settings.gradle
-        pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-        dependencyResolutionManagement {
-            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-            repositories { google(); mavenCentral() }
-        }
-        include ':app'
-        EOF
+        # 🟢 یہ وہ فائل ہے جس کی وجہ سے بلڈ فیل ہوا تھا
+        echo "android.useAndroidX=true" > gradle.properties
+        echo "android.enableJetifier=true" >> gradle.properties
 
-        # 2. app/build.gradle
+        echo "include ':app'" > settings.gradle
+        
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' version '8.2.0' }
         android {
@@ -71,7 +60,6 @@ jobs:
         }
         EOF
 
-        # 3. MainActivity.java (سادہ کلاک کوڈ)
         PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
         cat << EOF > "$PKG_PATH/MainActivity.java"
         package ${{ github.event.inputs.pkg_name }};
@@ -97,7 +85,6 @@ jobs:
         }
         EOF
 
-        # 4. AndroidManifest.xml
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
