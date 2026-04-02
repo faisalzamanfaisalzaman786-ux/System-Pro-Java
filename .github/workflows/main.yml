@@ -7,7 +7,7 @@ on:
         description: 'ایپ کا نام'
         required: true
       pkg_name:
-        description: 'پیکج نیم'
+        description: 'پیکج نیم (مثلاً com.systempro.apk)'
         required: true
       java_code_base64:
         description: 'Java Code (Base64 میں)'
@@ -29,45 +29,35 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Setup Project Structure
+    - name: 3. Wipe Old Files & Setup Structure
       run: |
+        # پرانی فائلوں کا مکمل خاتمہ
+        rm -rf app settings.gradle build.gradle gradlew gradlew.bat gradle .gradle
+        
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')
         mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-        # Decode Codes
+        # Base64 ڈیکوڈ کرنا
         echo "${{ github.event.inputs.java_code_base64 }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
         echo "${{ github.event.inputs.xml_code_base64 }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
 
-    - name: 4. Critical Build Configuration (Corrected)
+    - name: 4. Create Project Files
       run: |
-        # 1. settings.gradle with Plugin Management
+        # settings.gradle
         cat << EOF > settings.gradle
-        pluginManagement {
-            repositories {
-                google()
-                mavenCentral()
-                gradlePluginPortal()
-            }
-        }
+        pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
         dependencyResolutionManagement {
             repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-            repositories {
-                google()
-                mavenCentral()
-            }
+            repositories { google(); mavenCentral() }
         }
-        rootProject.name = "SystemPro"
         include ':app'
         EOF
 
-        # 2. App build.gradle with Version
+        # app/build.gradle
         cat << EOF > app/build.gradle
-        plugins {
-            id 'com.android.application' version '8.2.0'
-        }
-
+        plugins { id 'com.android.application' version '8.2.0' }
         android {
             namespace '${{ github.event.inputs.pkg_name }}'
             compileSdk 34
@@ -79,14 +69,13 @@ jobs:
                 versionName '1.0'
             }
         }
-
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
         }
         EOF
 
-        # 3. Manifest & Strings
+        # Strings & Manifest
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
@@ -102,14 +91,13 @@ jobs:
         </manifest>
         EOF
 
-    - name: 5. Build Final APK
+    - name: 5. Generate Wrapper & Build
       run: |
-        # گریڈل ریپر جنریٹ کرنا اگر موجود نہ ہو
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleDebug --no-daemon
 
-    - name: 6. Upload APK
+    - name: 6. Deliver APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
