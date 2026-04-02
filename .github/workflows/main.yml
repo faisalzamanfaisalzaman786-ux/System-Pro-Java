@@ -12,10 +12,10 @@ on:
         required: true
         default: 'com.systempro.apk'
       java_code:
-        description: 'MainActivity.java کا مکمل کوڈ'
+        description: 'MainActivity.java کا کوڈ'
         required: true
       xml_code:
-        description: 'activity_main.xml کا مکمل کوڈ'
+        description: 'activity_main.xml کا کوڈ'
         required: true
 
 jobs:
@@ -31,20 +31,18 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Faisal Folder Structure
+    - name: Create Structure
       run: |
-        # پیکج نیم سے فولڈر پاتھ بنانا
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
         mkdir -p gradle/wrapper
 
-    - name: Generate Build Configurations
+    - name: Generate Build Files
       run: |
         echo "android.useAndroidX=true" > gradle.properties
         echo "include ':app'" > settings.gradle
-        
         cat << 'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -74,24 +72,26 @@ jobs:
         }
         EOF
 
-    - name: Write User Files (Secure Mode)
-      env:
-        JAVA_DATA: ${{ github.event.inputs.java_code }}
-        XML_DATA: ${{ github.event.inputs.xml_code }}
+    - name: Write User Code
+      shell: bash
       run: |
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         
-        # جاوا فائل لکھنا
-        echo "$JAVA_DATA" > app/src/main/java/$PKG_PATH/MainActivity.java
-        
-        # XML فائل لکھنا (محفوظ طریقے سے)
-        echo "$XML_DATA" > app/src/main/res/layout/activity_main.xml
+        # Java Code لکھنا
+        cat << 'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
+        ${{ github.event.inputs.java_code }}
+        EOF
 
-        # ریسورسز بنانا
+        # XML Code لکھنا (انتہائی محفوظ طریقہ)
+        cat << 'XML_EOF' > app/src/main/res/layout/activity_main.xml
+        ${{ github.event.inputs.xml_code }}
+        XML_EOF
+
+        # دیگر ضروری ریسورسز
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: Generate Manifest
+    - name: Write Manifest
       run: |
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
@@ -110,11 +110,11 @@ jobs:
         </manifest>
         EOF
 
-    - name: Setup Gradle Wrapper
-      run: gradle wrapper --gradle-version 8.5
-
-    - name: Build APK
-      run: chmod +x gradlew && ./gradlew assembleDebug --stacktrace
+    - name: Setup Gradle Wrapper and Build
+      run: |
+        gradle wrapper --gradle-version 8.5
+        chmod +x gradlew
+        ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
