@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'ایپ کا نام (App Name)'
+        description: 'ایپ کا نام'
         required: true
         default: 'System Pro App'
       pkg_name:
-        description: 'پیکج نیم (Package Name)'
+        description: 'پیکج نیم'
         required: true
         default: 'com.systempro.apk'
       java_code:
-        description: 'MainActivity.java کا مکمل کوڈ یہاں پیسٹ کریں'
+        description: 'MainActivity.java کا کوڈ'
         required: true
       xml_code:
-        description: 'activity_main.xml کا مکمل کوڈ یہاں پیسٹ کریں'
+        description: 'activity_main.xml کا کوڈ'
         required: true
 
 jobs:
@@ -31,14 +31,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Project Structure
+    - name: Create Structure
       run: |
         PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_DIR
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-    - name: Generate Build Configuration
+    - name: Generate Core Files
       run: |
         echo "android.useAndroidX=true" > gradle.properties
         echo "include ':app'" > settings.gradle
@@ -72,7 +72,7 @@ jobs:
         }
         EOF
 
-    - name: Write User Code and Resources
+    - name: Write and Sanitize User Code
       shell: bash
       run: |
         PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
@@ -80,20 +80,21 @@ jobs:
         # Java Code لکھنا
         printf "%s" "${{ github.event.inputs.java_code }}" > app/src/main/java/$PKG_DIR/MainActivity.java
 
-        # XML Layout لکھنا
+        # XML Code لکھنا (سخت صفائی کے ساتھ)
         cat << 'EOF' > app/src/main/res/layout/activity_main.xml
         ${{ github.event.inputs.xml_code }}
         EOF
         
-        # خودکار درستی: اگر XML میں کوٹس (quotes) کا مسئلہ ہو تو اسے ٹھیک کریں
+        # خودکار ریپیئر: کوٹس اور فارمیٹنگ کی درستی
         sed -i 's/version=1.0/version="1.0"/g' app/src/main/res/layout/activity_main.xml
         sed -i 's/encoding=utf-8/encoding="utf-8"/g' app/src/main/res/layout/activity_main.xml
+        # اگر کسی وجہ سے پہلی لائن میں ڈبل کوٹس غائب ہو گئے ہوں
+        sed -i '1s/version=\([^" ]*\)/version="\1"/' app/src/main/res/layout/activity_main.xml
 
-        # Strings اور Themes
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: Generate Android Manifest
+    - name: Write Manifest
       run: |
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
@@ -101,11 +102,8 @@ jobs:
             <application
                 android:allowBackup="true"
                 android:label="@string/app_name"
-                android:supportsRtl="true"
                 android:theme="@style/Theme.SystemPro">
-                <activity
-                    android:name=".MainActivity"
-                    android:exported="true">
+                <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
