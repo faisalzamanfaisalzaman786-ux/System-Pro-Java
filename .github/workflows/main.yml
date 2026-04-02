@@ -29,26 +29,45 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Decode & Restore Project
+    - name: 3. Setup Project Structure
       run: |
-        # پیکج پاتھ بنانا
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')
         mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-        # Base64 سے کوڈ واپس نکالنا (تاکہ ڈیٹا نہ کٹے)
+        # Decode Codes
         echo "${{ github.event.inputs.java_code_base64 }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
         echo "${{ github.event.inputs.xml_code_base64 }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
 
-    - name: 4. Build Environment Setup
+    - name: 4. Critical Build Configuration (Corrected)
       run: |
-        # settings.gradle
-        echo "include ':app'" > settings.gradle
+        # 1. settings.gradle with Plugin Management
+        cat << EOF > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "SystemPro"
+        include ':app'
+        EOF
 
-        # App build.gradle
+        # 2. App build.gradle with Version
         cat << EOF > app/build.gradle
-        plugins { id 'com.android.application' }
+        plugins {
+            id 'com.android.application' version '8.2.0'
+        }
+
         android {
             namespace '${{ github.event.inputs.pkg_name }}'
             compileSdk 34
@@ -60,13 +79,14 @@ jobs:
                 versionName '1.0'
             }
         }
+
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
         }
         EOF
 
-        # Manifest & Strings
+        # 3. Manifest & Strings
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
@@ -82,12 +102,14 @@ jobs:
         </manifest>
         EOF
 
-    - name: 5. Execute Build
+    - name: 5. Build Final APK
       run: |
+        # گریڈل ریپر جنریٹ کرنا اگر موجود نہ ہو
+        gradle wrapper --gradle-version 8.2
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon
+        ./gradlew assembleDebug --stacktrace
 
-    - name: 6. Deliver APK
+    - name: 6. Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
