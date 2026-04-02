@@ -1,4 +1,4 @@
-name: System Pro Simple Builder
+name: System Pro Master APK Builder
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       app_name:
         description: 'ایپ کا نام'
         required: true
-        default: 'MySimpleClock'
+        default: 'SystemProClock'
       pkg_name:
         description: 'پیکج نیم'
         required: true
@@ -16,50 +16,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
+    - name: 1. Checkout
       uses: actions/checkout@v4
 
-    - name: Setup Java
+    - name: 2. Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create App Structure
+    - name: 3. Create Professional Folder Structure
       run: |
-        # پرانی فائلیں صاف کرنا
+        # پرانی فائلوں کی صفائی
         rm -rf app settings.gradle build.gradle gradlew gradle
         
-        # ڈائریکٹری بنانا
-        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')
-        mkdir -p app/src/main/java/$PKG_PATH
+        # پیکج پاتھ بنانا
+        PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
+        
+        # فولڈر اسٹرکچر بنانا
+        mkdir -p "$PKG_PATH"
         mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
+        
+        echo "✅ فولڈر اسٹرکچر تیار ہے!"
 
-        # سادہ کلاک کا جاوا کوڈ (ڈائریکٹ لکھنا)
-        cat << EOF > app/src/main/java/$PKG_PATH/MainActivity.java
-        package ${{ github.event.inputs.pkg_name }};
-        import android.os.Bundle;
-        import android.widget.TextClock;
-        import androidx.appcompat.app.AppCompatActivity;
-        import android.view.Gravity;
-        import android.widget.LinearLayout;
-
-        public class MainActivity extends AppCompatActivity {
-            @Override
-            protected void onCreate(Bundle savedInstanceState) {
-                super.onCreate(savedInstanceState);
-                LinearLayout layout = new LinearLayout(this);
-                layout.setGravity(Gravity.CENTER);
-                TextClock clock = new TextClock(this);
-                clock.setTextSize(50);
-                layout.addView(clock);
-                setContentView(layout);
-            }
+    - name: 4. Create App Files
+      run: |
+        # 1. settings.gradle
+        cat << EOF > settings.gradle
+        pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() }
         }
+        include ':app'
         EOF
 
-        # تنظیمات (Gradle Files)
-        echo "include ':app'" > settings.gradle
+        # 2. app/build.gradle
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' version '8.2.0' }
         android {
@@ -69,15 +62,46 @@ jobs:
                 applicationId '${{ github.event.inputs.pkg_name }}'
                 minSdk 24
                 targetSdk 34
+                versionCode 1
+                versionName '1.0'
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+
+        # 3. MainActivity.java (سادہ کلاک کوڈ)
+        PKG_PATH="app/src/main/java/$(echo "${{ github.event.inputs.pkg_name }}" | sed 's/\./\//g')"
+        cat << EOF > "$PKG_PATH/MainActivity.java"
+        package ${{ github.event.inputs.pkg_name }};
+        import android.os.Bundle;
+        import android.view.Gravity;
+        import android.widget.LinearLayout;
+        import android.widget.TextClock;
+        import androidx.appcompat.app.AppCompatActivity;
+
+        public class MainActivity extends AppCompatActivity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                LinearLayout layout = new LinearLayout(this);
+                layout.setGravity(Gravity.CENTER);
+                layout.setBackgroundColor(0xFF222222);
+                TextClock clock = new TextClock(this);
+                clock.setTextSize(60);
+                clock.setTextColor(0xFF00FF00);
+                layout.addView(clock);
+                setContentView(layout);
             }
         }
         EOF
 
-        # مینی فیسٹ (Manifest)
-        mkdir -p app/src/main
+        # 4. AndroidManifest.xml
         cat << EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:label="${{ github.event.inputs.app_name }}">
+            <application android:label="${{ github.event.inputs.app_name }}" android:allowBackup="true">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -88,13 +112,13 @@ jobs:
         </manifest>
         EOF
 
-    - name: Build APK
+    - name: 5. Build APK
       run: |
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
 
-    - name: Upload APK
+    - name: 6. Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
