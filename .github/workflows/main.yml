@@ -44,6 +44,7 @@ jobs:
         echo "android.enableJetifier=true" >> gradle.properties
         echo "include ':app'" > settings.gradle
 
+        # Root build.gradle
         cat <<'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -54,6 +55,7 @@ jobs:
         }
         EOF
 
+        # App build.gradle
         cat <<EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -73,28 +75,28 @@ jobs:
         }
         EOF
 
-    - name: Write User Code
+    - name: Write User Code and Resources
       env:
         JAVA_INPUT: ${{ github.event.inputs.java_code }}
         XML_INPUT: ${{ github.event.inputs.xml_code }}
       run: |
         PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        # محفوظ طریقے سے کوڈ فائل میں لکھنا
         echo "$JAVA_INPUT" > app/src/main/java/$PKG_DIR/MainActivity.java
         echo "$XML_INPUT" > app/src/main/res/layout/activity_main.xml
-
-    - name: Write Resources
-      run: |
+        
         echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
     - name: Generate Android Manifest
       run: |
-        cat <<EOF > app/src/main/AndroidManifest.xml
+        # یہاں 'EOF' استعمال کیا گیا ہے تاکہ android:name غائب نہ ہو
+        cat <<'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
             <application
+                android:allowBackup="true"
                 android:label="@string/app_name"
+                android:supportsRtl="true"
                 android:theme="@style/Theme.SystemPro">
                 <activity
                     android:name=".MainActivity"
@@ -114,7 +116,7 @@ jobs:
         gradle-version: 8.5
 
     - name: Build APK
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug || gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
