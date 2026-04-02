@@ -29,21 +29,20 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Deep Clean and Prep
+    - name: 3. Deep Clean & Structure
       run: |
-        # پرانی تمام کیشے اور بلڈ فولڈرز کی صفائی
+        # پرانی فائلوں کی مکمل صفائی
         rm -rf .gradle app/build
-        
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-    - name: 4. Inject Fresh Code
+    - name: 4. Inject Code
       run: |
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         
-        # آپ کے فراہم کردہ کوڈ کو لکھنا
+        # Java اور XML فائلز لکھنا
         cat << 'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
         ${{ github.event.inputs.java_code }}
         EOF
@@ -52,11 +51,11 @@ jobs:
         ${{ github.event.inputs.xml_code }}
         EOF
 
-        # ریسورسز کو دوبارہ تازہ بنانا
+        # ریسورسز بنانا
         printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: 5. Force Overwrite Manifest & Gradle
+    - name: 5. Manifest & Build Engine
       run: |
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
@@ -92,14 +91,13 @@ jobs:
         </manifest>
         EOF
 
-    - name: 6. Master Build Execution
+    - name: 6. Turbo Build
       run: |
         chmod +x gradlew
-        # --no-build-cache استعمال کر رہے ہیں تاکہ پرانی خرابی اثر نہ کرے
         ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
 
-    - name: 7. Upload Final APK
-      uses: upload-artifact@v4
+    - name: 7. Upload APK (Fixed Path)
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
         path: app/build/outputs/apk/debug/app-debug.apk
