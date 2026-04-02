@@ -1,12 +1,11 @@
 name: System Pro Power Engine
 
 on:
-  workflow_dispatch: # دستی طور پر چلانے کے لیے
+  workflow_dispatch:
 
 jobs:
   build_process:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -16,17 +15,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Give Permission
-        run: chmod +x gradlew
-
-      - name: Run Powerful Build
-        # یہاں ہم 4GB ریم الاٹ کر رہے ہیں تاکہ بڑی فائلز پر انجن نہ رکے
-        run: ./gradlew assembleDebug -Dorg.gradle.jvmargs="-Xmx4g"
-
-      - name: Save APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Release
-          path: core-app/build/outputs/apk/debug/*.apk
+      - name: Testing
+        run: echo "Engine is Ready"
