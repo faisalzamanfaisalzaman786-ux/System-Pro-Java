@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'ایپ کا نام درج کریں'
+        description: 'ایپ کا نام'
         required: true
         default: 'System Pro App'
       pkg_name:
-        description: 'پیکج نیم (مثال: com.systempro.apk)'
+        description: 'پیکج نیم'
         required: true
         default: 'com.systempro.apk'
       java_code:
-        description: 'MainActivity.java کا کوڈ یہاں پیسٹ کریں'
+        description: 'MainActivity.java کا مکمل کوڈ'
         required: true
       xml_code:
-        description: 'activity_main.xml کا کوڈ یہاں پیسٹ کریں'
+        description: 'activity_main.xml کا مکمل کوڈ'
         required: true
 
 jobs:
@@ -31,19 +31,17 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Project Structure
+    - name: Create Structure and Build Files
       run: |
         PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_DIR
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
-    - name: Generate Build Files
-      run: |
+        # Build configurations
         echo "android.useAndroidX=true" > gradle.properties
-        echo "android.enableJetifier=true" >> gradle.properties
         echo "include ':app'" > settings.gradle
-
+        
         cat << 'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -73,33 +71,16 @@ jobs:
         }
         EOF
 
-    - name: Write User Code and Resources
-      run: |
-        PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
-        
-        # Java Code (Using quote EOF to prevent truncation)
-        cat << 'EOF' > app/src/main/java/$PKG_DIR/MainActivity.java
-        ${{ github.event.inputs.java_code }}
-        EOF
-
-        # XML Code
-        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-        ${{ github.event.inputs.xml_code }}
-        EOF
-        
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
-
-    - name: Generate Android Manifest
+    - name: Write Android Manifest
       run: |
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <application
                 android:allowBackup="true"
                 android:label="@string/app_name"
                 android:supportsRtl="true"
-                android:theme="@style/Theme.SystemPro">
+                android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                 <activity
                     android:name=".MainActivity"
                     android:exported="true">
@@ -112,13 +93,23 @@ jobs:
         </manifest>
         EOF
 
-    - name: Setup Gradle
+    - name: Write Java and XML Code
+      run: |
+        PKG_DIR=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
+        
+        # لکھنے سے پہلے فائل بنانا تاکہ ڈیٹا ضائع نہ ہو
+        printf "%s" "${{ github.event.inputs.java_code }}" > app/src/main/java/$PKG_DIR/MainActivity.java
+        printf "%s" "${{ github.event.inputs.xml_code }}" > app/src/main/res/layout/activity_main.xml
+        
+        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
+
+    - name: Setup Gradle and Build
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: 8.5
 
     - name: Build APK
-      run: chmod +x gradlew && ./gradlew assembleDebug || gradle assembleDebug
+      run: chmod +x gradlew && ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
