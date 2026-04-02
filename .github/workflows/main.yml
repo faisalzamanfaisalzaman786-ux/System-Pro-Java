@@ -1,14 +1,51 @@
-name: System Pro Native APK Builder
+name: System Pro Master APK Builder
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Application Name (e.g., My Super App)'
+        required: true
+        default: 'System Pro App'
+      pkg_name:
+        description: 'Package Name (e.g., com.pro.app)'
+        required: true
+        default: 'com.systempro.app'
+      java_code:
+        description: 'Paste your MainActivity.java code here'
+        required: true
+        default: |
+          package com.systempro.app;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+      xml_code:
+        description: 'Paste your activity_main.xml code here'
+        required: true
+        default: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.microsoft.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#121212">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="System Pro Master Build"
+                  android:textColor="#00FF00"
+                  android:layout_centerInParent="true"
+                  android:textSize="22sp" />
+          </RelativeLayout>
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -19,12 +56,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Native Project Structure
+    - name: Setup Project Directories
       run: |
-        mkdir -p app/src/main/java/com/systempro/app
+        # پیکیج نیم کو فولڈر پاتھ میں تبدیل کرنا
+        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
+        mkdir -p app/src/main/java/$PKG_PATH
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
 
+    - name: Generate Project Files
+      run: |
         # 1. Gradle Properties
         echo "android.useAndroidX=true" > gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
@@ -43,14 +84,14 @@ jobs:
         }
         EOF
 
-        # 4. App build.gradle
-        cat <<'EOF' > app/build.gradle
+        # 4. App build.gradle (Dynamic Package Name)
+        cat <<EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
-            namespace 'com.systempro.app'
+            namespace '${{ github.event.inputs.pkg_name }}'
             compileSdk 34
             defaultConfig {
-                applicationId "com.systempro.app"
+                applicationId "${{ github.event.inputs.pkg_name }}"
                 minSdk 24
                 targetSdk 34
                 versionCode 1
@@ -63,44 +104,50 @@ jobs:
         }
         EOF
 
-        # 5. Resources (Strings & Themes)
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
-        
+        # 5. Resources (Dynamic App Name)
+        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-        # 6. UI Layout
-        echo '<?xml version="1.0" encoding="utf-8"?><FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="System Pro Build Success" android:textColor="#00FF00" android:textSize="20sp" /></FrameLayout>' > app/src/main/res/layout/activity_main.xml
+        # 6. UI Layout (User Input)
+        cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+        ${{ github.event.inputs.xml_code }}
+        EOF
 
-        # 7. Java Activity
-        echo 'package com.systempro.app; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }' > app/src/main/java/com/systempro/app/MainActivity.java
+        # 7. Java Code (User Input)
+        PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
+        cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
+        ${{ github.event.inputs.java_code }}
+        EOF
 
-        # 8. Android Manifest (Echo method for stability)
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-        echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' >> app/src/main/AndroidManifest.xml
-        echo '    <application' >> app/src/main/AndroidManifest.xml
-        echo '        android:label="@string/app_name"' >> app/src/main/AndroidManifest.xml
-        echo '        android:theme="@style/Theme.SystemPro">' >> app/src/main/AndroidManifest.xml
-        echo '        <activity' >> app/src/main/AndroidManifest.xml
-        echo '            android:name=".MainActivity"' >> app/src/main/AndroidManifest.xml
-        echo '            android:exported="true">' >> app/src/main/AndroidManifest.xml
-        echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-        echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-        echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-        echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-        echo '        </activity>' >> app/src/main/AndroidManifest.xml
-        echo '    </application>' >> app/src/main/AndroidManifest.xml
-        echo '</manifest>' >> app/src/main/AndroidManifest.xml
+        # 8. Android Manifest
+        cat <<'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
+            <application
+                android:label="@string/app_name"
+                android:theme="@style/Theme.SystemPro">
+                <activity 
+                    android:name=".MainActivity" 
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: 8.5
 
-    - name: Build APK
+    - name: Build Custom APK
       run: gradle assembleDebug
 
-    - name: Upload APK
+    - name: Upload Custom APK
       uses: actions/upload-artifact@v4
       with:
-        name: SystemPro-Success-APK
+        name: ${{ github.event.inputs.app_name }}-APK
         path: app/build/outputs/apk/debug/app-debug.apk
