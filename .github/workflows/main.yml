@@ -7,7 +7,7 @@ on:
         description: 'ایپ کا نام'
         required: true
       pkg_name:
-        description: 'پیکج نیم (مثلاً com.faisal.pro)'
+        description: 'پیکج نیم (مثلاً com.example.pro)'
         required: true
       java_code:
         description: 'MainActivity.java کا مکمل کوڈ'
@@ -29,7 +29,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Smart Code Injection & Folder Fix
+    - name: 3. Full Reset & Path Setup
       uses: actions/github-script@v7
       with:
         script: |
@@ -37,40 +37,38 @@ jobs:
           const pkg = "${{ github.event.inputs.pkg_name }}";
           const pkgPath = pkg.replace(/\./g, '/');
           
-          // فولڈرز بنانا
+          // پرانے تمام لاجک کو صاف کرنا
+          if (fs.existsSync('app/build.gradle')) fs.unlinkSync('app/build.gradle');
+          
+          // نئے فولڈرز بنانا
           fs.mkdirSync(`app/src/main/java/${pkgPath}`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/layout`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/values`, { recursive: true });
           
-          // کوڈ لکھنا
+          // کوڈ انجکشن
           fs.writeFileSync(`app/src/main/java/${pkgPath}/MainActivity.java`, process.env.JAVA_CODE);
           fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, process.env.XML_CODE);
       env:
         JAVA_CODE: ${{ github.event.inputs.java_code }}
         XML_CODE: ${{ github.event.inputs.xml_code }}
 
-    - name: 4. Build Configs
+    - name: 4. Re-Generate Core Configs
       run: |
-        # Strings and Themes
-        printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
+        # settings.gradle کو بالکل نیا بنانا تاکہ کوئی پرانا پروجیکٹ لنک نہ رہے
+        echo "include ':app'" > settings.gradle
 
-        # Manifest
-        cat << EOF > app/src/main/AndroidManifest.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro" android:allowBackup="true">
-                <activity android:name=".MainActivity" android:exported="true">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-            </application>
-        </manifest>
+        # Root build.gradle
+        cat << EOF > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+        }
+        allprojects {
+            repositories { google(); mavenCentral() }
+        }
         EOF
 
-        # Build Gradle
+        # App build.gradle
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -91,12 +89,27 @@ jobs:
         }
         EOF
 
-    - name: 5. Build Final
+        # Manifest
+        cat << EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:label="${{ github.event.inputs.app_name }}" android:allowBackup="true" android:supportsRtl="true">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+    - name: 5. Execute Fresh Build
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
 
-    - name: 6. Upload APK
+    - name: 6. Deliver APK
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
