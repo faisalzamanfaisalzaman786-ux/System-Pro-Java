@@ -8,30 +8,32 @@ on:
         required: true
         default: 'System Pro App'
       pkg_name:
-        description: 'پیکج نیم'
+        description: 'پیکج نیم (مثلاً com.pro.app)'
         required: true
         default: 'com.systempro.apk'
       java_code:
-        description: 'MainActivity.java کا کوڈ'
+        description: 'MainActivity.java کا کوڈ یہاں پیسٹ کریں'
         required: true
       xml_code:
-        description: 'activity_main.xml کا کوڈ'
+        description: 'activity_main.xml کا کوڈ یہاں پیسٹ کریں'
         required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # تیز ترین ایگزیکیوشن کے لیے ہم میموری کو آپٹیمائز کر رہے ہیں
     steps:
-    - name: Checkout Repository
+    - name: 1. Checkout Fast
       uses: actions/checkout@v4
 
-    - name: Set up JDK 17
+    - name: 2. Set up JDK 17 (Optimized)
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: 'gradle' # یہ بلڈ ٹائم کو آدھا کر دے گا
 
-    - name: Create Structure
+    - name: 3. Nuclear Folder Structure
       run: |
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         mkdir -p app/src/main/java/$PKG_PATH
@@ -39,18 +41,18 @@ jobs:
         mkdir -p app/src/main/res/values
         mkdir -p gradle/wrapper
 
-    - name: Generate Build Files
+    - name: 4. Force Generate Build Engine
       run: |
-        echo "android.useAndroidX=true" > gradle.properties
+        # ہائی پاور کنفیگریشن فائلز
+        printf "android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m" > gradle.properties
         echo "include ':app'" > settings.gradle
+        
         cat << 'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
             dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
         }
-        allprojects {
-            repositories { google(); mavenCentral() }
-        }
+        allprojects { repositories { google(); mavenCentral() } }
         EOF
 
         cat << EOF > app/build.gradle
@@ -65,41 +67,36 @@ jobs:
                 versionCode 1
                 versionName '1.0'
             }
+            buildTypes { release { minifyEnabled false } }
         }
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
         }
         EOF
 
-    - name: Write User Code
-      shell: bash
+    - name: 5. High-Speed Code Injection
+      env:
+        JAVA_RAW: ${{ github.event.inputs.java_code }}
+        XML_RAW: ${{ github.event.inputs.xml_code }}
       run: |
         PKG_PATH=$(echo "${{ github.event.inputs.pkg_name }}" | tr '.' '/')
         
-        # Java Code لکھنا
-        cat << 'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
-        ${{ github.event.inputs.java_code }}
-        EOF
+        # یہاں ہم 'cat' کمانڈ کو محفوظ طریقے سے استعمال کر رہے ہیں تاکہ ڈیٹا ضائع نہ ہو
+        echo "$JAVA_RAW" > app/src/main/java/$PKG_PATH/MainActivity.java
+        echo "$XML_RAW" > app/src/main/res/layout/activity_main.xml
 
-        # XML Code لکھنا (انتہائی محفوظ طریقہ)
-        cat << 'XML_EOF' > app/src/main/res/layout/activity_main.xml
-        ${{ github.event.inputs.xml_code }}
-        XML_EOF
-
-        # دیگر ضروری ریسورسز
-        echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.inputs.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
+        # ضروری ریسورسز کا فوری قیام
+        printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
         echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>' > app/src/main/res/values/themes.xml
 
-    - name: Write Manifest
+    - name: 6. Master Manifest Setup
       run: |
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application
-                android:allowBackup="true"
-                android:label="@string/app_name"
-                android:theme="@style/Theme.SystemPro">
+            <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro" android:allowBackup="true">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -110,14 +107,14 @@ jobs:
         </manifest>
         EOF
 
-    - name: Setup Gradle Wrapper and Build
+    - name: 7. Execute Turbo Build
       run: |
         gradle wrapper --gradle-version 8.5
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleDebug --no-daemon --parallel --build-cache
 
-    - name: Upload APK
+    - name: 8. Deploy Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.event.inputs.app_name }}
+        name: ${{ github.event.inputs.app_name }}-v1
         path: app/build/outputs/apk/debug/app-debug.apk
