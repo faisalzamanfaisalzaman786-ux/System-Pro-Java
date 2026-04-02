@@ -1,4 +1,4 @@
-name: System Pro APK Builder
+name: System Pro HTML to APK
 
 on:
   push:
@@ -18,16 +18,91 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Grant Execute Permission for Gradlew
-      run: chmod +x gradlew
+    - name: Create Android Project Structure
+      run: |
+        # پروجیکٹ کے بنیادی فولڈرز بنانا
+        mkdir -p app/src/main/assets
+        mkdir -p app/src/main/java/com/systempro/webapp
+        mkdir -p gradle/wrapper
 
-    - name: Build Debug APK
+        # Gradle کی بنیادی فائلیں بنانا
+        echo "include ':app'" > settings.gradle
+        
+        cat <<EOF > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+        }
+        allprojects {
+            repositories { google(); mavenCentral() }
+        }
+        EOF
+
+        cat <<EOF > app/build.gradle
+        plugins { id 'com.android.application' }
+        android {
+            namespace 'com.systempro.webapp'
+            compileSdk 33
+            defaultConfig {
+                applicationId "com.systempro.webapp"
+                minSdk 24
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+            }
+        }
+        EOF
+
+        # اگر آپ کی ریپوزٹری میں index.html نہیں ہے تو ایک عارضی فائل بنانا
+        if [ ! -f "index.html" ]; then
+          echo "<h1>System Pro: Hello from HTML</h1>" > app/src/main/assets/index.html
+        else
+          cp index.html app/src/main/assets/
+        fi
+
+        # Android Manifest بنانا
+        cat <<EOF > app/src/main/AndroidManifest.xml
+        <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <application android:label="System Pro App">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # Java MainActivity بنانا (WebView لوڈ کرنے کے لیے)
+        cat <<EOF > app/src/main/java/com/systempro/webapp/MainActivity.java
+        package com.systempro.webapp;
+        import android.app.Activity;
+        import android.os.Bundle;
+        import android.webkit.WebView;
+
+        public class MainActivity extends Activity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                WebView webView = new WebView(this);
+                webView.getSettings().setJavaScriptEnabled(true);
+                webView.loadUrl("file:///android_asset/index.html");
+                setContentView(webView);
+            }
+        }
+        EOF
+
+    - name: Initialize Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.1.1
+
+    - name: Build APK
       run: ./gradlew assembleDebug
 
-    - name: Upload APK Artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: system-pro-debug-apk
+        name: System-Pro-Release-APK
         path: app/build/outputs/apk/debug/app-debug.apk
