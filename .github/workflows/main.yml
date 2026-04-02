@@ -29,7 +29,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 3. Smart Path & XML Cleanup
+    - name: 3. Create Clean Structure
       uses: actions/github-script@v7
       with:
         script: |
@@ -37,33 +37,43 @@ jobs:
           const pkg = "${{ github.event.inputs.pkg_name }}";
           const pkgPath = pkg.replace(/\./g, '/');
           
-          // پرانے اسٹرکچر کی صفائی
+          // پرانی فائلز ہٹانا اور نئے فولڈرز بنانا
           fs.rmSync('app/src/main', { recursive: true, force: true });
-          
-          // درست ڈائریکٹریز بنانا
           fs.mkdirSync(`app/src/main/java/${pkgPath}`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/layout`, { recursive: true });
           fs.mkdirSync(`app/src/main/res/values`, { recursive: true });
           
-          // Java کوڈ لکھنا
+          // کوڈ سیو کرنا
           fs.writeFileSync(`app/src/main/java/${pkgPath}/MainActivity.java`, process.env.JAVA_CODE);
-          
-          // XML کوڈ کو صاف کرنا (تاکہ کوئی ادھورا ٹیگ بلڈ خراب نہ کرے)
-          let xml = process.env.XML_CODE.trim();
-          if (!xml.startsWith('<?xml')) {
-              xml = '<?xml version="1.0" encoding="utf-8"?>\n' + xml;
-          }
-          fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, xml);
+          fs.writeFileSync(`app/src/main/res/layout/activity_main.xml`, process.env.XML_CODE);
       env:
         JAVA_CODE: ${{ github.event.inputs.java_code }}
         XML_CODE: ${{ github.event.inputs.xml_code }}
 
-    - name: 4. Build Configuration
+    - name: 4. Fix Gradle & Plugin Repositories
       run: |
-        # settings.gradle
-        echo "include ':app'" > settings.gradle
+        # settings.gradle میں گوگل ریپوزٹری شامل کرنا لازمی ہے
+        cat << EOF > settings.gradle
+        pluginManagement {
+            repositories { google(); mavenCentral(); gradlePluginPortal() }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() }
+        }
+        rootProject.name = "SystemPro"
+        include ':app'
+        EOF
 
-        # App build.gradle
+        # Root build.gradle (پلگ ان ورژن کے ساتھ)
+        cat << EOF > build.gradle
+        plugins {
+            id 'com.android.application' version '8.2.2' apply false
+            id 'com.android.library' version '8.2.2' apply false
+        }
+        EOF
+
+        # App build.gradle (پلگ ان اپلائی کرنا)
         cat << EOF > app/build.gradle
         plugins { id 'com.android.application' }
         android {
@@ -83,11 +93,12 @@ jobs:
         }
         EOF
 
-        # Manifest (بغیر کسی اضافی تھیم کے تاکہ کریش نہ ہو)
+        # Strings & Manifest
+        printf '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">%s</string></resources>' "${{ github.event.inputs.app_name }}" > app/src/main/res/values/strings.xml
         cat << EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:label="${{ github.event.inputs.app_name }}" android:allowBackup="true">
+            <application android:label="@string/app_name" android:allowBackup="true">
                 <activity android:name=".MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
@@ -98,12 +109,12 @@ jobs:
         </manifest>
         EOF
 
-    - name: 5. Force Build (Clean Start)
+    - name: 5. Build APK
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        ./gradlew assembleDebug --no-daemon
 
-    - name: 6. Get APK
+    - name: 6. Upload Result
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}
