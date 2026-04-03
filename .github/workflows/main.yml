@@ -8,7 +8,7 @@ on:
         required: true
         default: 'SystemProApp'
       package_name:
-        description: 'Package Name (e.g., com.systempro.app)'
+        description: 'Package Name'
         required: true
         default: 'com.systempro.app'
       java_code:
@@ -32,22 +32,27 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Create Project Structure and Process Files
+      - name: Process and Save Files
         run: |
-          # Convert package name dots to slashes for the folder structure
+          # پیکیج نیم کو فولڈر سٹرکچر میں بدلنا
           PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          
-          # Create the necessary directories
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
 
-          # Save the XML (cleaning leading whitespace/newlines)
-          echo "${{ github.event.inputs.xml_layout }}" | sed '1{/^$/d;}' > app/src/main/res/layout/activity_main.xml
-          
-          # Save the Java code
-          echo "${{ github.event.inputs.java_code }}" > app/src/main/java/$PACKAGE_PATH/MainActivity.java
+          # XML فائل کو محفوظ کرنا (بغیر کسی تبدیلی کے)
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          ${{ github.event.inputs.xml_layout }}
+          EOF
 
-      - name: Grant Execute Permission for Gradlew
+          # پہلی لائن سے خالی جگہ ختم کرنا تاکہ پرانا ایرر نہ آئے
+          sed -i '1{/^$/d;}' app/src/main/res/layout/activity_main.xml
+
+          # Java فائل کو محفوظ کرنا
+          cat << 'EOF' > app/src/main/java/$PACKAGE_PATH/MainActivity.java
+          ${{ github.event.inputs.java_code }}
+          EOF
+
+      - name: Grant Execute Permission
         run: chmod +x gradlew
 
       - name: Build Debug APK
