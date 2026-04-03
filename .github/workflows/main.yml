@@ -1,39 +1,43 @@
-name: Create Android Project Structure
+name: System Pro APK Builder
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: # اس سے آپ بٹن دبا کر بھی رن کر سکتے ہیں
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-structure:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Folders with Keep Files
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle' # یہ بڑے پراجیکٹس کی رفتار بڑھاتا ہے
+
+      - name: Initialize Project Structure
         run: |
-          mkdir -p app/src/main/java
+          mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/assets
           mkdir -p app/libs
-          
-          # ہر فولڈر میں ایک خالی فائل بنانا ضروری ہے تاکہ Git اسے قبول کرے
-          touch app/src/main/java/.gitkeep
-          touch app/src/main/res/layout/.gitkeep
-          touch app/src/main/res/values/.gitkeep
-          touch app/src/main/res/drawable/.gitkeep
-          touch app/src/main/assets/.gitkeep
-          touch app/libs/.gitkeep
+          # ضروری فائلیں بنانا اگر موجود نہ ہوں
+          touch app/src/main/java/com/system/pro/MainActivity.java
+          touch app/src/main/res/layout/activity_main.xml
 
-      - name: Commit and Push Changes
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add .
-          git commit -m "Automated: Created Android project structure" || echo "No changes to commit"
-          git push
+      - name: Grant Execute Permission for Gradle
+        run: chmod +x gradlew || echo "No gradlew found yet"
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug --stacktrace --info
+        # '--stacktrace' بڑے ایررز کو پکڑنے کے لیے ضروری ہے
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
