@@ -4,19 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'App Name (e.g., MyClockApp)'
+        description: 'Name of the App'
         required: true
         default: 'SystemProApp'
       package_name:
-        description: 'Package Name (e.g., com.system.pro)'
+        description: 'Package Name (e.g., com.systempro.app)'
         required: true
-        default: 'com.system.pro'
+        default: 'com.systempro.app'
       java_code:
-        description: 'Paste your MainActivity Java code here'
-        required: false
+        description: 'Main Activity Java Code'
+        required: true
       xml_layout:
-        description: 'Paste your activity_main.xml code here'
-        required: false
+        description: 'Activity Main XML Layout'
+        required: true
 
 jobs:
   initialize-and-build:
@@ -32,101 +32,22 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Create Professional Structure
+      - name: Create Project Structure
         run: |
-          # پیکیج نیم سے ڈائریکٹری پاتھ بنانا
-          PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p app/src/main/java/${{ github.event.inputs.package_name | replace('.', '/') }}
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/libs
-          mkdir -p gradle/wrapper
 
-          # 1. AndroidManifest.xml (Dynamic)
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ github.event.inputs.package_name }}">
-              <application android:label="${{ github.event.inputs.app_name }}" android:theme="@android:style/Theme.DeviceDefault">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 2. Java Code Fixer & Writer
-          if [ -n "${{ github.event.inputs.java_code }}" ]; then
-            # شروع کی خالی جگہ ختم کرنا
-            echo "${{ github.event.inputs.java_code }}" | sed -e 's/^[[:space:]]*//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          else
-            cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            package ${{ github.event.inputs.package_name }};
-            import android.app.Activity;
-            import android.os.Bundle;
-            public class MainActivity extends Activity {
-                @Override protected void onCreate(Bundle savedInstanceState) { 
-                    super.onCreate(savedInstanceState); 
-                    setContentView(R.layout.activity_main); 
-                }
-            }
-          EOF
-          fi
-
-          # 3. XML Code Fixer (Crucial for ParseError)
-          if [ -n "${{ github.event.inputs.xml_layout }}" ]; then
-            # یہ کمانڈ XML ہیڈر کے پیچھے چھپے ہوئے کسی بھی کریکٹر کو صاف کر دے گی
-            echo "${{ github.event.inputs.xml_layout }}" | sed -e 's/^[[:space:]]*//' | awk 'NF' > app/src/main/res/layout/activity_main.xml
-          else
-            cat <<EOF > app/src/main/res/layout/activity_main.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro v2 Ready!" android:layout_centerInParent="true"/>
-            </RelativeLayout>
-          EOF
-          fi
-
-          # 4. Build Scripts
-          echo "include ':app'" > settings.gradle
-          
-          cat <<EOF > build.gradle
-          buildscript { 
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace '${{ github.event.inputs.package_name }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-      - name: Build APK
+      - name: Process and Save Files
         run: |
-          gradle wrapper
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          # The following lines strip leading whitespace/newlines to prevent XML parsing errors
+          echo "${{ github.event.inputs.xml_layout }}" | sed '1{/^$/d;}' > app/src/main/res/layout/activity_main.xml
+          echo "${{ github.event.inputs.java_code }}" > app/src/main/java/${{ github.event.inputs.package_name | replace('.', '/') }}/MainActivity.java
 
-      - name: Save Changes to Repo
-        run: |
-          git config --local user.email "bot@systempro.v2"
-          git config --local user.name "System-Pro-Engine"
-          git add .
-          git commit -m "Auto-Build: ${{ github.event.inputs.app_name }}" || echo "No changes"
-          git push
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
