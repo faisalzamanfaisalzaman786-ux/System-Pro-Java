@@ -1,25 +1,11 @@
-name: System Pro Dynamic Builder
+name: System Pro Auto Builder
 
 on:
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'Name of the App'
-        required: true
-        default: 'SystemProApp'
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.systempro.app'
-      java_code:
-        description: 'Main Activity Java Code'
-        required: true
-      xml_layout:
-        description: 'Activity Main XML Layout'
-        required: true
+  repository_dispatch:
+    types: [build-zip-project]
 
 jobs:
-  initialize-and-build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -32,25 +18,18 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process and Save Files
+      - name: Process Zip Data
         run: |
-          # پیکیج نیم کو فولڈر سٹرکچر میں بدلنا
-          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          mkdir -p app/src/main/java/$PACKAGE_PATH
-          mkdir -p app/src/main/res/layout
-
-          # XML فائل کو محفوظ کرنا (بغیر کسی تبدیلی کے)
-          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.inputs.xml_layout }}
-          EOF
-
-          # پہلی لائن سے خالی جگہ ختم کرنا تاکہ پرانا ایرر نہ آئے
-          sed -i '1{/^$/d;}' app/src/main/res/layout/activity_main.xml
-
-          # Java فائل کو محفوظ کرنا
-          cat << 'EOF' > app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          ${{ github.event.inputs.java_code }}
-          EOF
+          # پرانی فائلیں صاف کرنا
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          
+          # زپ ڈیٹا کو ڈی کوڈ کرنا
+          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          unzip -o project.zip -d temp_dir/
+          
+          # فائلوں کو صحیح جگہ منتقل کرنا
+          cp -rv temp_dir/src/* app/src/ || true
 
       - name: Grant Execute Permission
         run: chmod +x gradlew
@@ -58,8 +37,8 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-Debug
+          name: ${{ github.event.client_payload.app_name }}
           path: app/build/outputs/apk/debug/*.apk
