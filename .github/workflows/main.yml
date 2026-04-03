@@ -1,28 +1,39 @@
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+name: Create Android Project Structure
 
-public void buildPhysicalStructure(String basePath) {
-    // وہ تمام راستے جو ہم نے YAML میں طے کیے ہیں
-    List<String> foldersToCreate = new ArrayList<>();
-    foldersToCreate.add("/app/src/main/java");
-    foldersToCreate.add("/app/src/main/res/layout");
-    foldersToCreate.add("/app/src/main/res/values");
-    foldersToCreate.add("/app/src/main/res/drawable");
-    foldersToCreate.add("/app/src/main/assets");
-    foldersToCreate.add("/app/libs");
-    foldersToCreate.add("/app/build/outputs/apk");
-    foldersToCreate.add("/app/build/intermediates");
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # اس سے آپ بٹن دبا کر بھی رن کر سکتے ہیں
 
-    for (String path : foldersToCreate) {
-        File folder = new File(basePath + path);
-        
-        // اگر فولڈر پہلے سے نہیں ہے تو بنا دو
-        if (!folder.exists()) {
-            boolean created = folder.mkdirs(); // mkdirs() بڑے اسٹرکچر کے لیے بہترین ہے
-            if (created) {
-                System.out.println("کامیابی سے بن گیا: " + folder.getAbsolutePath());
-            }
-        }
-    }
-}
+jobs:
+  build-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Folders with Keep Files
+        run: |
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/assets
+          mkdir -p app/libs
+          
+          # ہر فولڈر میں ایک خالی فائل بنانا ضروری ہے تاکہ Git اسے قبول کرے
+          touch app/src/main/java/.gitkeep
+          touch app/src/main/res/layout/.gitkeep
+          touch app/src/main/res/values/.gitkeep
+          touch app/src/main/res/drawable/.gitkeep
+          touch app/src/main/assets/.gitkeep
+          touch app/libs/.gitkeep
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "Automated: Created Android project structure" || echo "No changes to commit"
+          git push
