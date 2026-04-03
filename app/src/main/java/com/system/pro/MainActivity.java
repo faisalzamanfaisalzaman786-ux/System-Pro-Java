@@ -1,9 +1,1 @@
-package com.system.pro;
-import android.app.Activity;
-import android.os.Bundle;
-public class MainActivity extends Activity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
-}
+package com.system.pro;  import android.app.Activity; import android.os.Bundle; import android.os.Handler; import android.widget.TextView; import java.text.SimpleDateFormat; import java.util.Calendar; import java.util.Locale;  public class MainActivity extends Activity {      private TextView clockText;     private Handler handler = new Handler();     private SimpleDateFormat timeFormat = new SimpleDateFormat(HH:mm:ss, Locale.getDefault());      @Override     protected void onCreate(Bundle savedInstanceState) {         super.onCreate(savedInstanceState);         setContentView(R.layout.activity_main);          clockText = findViewById(R.id.clockText);         startClock();     }      private void startClock() {         handler.postDelayed(new Runnable() {             @Override             public void run() {                 String currentTime = timeFormat.format(Calendar.getInstance().getTime());                 clockText.setText(currentTime);                 handler.postDelayed(this, 1000);             }         }, 0);     } }
