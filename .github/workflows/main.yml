@@ -32,16 +32,20 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Create Project Structure
+      - name: Create Project Structure and Process Files
         run: |
-          mkdir -p app/src/main/java/${{ github.event.inputs.package_name | replace('.', '/') }}
+          # Convert package name dots to slashes for the folder structure
+          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
+          
+          # Create the necessary directories
+          mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
 
-      - name: Process and Save Files
-        run: |
-          # The following lines strip leading whitespace/newlines to prevent XML parsing errors
+          # Save the XML (cleaning leading whitespace/newlines)
           echo "${{ github.event.inputs.xml_layout }}" | sed '1{/^$/d;}' > app/src/main/res/layout/activity_main.xml
-          echo "${{ github.event.inputs.java_code }}" > app/src/main/java/${{ github.event.inputs.package_name | replace('.', '/') }}/MainActivity.java
+          
+          # Save the Java code
+          echo "${{ github.event.inputs.java_code }}" > app/src/main/java/$PACKAGE_PATH/MainActivity.java
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
