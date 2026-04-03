@@ -1,4 +1,4 @@
-name: System Pro APK Builder
+name: System Pro Initializer & Builder
 
 on:
   push:
@@ -6,38 +6,105 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  setup-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Create Full Android Structure
+        run: |
+          # 1. فولڈرز بنانا
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/libs
+          mkdir -p gradle/wrapper
+
+          # 2. بنیادی فائلیں بنانا (اگر موجود نہ ہوں)
+          
+          # AndroidManifest.xml
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # build.gradle (Project Level)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          # build.gradle (App Level)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # settings.gradle
+          echo "include ':app'" > settings.gradle
+
+          # Dummy Java File
+          cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
+          package com.system.pro;
+          import android.app.Activity;
+          import android.os.Bundle;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # یہ بڑے پراجیکٹس کی رفتار بڑھاتا ہے
 
-      - name: Initialize Project Structure
+      - name: Build APK (Debug)
         run: |
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/libs
-          # ضروری فائلیں بنانا اگر موجود نہ ہوں
-          touch app/src/main/java/com/system/pro/MainActivity.java
-          touch app/src/main/res/layout/activity_main.xml
+          # Gradle Wrapper تیار کرنا اگر موجود نہ ہو
+          gradle wrapper
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Grant Execute Permission for Gradle
-        run: chmod +x gradlew || echo "No gradlew found yet"
+      - name: Commit Structure to Repo
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Initialize Professional Project Structure" || echo "No changes"
+          git push
 
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug --stacktrace --info
-        # '--stacktrace' بڑے ایررز کو پکڑنے کے لیے ضروری ہے
-
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Debug-APK
+          name: SystemPro-V2
           path: app/build/outputs/apk/debug/*.apk
