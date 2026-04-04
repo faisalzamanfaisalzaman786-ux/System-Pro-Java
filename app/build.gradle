@@ -1,20 +1,25 @@
+android {
+    // ... آپ کا باقی مروجہ کوڈ (namespace, compileSdk وغیرہ)
+
+    configurations.all {
+        resolutionStrategy {
+            // یہ لائنز مختلف لائبریریز کے ورژنز کو آپس میں ٹکرانے سے روکتی ہیں
+            force 'androidx.core:core:1.9.0'
+            force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
+            force 'androidx.cursoradapter:cursoradapter:1.0.0'
+            force 'androidx.appcompat:appcompat:1.6.1'
+        }
+    }
+}
+
 dependencies {
-    // اینڈرائیڈ کی بنیادی لائبریریز جن میں ٹکراؤ ہو رہا ہے
+    // بنیادی UI لائبریریز
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // ان لائبریریز کو زبردستی ایک ہی ورژن پر لانے کے لیے (Conflict Resolution)
+    // کٹلن اور لائف سائیکل سپورٹ (جو آپ نے ابھی شامل کیں)
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.5.1'
     implementation 'androidx.activity:activity-ktx:1.6.0'
-}
-
-// یہ بلاک گریڈل کو مجبور کرے گا کہ وہ متصادم ورژنز کو نظر انداز کرے
-configurations.all {
-    resolutionStrategy {
-        force 'androidx.core:core:1.9.0'
-        force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
-        force 'androidx.cursoradapter:cursoradapter:1.0.0'
-    }
 }
