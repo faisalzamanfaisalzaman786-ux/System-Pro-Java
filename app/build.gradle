@@ -1,24 +1,48 @@
-android {
-    // ... آپ کا باقی مروجہ کوڈ (namespace, compileSdk وغیرہ)
+// یہ لائن سب سے اوپر ہونا لازمی ہے، ورنہ 'android()' میتھڈ نہیں ملے گا
+plugins {
+    id 'com.android.application'
+}
 
+android {
+    namespace 'com.faisal.systempro' // اپنے پروجیکٹ کا اصل پیکیج نام یہاں لکھیں
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.faisal.systempro"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // لائبریریز کے ٹکراؤ کو روکنے کے لیے یہ بلاک ضروری ہے
     configurations.all {
         resolutionStrategy {
-            // یہ لائنز مختلف لائبریریز کے ورژنز کو آپس میں ٹکرانے سے روکتی ہیں
             force 'androidx.core:core:1.9.0'
-            force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
-            force 'androidx.cursoradapter:cursoradapter:1.0.0'
             force 'androidx.appcompat:appcompat:1.6.1'
+            force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
         }
     }
 }
 
 dependencies {
-    // بنیادی UI لائبریریز
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // کٹلن اور لائف سائیکل سپورٹ (جو آپ نے ابھی شامل کیں)
+    // کٹلن اور دیگر ضروری سپورٹ
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.5.1'
     implementation 'androidx.activity:activity-ktx:1.6.0'
