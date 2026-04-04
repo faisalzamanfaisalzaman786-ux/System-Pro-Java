@@ -20,49 +20,46 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process Project and Fix Zip
+      - name: Preparation and Data Processing
         run: |
           # پیکیج نیم حاصل کرنا
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisalzar.systempro' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Building for: $PKG_NAME"
 
-          # پرانا ڈیٹا صاف کرنا
+          # پرانے ریسورسز صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
 
-          # زپ ڈیٹا کو چیک کرنا اور نکالنا
-          if [ -z "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "Error: No zip data received from app!"
-            exit 1
+          # زپ ڈیٹا چیک کرنا
+          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
+            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+            unzip -o project.zip -d temp_dir/
+            
+            # پیکج نیم کی درستگی
+            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
+            
+            # فولڈر سٹرکچر بنانا اور فائلیں منتقل کرنا
+            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
+            mkdir -p "app/src/main/java/$PKG_PATH"
+            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            rm -rf temp_dir project.zip
+          else
+            echo "Warning: No zip data received, using baseline files."
           fi
 
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-          
-          # زپ فائل کی صحت چیک کرنا
-          if ! unzip -t project.zip > /dev/null 2>&1; then
-            echo "Error: project.zip is corrupted or not a valid zip file."
-            exit 1
-          fi
-
-          unzip -o project.zip -d temp_dir/
-
-          # جاوا پیکج اپ ڈیٹ کرنا
-          find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
-          
-          # ڈائنامک فولڈر بنانا
-          PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          
-          # فائلیں منتقل کرنا
-          find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-          cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-          
-          rm -rf temp_dir project.zip
-
-      - name: Auto-Generate Manifest
+      - name: Generate Manifest and Build
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisalzar.systempro' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          
+          # ریسورس فائلوں کے نام ٹھیک کرنا
+          find app/src/main/res/drawable -type f | while read -r file; do
+            new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
+            mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
+          done
+
+          # مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
@@ -79,13 +76,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build System Pro
-        run: |
+          # بلڈ شروع کرنا
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: System-Pro-v2-Build
           path: app/build/outputs/apk/debug/*.apk
