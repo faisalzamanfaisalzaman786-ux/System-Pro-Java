@@ -20,56 +20,46 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Cleanup and Setup Workspace
+      - name: Preparation
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
-          rm -rf app/src/main/res/mipmap*
           mkdir -p app/src/main/java/com/faisalzar/systempro
-          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/res/menu
+          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values
 
-      - name: Extract and Hard Fix Resources
+      - name: Sync Code and Fix Package
         if: github.event_name == 'repository_dispatch'
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           unzip -o project.zip -d temp_dir/
 
-          # تمام امیجز کے ناموں سے اسپیس اور بریکٹ ختم کرنا (سخت فلٹر)
-          find temp_dir/src/main/res/drawable -type f | while read -r file; do
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            # نام سے اسپیس اور بریکٹ ختم کر کے انڈر اسکور لگانا
-            clean_name=$(echo "$base" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
-            mv "$file" "$dir/$clean_name" 2>/dev/null || true
-          done
-
-          # پہلا امیج بطور ic_launcher سیٹ کرنا
-          first_img=$(find temp_dir/src/main/res/drawable -type f \( -name "*.png" -o -name "*.jpg" \) | head -n 1)
-          if [ -n "$first_img" ]; then
-            cp "$first_img" "app/src/main/res/drawable/ic_launcher.png"
-          fi
-
-          # کوڈ اور باقی ریسورسز منتقل کرنا
+          # تمام جاوا فائلوں کے اندر سے پیکج نیم کو زبردستی 'com.faisalzar.systempro' کرنا
           find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package com.faisalzar.systempro;/g" {} +
+          
+          # فائلوں کو صحیح جگہ منتقل کرنا
           find temp_dir/src/main/java -name "*.java" -exec cp {} app/src/main/java/com/faisalzar/systempro/ \;
           cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           
           rm -rf temp_dir project.zip
 
-      - name: Force Fix Manifest
+      - name: Generate Manifest and Clean Assets
         run: |
+          # ریسورس فائلوں کے نام درست کرنا (اسپیس اور بریکٹ ختم کرنا)
+          find app/src/main/res/drawable -type f | while read -r file; do
+            new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
+            mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
+          done
+
+          # نیا اور درست مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.faisalzar.systempro">
-              
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
-
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
                   android:label="System Pro"
                   android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
@@ -82,13 +72,9 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build APK
+      - name: Build and Upload
         run: |
-          if [ ! -f "app/src/main/res/drawable/ic_launcher.png" ]; then
-            touch app/src/main/res/drawable/ic_launcher.png
-          fi
           chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.5
           ./gradlew clean assembleDebug --no-daemon
 
       - name: Upload APK
