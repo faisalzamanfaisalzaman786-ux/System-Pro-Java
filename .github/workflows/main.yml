@@ -19,47 +19,35 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Prepare Workspace and Resources
+      - name: Prepare Workspace
         run: |
-          mkdir -p app/src/main/java
+          mkdir -p app/src/main/java/com/faisalzar/systempro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
-
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            mkdir -p temp_dir
-            unzip -o project.zip -d temp_dir/
-            
-            if [ -d "temp_dir/app/src/main/java" ]; then
-              cp -rf temp_dir/app/src/main/java/* app/src/main/java/ || true
-              cp -rf temp_dir/app/src/main/res/* app/src/main/res/ || true
-            else
-              cp -rf temp_dir/* app/src/main/ || true
-            fi
-            rm -rf temp_dir project.zip
-          fi
-
-          # مینیو فائل کا فکس
+          
+          # مینیو فائل کا لازمی فکس
           cat <<EOF > app/src/main/res/menu/main_menu.xml
           <?xml version="1.0" encoding="utf-8"?>
           <menu xmlns:android="http://schemas.android.com/apk/res/android"
                 xmlns:app="http://schemas.android.com/apk/res-auto">
-              <item
-                  android:id="@+id/action_settings"
-                  android:title="Settings"
-                  android:orderInCategory="100"
-                  app:showAsAction="never" />
+              <item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" />
           </menu>
           EOF
+
+      - name: Force Gradle Wrapper Version
+        # اگر آپ کا ریپوزٹری ورژن 9.4 استعمال کر رہا ہے، تو اسے 8.5 پر لانا بہتر ہے
+        run: |
+          if [ -f "gradlew" ]; then
+            ./gradlew wrapper --gradle-version 8.5
+          fi
 
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        # ہم نے یہاں --no-configuration-cache شامل کیا ہے تاکہ Resolved Configuration کا مسئلہ حل ہو
-        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
         env:
-          GRADLE_OPTS: "-Dorg.gradle.project.android.useAndroidX=true -Dorg.gradle.project.android.enableJetifier=true"
+          GRADLE_OPTS: "-Xmx2048m -Dorg.gradle.jvmargs=-Xmx2048m"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
