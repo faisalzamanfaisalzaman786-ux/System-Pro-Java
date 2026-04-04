@@ -20,26 +20,27 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Data Processing and Sync
+      - name: Data Processing and Asset Fix
         run: |
-          # پیکیج نیم حاصل کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
-          # پرانا ڈیٹا صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
 
-          # اگر زپ ڈیٹا موجود ہو
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # جاوا فائلز میں پیکیج ٹھیک کرنا
+            # امیج فائلوں کے غلط نام (Spaces, Brackets) ٹھیک کرنا
+            find temp_dir/src/main/res/drawable -type f | while read -r file; do
+              new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
+              mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
+            done
+
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # صحیح ڈائریکٹری بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -47,14 +48,15 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Generate Clean Manifest
+      - name: Final Build and Namespace Inject
         run: |
-          # نئے گریڈل رولز کے مطابق مینی فیسٹ (بغیر پیکیج ایٹریبیوٹ کے)
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          
+          # کلین مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
-              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
               <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -66,12 +68,8 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Build with Namespace Inject
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           chmod +x gradlew
-          # پیکیج نیم کو براہ راست پراپرٹی کے طور پر پاس کرنا
-          ./gradlew clean assembleDebug -Pandroid.overridePathCheck=true -Pandroid.namespace=$PKG_NAME --no-daemon
+          ./gradlew clean assembleDebug -Pandroid.namespace=$PKG_NAME --no-daemon
 
       - name: Archive Success APK
         uses: actions/upload-artifact@v4
