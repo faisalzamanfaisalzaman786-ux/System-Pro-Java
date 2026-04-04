@@ -18,16 +18,13 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Prepare Workspace and Resources
-        # تمام فائل ہینڈلنگ گریڈل سے پہلے یہاں ہوگی
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
 
-          # 1. اگر زپ ڈیٹا موجود ہے تو اسے پہلے پروسیس کریں
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             mkdir -p temp_dir
@@ -36,16 +33,13 @@ jobs:
             if [ -d "temp_dir/app/src/main/java" ]; then
               cp -rf temp_dir/app/src/main/java/* app/src/main/java/ || true
               cp -rf temp_dir/app/src/main/res/* app/src/main/res/ || true
-            elif [ -d "temp_dir/src/main/java" ]; then
-              cp -rf temp_dir/src/main/java/* app/src/main/java/ || true
-              cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             else
               cp -rf temp_dir/* app/src/main/ || true
             fi
             rm -rf temp_dir project.zip
           fi
 
-          # 2. مینیو فائل کا فکس (Namespace Error Fix)
+          # مینیو فائل کا فکس
           cat <<EOF > app/src/main/res/menu/main_menu.xml
           <?xml version="1.0" encoding="utf-8"?>
           <menu xmlns:android="http://schemas.android.com/apk/res/android"
@@ -62,11 +56,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        # اب گریڈل کو ایک کلین اور تیار شدہ ڈائریکٹری ملے گی
-        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+        # ہم نے یہاں --no-configuration-cache شامل کیا ہے تاکہ Resolved Configuration کا مسئلہ حل ہو
+        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace
         env:
-          # گریڈل 9.4.1 کی سختی کو کم کرنے کے لیے عارضی طور پر یہ شامل کیا جا سکتا ہے
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+          GRADLE_OPTS: "-Dorg.gradle.project.android.useAndroidX=true -Dorg.gradle.project.android.enableJetifier=true"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
