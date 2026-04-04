@@ -7,11 +7,71 @@ on:
     types: [build-zip-project]
 
 jobs:
-  build:
+  prepare-data:
+    runs-on: ubuntu-latest
+    outputs:
+      pkg_name: ${{ steps.vars.outputs.pkg_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Process Resources
+        id: vars
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
+          
+          # صفائی اور فولڈر بنانا
+          rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
+          
+          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
+            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+            unzip -o project.zip -d temp_dir/
+            
+            # نام درست کرنا
+            find temp_dir/src/main/res -type f | while read -r file; do
+                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
+                mv "$file" "$new_name" 2>/dev/null || true
+            done
+            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
+            
+            # فولڈر سٹرکچر
+            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
+            mkdir -p "app/src/main/java/$PKG_PATH"
+            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            
+            # آئیکن فکس
+            mkdir -p app/src/main/res/mipmap-anydpi-v26 app/src/main/res/mipmap-hdpi
+            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
+            if [ -n "$ICON_FILE" ]; then
+                ICON_NAME=$(basename "$ICON_FILE" .png)
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
+                echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@android:color/white"/><foreground android:drawable="@drawable/'$ICON_NAME'"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+            fi
+          fi
+          
+          # مینی فیسٹ بنانا
+          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+
+      - name: Upload Prepared Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepared-src
+          path: app/src/main/
+
+  build-apk:
+    needs: prepare-data
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download Prepared Files
+        uses: actions/download-artifact@v4
+        with:
+          name: prepared-src
+          path: app/src/main/
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -19,51 +79,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Project and Icon
+      - name: Compile APK
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          
-          # پرانی فائلوں کی صفائی
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/drawable/*
-          rm -rf app/src/main/res/mipmap-*
-          rm -rf .gradle build app/build
-
-          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            unzip -o project.zip -d temp_dir/
-            
-            # امیجز اور جاوا فائلوں کی درستگی
-            find temp_dir/src/main/res -type f | while read -r file; do
-                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
-                mv "$file" "$new_name" 2>/dev/null || true
-            done
-            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
-            
-            # فولڈر سٹرکچر بنانا
-            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-            mkdir -p "app/src/main/java/$PKG_PATH"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # آئیکن فکس (Adaptive Icon)
-            mkdir -p app/src/main/res/mipmap-anydpi-v26
-            mkdir -p app/src/main/res/mipmap-hdpi
-            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
-            if [ -n "$ICON_FILE" ]; then
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-                ICON_NAME=$(basename "$ICON_FILE" .png)
-                echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@android:color/white"/><foreground android:drawable="@drawable/'$ICON_NAME'"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-                cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-            fi
-            rm -rf temp_dir project.zip
-          fi
-
-          # مینی فیسٹ بنانا
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-
-          # build.gradle بنانا
+          PKG_NAME="${{ needs.prepare-data.outputs.pkg_name }}"
+          # بلڈ گریڈل کو بالکل نئے سرے سے لکھنا
           echo "plugins { id 'com.android.application' }
           android {
               namespace '$PKG_NAME'
@@ -81,13 +100,11 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Final Build
-        run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --no-configuration-cache
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: System-Pro-V2-Working
           path: app/build/outputs/apk/debug/*.apk
