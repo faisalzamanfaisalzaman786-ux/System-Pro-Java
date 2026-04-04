@@ -14,15 +14,6 @@ android {
         versionName "1.0"
     }
 
-    // یہ حصہ 'android' بلاک کے اندر لیکن 'dependencies' سے پہلے ہونا چاہیے
-    configurations.all {
-        resolutionStrategy {
-            force 'androidx.core:core:1.9.0'
-            force 'androidx.appcompat:appcompat:1.6.1'
-            force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
-        }
-    }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -33,6 +24,15 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// یہ بلاک اب 'android' بلاک سے باہر ہے
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.9.0'
+        force 'androidx.appcompat:appcompat:1.6.1'
+        force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
     }
 }
 
