@@ -1,1 +1,45 @@
-<RelativeLayout xmlns:android=http://schemas.android.com/apk/res/android     android:layout_width=match_parent     android:layout_height=match_parent     android:background=#121212>      <TextView         android:id=@+id/clockText         android:layout_width=wrap_content         android:layout_height=wrap_content         android:layout_centerInParent=true         android:text=00:00:00         android:textColor=#00FFCC         android:textSize=65sp         android:textStyle=bold         android:fontFamily=monospace />  </RelativeLayout>
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res/auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F111A">
+
+    <TextView
+        android:id="@+id/title_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="30dp"
+        android:text="System Pro v2.0"
+        android:textColor="#00FFC6"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/et_code"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/btn_build"
+        android:layout_below="@id/title_text"
+        android:layout_margin="20dp"
+        android:background="#1A1D2E"
+        android:gravity="top"
+        android:hint="Java code here..."
+        android:padding="15dp"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_build"
+        android:layout_width="match_parent"
+        android:layout_height="65dp"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="20dp"
+        android:text="🚀 پروجیکٹ بلڈ کریں"
+        android:textColor="#000000"
+        android:textSize="18sp"
+        app:backgroundTint="#00FFC6"
+        app:cornerRadius="30dp" />
+
+</RelativeLayout>
