@@ -26,37 +26,33 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/values/strings.xml
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/menu
+          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/res/menu
 
-      - name: Extract Project Data
+      - name: Extract and Rename Resources
         if: github.event_name == 'repository_dispatch'
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           unzip -o project.zip -d temp_dir/
+          
+          # تمام امیجز کے ناموں سے اسپیس اور بریکٹ ختم کرنا (اینڈرائیڈ رولز کے لیے)
+          find temp_dir/src/main/res/drawable -type f | while read -r file; do
+            new_name=$(echo "$file" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | tr -d '()' | sed 's/-/_/g')
+            mv "$file" "$new_name" 2>/dev/null || true
+          done
+
           cp -rf temp_dir/src/main/* app/src/main/ || true
           rm -rf temp_dir project.zip
 
-      - name: Fix Resources and Versioning
+      - name: Final Fixes and Build
         run: |
-          # مینیو فائل کا فکس
+          # مینیو فائل چیک
           if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
             echo '<?xml version="1.0" encoding="utf-8"?><menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"><item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" /></menu>' > app/src/main/res/menu/main_menu.xml
           fi
-          # گریڈل ورژن کو 8.5 پر سیٹ کرنا
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew wrapper --gradle-version 8.5
-          fi
-
-      - name: Build Debug APK
-        # یہاں '--clean' کو ہٹا کر 'clean' ٹاسک شامل کیا گیا ہے
-        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
-        env:
-          GRADLE_OPTS: "-Xmx2048m -Dorg.gradle.jvmargs=-Xmx2048m"
+          
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.5
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
