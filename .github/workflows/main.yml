@@ -26,10 +26,17 @@ jobs:
           
           # زپ ڈیٹا کو ڈی کوڈ کرنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          mkdir -p temp_dir
           unzip -o project.zip -d temp_dir/
           
-          # فائلوں کو صحیح جگہ منتقل کرنا
-          cp -rv temp_dir/src/* app/src/ || true
+          # فائلوں کو درست اینڈرائیڈ اسٹرکچر میں منتقل کرنا
+          # یہ فرض کرتے ہوئے کہ زپ کے اندر 'src' کا فولڈر موجود ہے
+          if [ -d "temp_dir/src" ]; then
+            cp -rv temp_dir/src/* app/src/ || true
+          else
+            # اگر زپ میں براہ راست کوڈ ہے تو اسے یہاں سے سنبھالیں
+            cp -rv temp_dir/* app/src/main/ || true
+          fi
 
       - name: Grant Execute Permission
         run: chmod +x gradlew
