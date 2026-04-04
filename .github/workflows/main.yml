@@ -1,28 +1,5 @@
-name: System Pro Auto Builder
-
-on:
-  push:
-    branches: [ main ]
-  repository_dispatch:
-    types: [build-zip-project]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
       - name: Setup Dynamic Project Data
         run: |
-          # پیکیج نیم سیٹ کریں
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
@@ -31,71 +8,25 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
 
-          # اگر زپ فائل موجود ہے تو ڈیٹا ایکسٹریکٹ کریں
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
+            # --- اہم تبدیلی: فائل نیمز درست کرنا ---
+            # یہ کمانڈ تمام فائلوں کے ناموں سے سپیس اور بریکٹ ختم کر دے گی
+            find temp_dir/src/main/res -type f | while read -r file; do
+                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()')
+                if [ "$file" != "$new_name" ]; then
+                    mv "$file" "$new_name"
+                fi
+            done
+
             # جاوا فائلز کا پیکیج نیم اپ ڈیٹ کریں
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # صحیح ڈائریکٹری اسٹرکچر میں فائلیں منتقل کریں
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             rm -rf temp_dir project.zip
           fi
-
-          # بلڈ گریڈل فائل کو مکمل دوبارہ لکھیں (بغیر کسی Mutation کے)
-          cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-
-      - name: Fix Permissions and Gradle Version
-        run: |
-          chmod +x gradlew
-          # گریڈل ورژن کو 8.5 پر سیٹ کریں جو زیادہ سٹیبل ہے
-          ./gradlew wrapper --gradle-version 8.5
-
-      - name: Build with Gradle
-        run: |
-          # کلین بلڈ کریں تاکہ پچھلا کوئی کیشے مسئلہ نہ کرے
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/*.apk
