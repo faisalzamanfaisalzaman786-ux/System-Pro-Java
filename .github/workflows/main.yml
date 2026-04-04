@@ -29,49 +29,63 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # مکمل صفائی
+          # صفائی
           rm -rf .gradle build app/build
           rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
 
-          # ڈیفالٹ فولڈرز بنانا (ایرر سے بچنے کے لیے ضروری ہے)
+          # ضروری فولڈرز کی تخلیق
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/values
 
-          # زپ سے ڈیٹا نکالنا
+          # اگر زپ ڈیٹا موجود ہے
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کے نام ٹھیک کرنا
+            # فائلوں کی درستگی اور منتقلی
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
-            
-            # پیکیج اور جاوا سیٹ اپ
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
+            
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # آئیکن کو زبردستی میپ میپ (mipmap) میں کاپی کرنا
-            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
-            if [ -n "$ICON_FILE" ]; then
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-            else
-                # اگر زپ میں تصویر نہ ہو تو خالی فولڈر کی وجہ سے ایرر نہ آئے، اس لیے ایک سادہ فائل بنانا
-                touch app/src/main/res/mipmap-hdpi/ic_launcher.png
-            fi
-            rm -rf temp_dir project.zip
           fi
 
-          # مینی فیسٹ (بغیر کسی پیچیدگی کے)
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          # آئیکن چیک: اگر کوئی بھی PNG ملے تو اسے آئیکن بنا دیں، ورنہ ایک عارضی فائل بنائیں
+          ICON_FOUND=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
+          if [ -n "$ICON_FOUND" ]; then
+              cp "$ICON_FOUND" app/src/main/res/mipmap-hdpi/ic_launcher.png
+          else
+              # بلڈ کو فیل ہونے سے بچانے کے لیے ایک سادہ ڈمی فائل (اگر تصویر نہ ملے)
+              convert -size 512x512 xc:red app/src/main/res/mipmap-hdpi/ic_launcher.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
 
-          # بلڈ فائل (8.5 کے لیے فکسڈ)
-          echo "plugins { id 'com.android.application' }
+          # مینی فیسٹ بنانا (انتہائی سادہ)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # گریڈل فائل بنانا
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
           android {
               namespace '$PKG_NAME'
               compileSdk 34
@@ -86,13 +100,14 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-          }" > app/build.gradle
+          }
+          EOF
 
-          # بلڈ رن کرنا
+          # فائنل بلڈ
           gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Fixed
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
