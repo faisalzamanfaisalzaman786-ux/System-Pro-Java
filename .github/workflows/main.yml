@@ -18,22 +18,20 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # کیشے کو فی الحال بند رکھا ہے تاکہ بلڈ بالکل تازہ (clean) ہو
           cache: 'gradle'
 
       - name: Process Zip Data
         run: |
-          # یقینی بنائیں کہ ضروری فولڈرز موجود ہیں
+          # ضروری فولڈرز بنانا
           mkdir -p app/src/main/java
-          mkdir -p app/src/main/res
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/menu
           
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            # زپ ڈیٹا کو ڈی کوڈ اور ان زپ کرنا
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             mkdir -p temp_dir
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کو درست جگہ منتقل کرنے کی محفوظ منطق
             if [ -d "temp_dir/app/src/main/java" ]; then
               cp -rf temp_dir/app/src/main/java/* app/src/main/java/ || true
               cp -rf temp_dir/app/src/main/res/* app/src/main/res/ || true
@@ -41,19 +39,31 @@ jobs:
               cp -rf temp_dir/src/main/java/* app/src/main/java/ || true
               cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             else
-              # اگر فولڈر اسٹرکچر مختلف ہو تو براہ راست کاپی
               cp -rf temp_dir/* app/src/main/ || true
             fi
-            
-            # عارضی ڈیٹا صاف کرنا
             rm -rf temp_dir project.zip
           fi
+
+      - name: Fix Menu Resource Error
+        run: |
+          # مینیو فائل کو درست نیم اسپیس کے ساتھ دوبارہ لکھنا تاکہ AttributePrefixUnbound ایرر نہ آئے
+          cat <<EOF > app/src/main/res/menu/main_menu.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <menu xmlns:android="http://schemas.android.com/apk/res/android"
+                xmlns:app="http://schemas.android.com/apk/res-auto">
+              <item
+                  android:id="@+id/action_settings"
+                  android:title="Settings"
+                  android:orderInCategory="100"
+                  app:showAsAction="never" />
+          </menu>
+          EOF
 
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        # 'clean' اور '--no-build-cache' پچھلے تمام ایررز کو صاف کر دے گا
+        # 'clean' کا استعمال پرانے کیشے اور ایررز کو ختم کر دے گا
         run: ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace
 
       - name: Upload APK Artifact
