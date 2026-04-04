@@ -20,12 +20,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Step 1 - Clean and Extract Data
+      - name: Preparation and Clean Setup
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Package Name: $PKG_NAME"
+          echo "Building for: $PKG_NAME"
 
-          # پرانا ڈیٹا ڈیلیٹ کرنا
+          # پرانے ڈیٹا کی صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -34,16 +34,16 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیج فائلوں کے نام ٹھیک کرنا (Lowercase only)
+            # امیج فائلوں کے ناموں کو فکس کرنا
             find temp_dir/src/main/res/drawable -type f | while read -r file; do
               new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
               mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
             done
 
-            # جاوا فائلوں کا پیکیج نیم ٹھیک کرنا
+            # جاوا فائلوں میں پیکیج نیم درست کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # فولڈر سٹرکچر سیٹ کرنا
+            # صحیح ڈائریکٹری سٹرکچر بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -51,22 +51,22 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Step 2 - Create Fresh Build Config
+      - name: Static Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # اب ہم فائل ایڈٹ نہیں کریں گے، بلکہ نئی فائل لکھیں گے (Overwriting)
-          cat <<EOF > app/build.gradle
+          # مکمل نئی build.gradle فائل لکھنا (تاکہ کوئی Mutation نہ ہو)
+          cat <<'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace "$PKG_NAME"
+              namespace project.property("PKG_NAME")
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PKG_NAME"
+                  applicationId project.property("PKG_NAME")
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -91,16 +91,13 @@ jobs:
           }
           EOF
 
-      - name: Step 3 - Create Android Manifest
+      - name: Generate Android Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
-              <application 
-                  android:allowBackup="true" 
-                  android:label="System Pro" 
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -111,14 +108,15 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Build Execution
+      - name: Execute Gradle Build with Properties
         run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           chmod +x gradlew
-          # بالکل سادہ کمانڈ، گریڈل کو اب کوئی اعتراض نہیں ہوگا
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          # اب ہم پیکیج نیم کو گریڈل پراپرٹی کے طور پر پاس کریں گے
+          ./gradlew assembleDebug -PPKG_NAME="$PKG_NAME" --no-daemon --stacktrace
 
-      - name: Save APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build
+          name: System-Pro-Build-V3
           path: app/build/outputs/apk/debug/*.apk
