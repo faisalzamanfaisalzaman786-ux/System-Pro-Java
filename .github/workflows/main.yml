@@ -20,27 +20,37 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Dynamic Project Data
+      - name: Setup Project and Force Icon
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
+          # پرانا ڈیٹا صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
+          rm -rf app/src/main/res/mipmap-*
 
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کے نام سے سپیس اور بریکٹ ختم کرنا
+            # 1. تمام امیجز کے نام ٹھیک کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
-                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()')
-                if [ "$file" != "$new_name" ]; then
-                    mv "$file" "$new_name"
-                fi
+                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
+                mv "$file" "$new_name" 2>/dev/null || true
             done
 
+            # 2. آئیکن فکس: کسی بھی تصویر کو ic_launcher بنانے کی کوشش کرنا
+            # اگر drawable میں کوئی بھی png ہے تو اسے مین آئیکن بنا دو
+            mkdir -p app/src/main/res/mipmap-hdpi
+            ICON_FILE=$(find temp_dir/src/main/res/drawable -name "*.png" | head -n 1)
+            if [ -n "$ICON_FILE" ]; then
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            fi
+
+            # 3. پیکیج نیم اپ ڈیٹ کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
@@ -50,12 +60,13 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-          # build.gradle فائل تیار کرنا
+      - name: Final Build Config
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          
+          # build.gradle لکھنا
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
+          plugins { id 'com.android.application' }
           android {
               namespace "$PKG_NAME"
               compileSdk 34
@@ -66,30 +77,39 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: Fix Permissions and Gradle Version
+          # مینی فیسٹ میں آئیکن کا حوالہ دینا
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Build and Release
         run: |
           chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.5
-
-      - name: Build with Gradle
-        run: |
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: System-Pro-V2-Icon-Fixed
           path: app/build/outputs/apk/debug/*.apk
