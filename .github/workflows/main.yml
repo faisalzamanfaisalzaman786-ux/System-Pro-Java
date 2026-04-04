@@ -7,35 +7,43 @@ on:
     types: [build-zip-project]
 
 jobs:
-  prepare-data:
+  build:
     runs-on: ubuntu-latest
-    outputs:
-      pkg_name: ${{ steps.vars.outputs.pkg_name }}
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Process Resources
-        id: vars
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: Prepare Files and Build
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
           
-          # صفائی اور فولڈر بنانا
+          # پرانی فائلوں کی صفائی
           rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
-          
+          rm -rf .gradle build app/build
+
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # نام درست کرنا
+            # امیجز اور جاوا فائلوں کی درستگی
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # فولڈر سٹرکچر
+            # فولڈر سٹرکچر بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -49,40 +57,13 @@ jobs:
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
                 echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@android:color/white"/><foreground android:drawable="@drawable/'$ICON_NAME'"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
             fi
+            rm -rf temp_dir project.zip
           fi
-          
+
           # مینی فیسٹ بنانا
           echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Upload Prepared Files
-        uses: actions/upload-artifact@v4
-        with:
-          name: prepared-src
-          path: app/src/main/
-
-  build-apk:
-    needs: prepare-data
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Prepared Files
-        uses: actions/download-artifact@v4
-        with:
-          name: prepared-src
-          path: app/src/main/
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Compile APK
-        run: |
-          PKG_NAME="${{ needs.prepare-data.outputs.pkg_name }}"
-          # بلڈ گریڈل کو بالکل نئے سرے سے لکھنا
+          # build.gradle بنانا (Gradle 8.5 کے لیے)
           echo "plugins { id 'com.android.application' }
           android {
               namespace '$PKG_NAME'
@@ -100,11 +81,12 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
+          # بلڈ رن کرنا
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --no-configuration-cache
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Final APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Working
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
