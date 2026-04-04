@@ -18,34 +18,39 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # کیشے کو ابھی کے لیے ہٹا دیں تاکہ پرانی فائلز کا مسئلہ نہ ہو
+          # cache: 'gradle' 
 
       - name: Process Zip Data
         run: |
-          # پرانی فائلیں صاف کرنا
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
+          # فولڈرز بنائیں اگر موجود نہ ہوں
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res
           
-          # زپ ڈیٹا کو ڈی کوڈ کرنا (اگر repository_dispatch کے ذریعے آ رہا ہے)
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            # زپ ڈیٹا کو ڈی کوڈ کرنا
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             mkdir -p temp_dir
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کو درست جگہ منتقل کرنا
+            # فائلوں کو ڈیلیٹ کرنے کے بجائے اوور رائٹ کرنا
             if [ -d "temp_dir/src/main/java" ]; then
-              cp -rv temp_dir/src/main/java/* app/src/main/java/ || true
-              cp -rv temp_dir/src/main/res/* app/src/main/res/ || true
+              cp -rf temp_dir/src/main/java/* app/src/main/java/ || true
+              cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             else
-              cp -rv temp_dir/* app/src/main/ || true
+              # اگر سورس ڈائریکٹری براہ راست ہے
+              cp -rf temp_dir/* app/src/main/ || true
             fi
+            # عارضی فولڈر صاف کریں
+            rm -rf temp_dir project.zip
           fi
 
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        # یہاں '--no-daemon' شامل کریں تاکہ میموری اور فائل لاکنگ کا مسئلہ نہ ہو
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
