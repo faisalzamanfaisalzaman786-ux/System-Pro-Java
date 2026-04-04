@@ -1,35 +1,98 @@
-      - name: Force Icon and Manifest Update
+name: System Pro Auto Builder
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [build-zip-project]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cleanup and Prepare Files
         run: |
+          # پیکیج نیم حاصل کریں
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # 1. پرانے ڈیفالٹ آئیکنز کو ہر جگہ سے ڈیلیٹ کریں
-          find app/src/main/res -name "ic_launcher*" -delete
-          
-          # 2. نئے آئیکن فولڈرز بنائیں
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          # پرانے ڈیفالٹ ڈیٹا کی مکمل صفائی
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/drawable/*
+          rm -rf app/src/main/res/mipmap-*
+          rm -rf .gradle build app/build
 
-          # 3. آپ کے فراہم کردہ زپ سے تصویر تلاش کریں
-          ICON_SOURCE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
-
-          if [ -n "$ICON_SOURCE" ]; then
-            echo "Setting Icon from: $ICON_SOURCE"
-            # سادہ آئیکن کے لیے
-            cp "$ICON_SOURCE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp "$ICON_SOURCE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          # زپ ڈیٹا کو ایکسٹریکٹ کرنا
+          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
+            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+            unzip -o project.zip -d temp_dir/
             
-            # ایڈپٹیو آئیکن (Adaptive Icon) کے لیے تاکہ ہر موبائل پر نظر آئے
-            cat <<EOF > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-                <background android:drawable="@android:color/white"/>
-                <foreground android:drawable="@drawable/$(basename "$ICON_SOURCE" .png)"/>
-            </adaptive-icon>
-            EOF
-            cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+            # امیجز کے نام فکس کرنا (لوئر کیس اور نو سپیس)
+            find temp_dir/src/main/res -type f | while read -r file; do
+                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
+                mv "$file" "$new_name" 2>/dev/null || true
+            done
+
+            # جاوا فائلوں میں پیکیج نیم بدلنا
+            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
+            
+            # صحیح فولڈر سٹرکچر بنانا
+            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
+            mkdir -p "app/src/main/java/$PKG_PATH"
+            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            
+            # آئیکن فکس (Adaptive Icon Support)
+            mkdir -p app/src/main/res/mipmap-anydpi-v26
+            mkdir -p app/src/main/res/mipmap-hdpi
+            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
+            if [ -n "$ICON_FILE" ]; then
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+                
+                # ایڈپٹیو آئیکن کی XML فائل بنانا
+                ICON_NAME=$(basename "$ICON_FILE" .png)
+                cat <<EOF > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+                <?xml version="1.0" encoding="utf-8"?>
+                <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+                    <background android:drawable="@android:color/white"/>
+                    <foreground android:drawable="@drawable/$ICON_NAME"/>
+                </adaptive-icon>
+                EOF
+                cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+            fi
+            rm -rf temp_dir project.zip
           fi
 
-          # 4. مینی فیسٹ میں آئیکن کا صحیح لنک دینا
+          # 4. نئی اور سٹیٹک build.gradle لکھنا (تاکہ میوٹیشن نہ ہو)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          # 5. مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -37,7 +100,6 @@
                   android:label="System Pro" 
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher_round"
-                  android:allowBackup="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -48,3 +110,14 @@
               </application>
           </manifest>
           EOF
+
+      - name: Build and Upload
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --no-configuration-cache
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Working
+          path: app/build/outputs/apk/debug/*.apk
