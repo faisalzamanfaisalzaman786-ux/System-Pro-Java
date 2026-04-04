@@ -20,7 +20,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Preparation
+      - name: Clean Environment
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
@@ -28,30 +28,30 @@ jobs:
           mkdir -p app/src/main/java/com/faisalzar/systempro
           mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values
 
-      - name: Sync Code and Fix Package
+      - name: Inject Project Data
         if: github.event_name == 'repository_dispatch'
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           unzip -o project.zip -d temp_dir/
 
-          # تمام جاوا فائلوں کے اندر سے پیکج نیم کو زبردستی 'com.faisalzar.systempro' کرنا
+          # جاوا فائلوں کے اندر پیکج نیم کو زبردستی ٹھیک کرنا
           find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package com.faisalzar.systempro;/g" {} +
           
-          # فائلوں کو صحیح جگہ منتقل کرنا
+          # فائلز کو صحیح جگہ منتقل کرنا
           find temp_dir/src/main/java -name "*.java" -exec cp {} app/src/main/java/com/faisalzar/systempro/ \;
           cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           
           rm -rf temp_dir project.zip
 
-      - name: Generate Manifest and Clean Assets
+      - name: Auto-Correct Manifest and Resources
         run: |
-          # ریسورس فائلوں کے نام درست کرنا (اسپیس اور بریکٹ ختم کرنا)
+          # ریسورس فائلوں کے نام اینڈرائیڈ کے مطابق کرنا (lowercase only)
           find app/src/main/res/drawable -type f | while read -r file; do
             new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
             mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
           done
 
-          # نیا اور درست مینی فیسٹ بنانا
+          # مینی فیسٹ کو زیرو سے دوبارہ لکھنا تاکہ اسکیما کا کوئی مسئلہ نہ رہے
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -72,13 +72,14 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build and Upload
+      - name: Execute Build
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          # گریڈل کیشے کو نظر انداز کر کے تازہ بلڈ بنانا
+          ./gradlew clean assembleDebug --no-daemon --no-build-cache
 
-      - name: Upload APK
+      - name: Archive System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: System-Pro-v2-Build
           path: app/build/outputs/apk/debug/*.apk
