@@ -20,11 +20,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Data Processing and Asset Fix
+      - name: Deep Clean and Sync Data
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
+          # ریسورسز کی مکمل صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -33,14 +34,16 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیج فائلوں کے غلط نام (Spaces, Brackets) ٹھیک کرنا
+            # فائلوں کے نام ٹھیک کرنا (Lowercase and Clean)
             find temp_dir/src/main/res/drawable -type f | while read -r file; do
               new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
               mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
             done
 
+            # جاوا فائلوں میں پیکیج ٹھیک کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
+            # ڈائریکٹری بنانا اور فائلیں منتقل کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -48,11 +51,15 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Final Build and Namespace Inject
+      - name: Force Update Gradle Config
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # کلین مینی فیسٹ بنانا
+          # build.gradle میں پیکیج نیم اور نیم اسپیس کو زبردستی اپ ڈیٹ کرنا
+          sed -i "s/namespace .*/namespace '$PKG_NAME'/g" app/build.gradle
+          sed -i "s/applicationId .*/applicationId '$PKG_NAME'/g" app/build.gradle
+
+          # درست مینی فیسٹ فائل بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -68,11 +75,14 @@ jobs:
           </manifest>
           EOF
 
+      - name: Build System Pro
+        run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug -Pandroid.namespace=$PKG_NAME --no-daemon
+          # اب ہم گریڈل کو کنفیگریشن بدلنے پر مجبور نہیں کریں گے، کیونکہ ہم نے فائل پہلے ہی بدل دی ہے
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: Archive Success APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-v2-Build
+          name: System-Pro-Success-Build
           path: app/build/outputs/apk/debug/*.apk
