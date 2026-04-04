@@ -20,29 +20,29 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Preparation and Asset Sync
+      - name: Preparation and Force Configuration
         run: |
-          # پیکیج نیم حاصل کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Building for: $PKG_NAME"
+          echo "Target Package: $PKG_NAME"
 
-          # پرانے فولڈرز کی مکمل صفائی
+          # 1. پرانے ڈیٹا اور کیشے کی صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/mipmap-*
+          rm -rf .gradle
 
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیجز کے نام ٹھیک کرنا
+            # 2. تصویروں کے نام درست کرنا (سپیس اور بریکٹ ختم)
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # آئیکن کو زبردستی اپ ڈیٹ کرنا
+            # 3. آئیکن سیٹ اپ (پہلی تصویر کو آئیکن بنانا)
             mkdir -p app/src/main/res/mipmap-hdpi
             ICON_FILE=$(find temp_dir/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
@@ -50,24 +50,17 @@ jobs:
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
             fi
 
-            # تمام جاوا فائلوں میں پیکیج نیم تبدیل کرنا
+            # 4. جاوا فائلز میں پیکیج نیم فکس کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # جاوا فائلیں نئے فولڈر سٹرکچر میں منتقل کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            
-            # ریسورسز کاپی کرنا
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             rm -rf temp_dir project.zip
           fi
 
-      - name: Generate Static Build Config
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-
-          # build.gradle میں براہ راست پیکیج نیم لکھنا (کوئی ویریبل نہیں)
+          # 5. سٹیٹک build.gradle لکھنا (تاکہ میوٹیشن نہ ہو)
           cat <<EOF > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -83,19 +76,19 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+              buildFeatures {
+                  viewBinding true
               }
           }
 
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # مینی فیسٹ فائل بنانا
+          # 6. مینی فیسٹ فکس
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -114,13 +107,14 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Build
+      - name: Final Build and Cleanup
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          # کلین بلڈ اور ڈیمن کے بغیر تاکہ میموری سے پرانا ڈیٹا نہ اٹھے
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Build
+          name: System-Pro-Build-Success
           path: app/build/outputs/apk/debug/*.apk
