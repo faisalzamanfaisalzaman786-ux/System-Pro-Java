@@ -22,7 +22,6 @@ jobs:
 
       - name: Prepare Workspace and Resources
         run: |
-          # پرانی فائلیں صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -42,7 +41,6 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-          # مینیو فائل کا فکس (EOF کو یہاں درست طریقے سے بند کیا گیا ہے)
           if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
             cat <<EOF > app/src/main/res/menu/main_menu.xml
 <?xml version="1.0" encoding="utf-8"?>
