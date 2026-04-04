@@ -1,2 +1,17 @@
-buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }
-allprojects { repositories { google(); mavenCentral() } }
+android {
+    namespace 'com.system.pro'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.system.pro"
+        minSdk 21
+        targetSdk 33 // اسے عارضی طور پر 33 کر کے دیکھیں
+        versionCode 1
+        versionName "1.0"
+    }
+    
+    // یہ حصہ شامل کریں تاکہ Gradle ایررز کو نظر انداز کر سکے
+    buildFeatures {
+        viewBinding true
+    }
+}
