@@ -19,7 +19,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # گریڈل 8.5 کو زبردستی انسٹال کرنا
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -30,42 +29,48 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # مکمل صفائی (Clean Start)
+          # مکمل صفائی
           rm -rf .gradle build app/build
           rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
 
-          # زپ سے فائلیں نکالنا اور سیٹ کرنا
+          # ڈیفالٹ فولڈرز بنانا (ایرر سے بچنے کے لیے ضروری ہے)
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/values
+
+          # زپ سے ڈیٹا نکالنا
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیجز کے نام فکس کرنا
+            # فائلوں کے نام ٹھیک کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
             
-            # پیکیج نیم اور فولڈر سٹرکچر
+            # پیکیج اور جاوا سیٹ اپ
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             
-            # آئیکن سیٹ اپ (Adaptive)
-            mkdir -p app/src/main/res/mipmap-anydpi-v26 app/src/main/res/mipmap-hdpi
+            # آئیکن کو زبردستی میپ میپ (mipmap) میں کاپی کرنا
             ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
-                ICON_NAME=$(basename "$ICON_FILE" .png)
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-                echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@android:color/white"/><foreground android:drawable="@drawable/'$ICON_NAME'"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+            else
+                # اگر زپ میں تصویر نہ ہو تو خالی فولڈر کی وجہ سے ایرر نہ آئے، اس لیے ایک سادہ فائل بنانا
+                touch app/src/main/res/mipmap-hdpi/ic_launcher.png
             fi
             rm -rf temp_dir project.zip
           fi
 
-          # مینی فیسٹ اور گریڈل فائلز کو ایک ہی بار لکھنا
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          # مینی فیسٹ (بغیر کسی پیچیدگی کے)
+          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
 
+          # بلڈ فائل (8.5 کے لیے فکسڈ)
           echo "plugins { id 'com.android.application' }
           android {
               namespace '$PKG_NAME'
@@ -74,6 +79,8 @@ jobs:
                   applicationId '$PKG_NAME'
                   minSdk 21
                   targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
               }
           }
           dependencies {
@@ -81,11 +88,11 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # ریپر کے بجائے ڈائریکٹ گریڈل کمانڈ استعمال کرنا
+          # بلڈ رن کرنا
           gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-8.5
+          name: System-Pro-V2-Fixed
           path: app/build/outputs/apk/debug/*.apk
