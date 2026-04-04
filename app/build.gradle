@@ -1,4 +1,6 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+}
 
 android {
     namespace 'com.system.pro'
@@ -7,15 +9,19 @@ android {
     defaultConfig {
         applicationId "com.system.pro"
         minSdk 21
-        targetSdk 34
+        targetSdk 33 // اسے 33 کریں تاکہ پرانی لائبریریز کے ساتھ مسئلہ نہ ہو
         versionCode 1
         versionName "1.0"
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
 }
 
-// یہ حصہ شامل کرنا لازمی ہے
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0' // ورژن تھوڑا کم کیا تاکہ استحکام رہے
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
