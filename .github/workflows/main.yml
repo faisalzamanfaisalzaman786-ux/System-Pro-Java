@@ -20,45 +20,30 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Workspace and Resources
+      - name: Cleanup Old Files
         run: |
-          # پرانی فائلوں کی صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/values/strings.xml
-
-          # ضروری فولڈرز کی تخلیق
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/menu
 
-          # اگر ڈیٹا HTML UI سے زپ کی صورت میں آ رہا ہو
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            mkdir -p temp_dir
-            unzip -o project.zip -d temp_dir/
-            cp -rf temp_dir/src/main/* app/src/main/ || true
-            rm -rf temp_dir project.zip
-          fi
-
-          # مینیو فائل کا خودکار فکس (اگر موجود نہ ہو)
-          if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
-            cat << 'EOF' > app/src/main/res/menu/main_menu.xml
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android"
-      xmlns:app="http://schemas.android.com/apk/res-auto">
-    <item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" />
-</menu>
-EOF
-          fi
-
-      - name: Force Gradle Wrapper Version
+      - name: Extract Project Data
+        if: github.event_name == 'repository_dispatch'
         run: |
-          if [ -f "gradlew" ]; then
-            ./gradlew wrapper --gradle-version 8.5
+          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          unzip -o project.zip -d temp_dir/
+          cp -rf temp_dir/src/main/* app/src/main/ || true
+          rm -rf temp_dir project.zip
+
+      - name: Ensure Menu Resource Exists
+        run: |
+          if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"><item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" /></menu>' > app/src/main/res/menu/main_menu.xml
           fi
 
       - name: Grant Execute Permission
