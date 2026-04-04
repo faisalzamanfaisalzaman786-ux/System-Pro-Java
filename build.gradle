@@ -5,8 +5,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // اینڈرائیڈ گریڈل پلگ ان کا ورژن
-        classpath 'com.android.tools.build:gradle:8.2.2'
+        // Android Gradle Plugin کا مکمل ورژن لکھیں (مثلاً 8.2.0)
+        classpath 'com.android.tools.build:gradle:8.2.0'
     }
 }
 
@@ -15,4 +15,8 @@ allprojects {
         google()
         mavenCentral()
     }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }
