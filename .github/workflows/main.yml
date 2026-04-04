@@ -20,13 +20,14 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process Zip Data
+      - name: Prepare Workspace and Resources
+        # تمام فائل ہینڈلنگ گریڈل سے پہلے یہاں ہوگی
         run: |
-          # ضروری فولڈرز بنانا
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
-          
+
+          # 1. اگر زپ ڈیٹا موجود ہے تو اسے پہلے پروسیس کریں
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             mkdir -p temp_dir
@@ -44,9 +45,7 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Fix Menu Resource Error
-        run: |
-          # مینیو فائل کو درست نیم اسپیس کے ساتھ دوبارہ لکھنا تاکہ AttributePrefixUnbound ایرر نہ آئے
+          # 2. مینیو فائل کا فکس (Namespace Error Fix)
           cat <<EOF > app/src/main/res/menu/main_menu.xml
           <?xml version="1.0" encoding="utf-8"?>
           <menu xmlns:android="http://schemas.android.com/apk/res/android"
@@ -63,8 +62,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        # 'clean' کا استعمال پرانے کیشے اور ایررز کو ختم کر دے گا
-        run: ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace
+        # اب گریڈل کو ایک کلین اور تیار شدہ ڈائریکٹری ملے گی
+        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+        env:
+          # گریڈل 9.4.1 کی سختی کو کم کرنے کے لیے عارضی طور پر یہ شامل کیا جا سکتا ہے
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
