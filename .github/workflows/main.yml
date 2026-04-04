@@ -19,37 +19,40 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # گریڈل 8.5 کو زبردستی انسٹال کرنا
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
+          cache-disabled: true
 
-      - name: Prepare Files and Build
+      - name: Prepare and Build
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # پرانی فائلوں کی صفائی
-          rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
+          # مکمل صفائی (Clean Start)
           rm -rf .gradle build app/build
+          rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
 
+          # زپ سے فائلیں نکالنا اور سیٹ کرنا
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیجز اور جاوا فائلوں کی درستگی
+            # امیجز کے نام فکس کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
-            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # فولڈر سٹرکچر بنانا
+            # پیکیج نیم اور فولڈر سٹرکچر
+            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             
-            # آئیکن فکس
+            # آئیکن سیٹ اپ (Adaptive)
             mkdir -p app/src/main/res/mipmap-anydpi-v26 app/src/main/res/mipmap-hdpi
             ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
@@ -60,10 +63,9 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-          # مینی فیسٹ بنانا
+          # مینی فیسٹ اور گریڈل فائلز کو ایک ہی بار لکھنا
           echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
 
-          # build.gradle بنانا (Gradle 8.5 کے لیے)
           echo "plugins { id 'com.android.application' }
           android {
               namespace '$PKG_NAME'
@@ -72,8 +74,6 @@ jobs:
                   applicationId '$PKG_NAME'
                   minSdk 21
                   targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
               }
           }
           dependencies {
@@ -81,12 +81,11 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # بلڈ رن کرنا
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # ریپر کے بجائے ڈائریکٹ گریڈل کمانڈ استعمال کرنا
+          gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: System-Pro-V2-8.5
           path: app/build/outputs/apk/debug/*.apk
