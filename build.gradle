@@ -5,6 +5,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
+        // اینڈرائیڈ گریڈل پلگ ان کا ورژن
         classpath 'com.android.tools.build:gradle:8.2.2'
     }
 }
