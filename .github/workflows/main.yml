@@ -20,30 +20,26 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Preparation and Clean Setup
+      - name: Setup Dynamic Project Data
         run: |
+          # پیکیج نیم سیٹ کریں
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Building for: $PKG_NAME"
+          echo "Target Package: $PKG_NAME"
 
-          # پرانے ڈیٹا کی صفائی
+          # پرانی فائلوں کی صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
 
+          # اگر زپ فائل موجود ہے تو ڈیٹا ایکسٹریکٹ کریں
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیج فائلوں کے ناموں کو فکس کرنا
-            find temp_dir/src/main/res/drawable -type f | while read -r file; do
-              new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
-              mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
-            done
-
-            # جاوا فائلوں میں پیکیج نیم درست کرنا
+            # جاوا فائلز کا پیکیج نیم اپ ڈیٹ کریں
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # صحیح ڈائریکٹری سٹرکچر بنانا
+            # صحیح ڈائریکٹری اسٹرکچر میں فائلیں منتقل کریں
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -51,22 +47,18 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Static Build Configuration
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          
-          # مکمل نئی build.gradle فائل لکھنا (تاکہ کوئی Mutation نہ ہو)
-          cat <<'EOF' > app/build.gradle
+          # بلڈ گریڈل فائل کو مکمل دوبارہ لکھیں (بغیر کسی Mutation کے)
+          cat <<EOF > app/build.gradle
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace project.property("PKG_NAME")
+              namespace "$PKG_NAME"
               compileSdk 34
 
               defaultConfig {
-                  applicationId project.property("PKG_NAME")
+                  applicationId "$PKG_NAME"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -91,32 +83,19 @@ jobs:
           }
           EOF
 
-      - name: Generate Android Manifest
+      - name: Fix Permissions and Gradle Version
         run: |
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Execute Gradle Build with Properties
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           chmod +x gradlew
-          # اب ہم پیکیج نیم کو گریڈل پراپرٹی کے طور پر پاس کریں گے
-          ./gradlew assembleDebug -PPKG_NAME="$PKG_NAME" --no-daemon --stacktrace
+          # گریڈل ورژن کو 8.5 پر سیٹ کریں جو زیادہ سٹیبل ہے
+          ./gradlew wrapper --gradle-version 8.5
+
+      - name: Build with Gradle
+        run: |
+          # کلین بلڈ کریں تاکہ پچھلا کوئی کیشے مسئلہ نہ کرے
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build-V3
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
