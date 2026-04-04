@@ -18,24 +18,46 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Prepare Workspace
+      - name: Prepare Workspace and Resources
         run: |
-          mkdir -p app/src/main/java/com/faisalzar/systempro
+          # 1. پرانی فائلیں صاف کرنا (تاکہ نیا پیکج نیم مکس نہ ہو)
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/drawable/*
+          rm -rf app/src/main/res/values/strings.xml
+
+          # 2. ضروری فولڈرز بنانا
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/menu
-          
-          # مینیو فائل کا لازمی فکس
-          cat <<EOF > app/src/main/res/menu/main_menu.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <menu xmlns:android="http://schemas.android.com/apk/res/android"
-                xmlns:app="http://schemas.android.com/apk/res-auto">
-              <item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" />
-          </menu>
-          EOF
+
+          # 3. اگر ڈیٹا زپ فائل سے آ رہا ہے (HTML UI Trigger)
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+            mkdir -p temp_dir
+            unzip -o project.zip -d temp_dir/
+            
+            # ڈیٹا کو مین ایپ فولڈر میں منتقل کرنا
+            cp -rf temp_dir/src/main/* app/src/main/ || true
+            rm -rf temp_dir project.zip
+          fi
+
+          # 4. مینیو فائل کا لازمی فکس (اگر زپ میں نہ ہو)
+          if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
+            cat <<EOF > app/src/main/res/menu/main_menu.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <menu xmlns:android="http://schemas.android.com/apk/res/android"
+                  xmlns:app="http://schemas.android.com/apk/res-auto">
+                <item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" />
+            </menu>
+            EOF
+          fi
 
       - name: Force Gradle Wrapper Version
-        # اگر آپ کا ریپوزٹری ورژن 9.4 استعمال کر رہا ہے، تو اسے 8.5 پر لانا بہتر ہے
         run: |
           if [ -f "gradlew" ]; then
             ./gradlew wrapper --gradle-version 8.5
@@ -52,5 +74,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Release' }}
           path: app/build/outputs/apk/debug/*.apk
