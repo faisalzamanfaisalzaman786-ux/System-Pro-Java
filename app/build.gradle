@@ -9,14 +9,21 @@ android {
     defaultConfig {
         applicationId "com.system.pro"
         minSdk 21
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
 
+    // یہ حصہ شامل کرنا لازمی ہے
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
     }
 }
 
