@@ -1,9 +1,30 @@
+name: System Pro Auto Builder
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [build-zip-project]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
       - name: Setup Dynamic Project Data
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
-          # پرانی فائلوں کی صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -12,8 +33,7 @@
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # --- اہم تبدیلی: فائل نیمز درست کرنا ---
-            # یہ کمانڈ تمام فائلوں کے ناموں سے سپیس اور بریکٹ ختم کر دے گی
+            # فائلوں کے نام سے سپیس اور بریکٹ ختم کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()')
                 if [ "$file" != "$new_name" ]; then
@@ -21,7 +41,6 @@
                 fi
             done
 
-            # جاوا فائلز کا پیکیج نیم اپ ڈیٹ کریں
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
@@ -30,3 +49,47 @@
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             rm -rf temp_dir project.zip
           fi
+
+          # build.gradle فائل تیار کرنا
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: Fix Permissions and Gradle Version
+        run: |
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.5
+
+      - name: Build with Gradle
+        run: |
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: app/build/outputs/apk/debug/*.apk
