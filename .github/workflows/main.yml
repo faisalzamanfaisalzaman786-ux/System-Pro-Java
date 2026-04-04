@@ -26,37 +26,48 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/mipmap*
-          rm -rf app/src/main/res/values/strings.xml
-          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/res/menu
+          mkdir -p app/src/main/java/com/faisalzar/systempro
+          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/res/menu
 
       - name: Process Resources and Code
         if: github.event_name == 'repository_dispatch'
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           unzip -o project.zip -d temp_dir/
-
-          # 1. آئیکون فکس: پہلی امیج کو ic_launcher بنانا
-          count=0
-          find temp_dir/src/main/res/drawable -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) | while read -r file; do
-            count=$((count+1))
-            new_name="img_${count}.png"
-            if [ $count -eq 1 ]; then new_name="ic_launcher.png"; fi
-            mv "$file" "temp_dir/src/main/res/drawable/${new_name}" 2>/dev/null || true
-          done
-
-          # 2. جاوا فائلز کا پیکج نیم درست کرنا
-          # یہ کمانڈ جاوا فائل کے اندر 'package ...' والی لائن کو خود بخود ٹھیک کر دے گی
+          
+          # جاوا فائلز کا پیکیج فکس
           find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package com.faisalzar.systempro;/g" {} +
-
-          # 3. فائلوں کو منتقل کرنا
-          mkdir -p app/src/main/java/com/faisalzar/systempro
           find temp_dir/src/main/java -name "*.java" -exec cp {} app/src/main/java/com/faisalzar/systempro/ \;
           cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-          cp -f temp_dir/src/main/AndroidManifest.xml app/src/main/ || true
-          
           rm -rf temp_dir project.zip
 
-      - name: System Pro Final Fixes
+      - name: Force Fix Manifest (Torch & Permissions)
+        run: |
+          # مکمل مینی فیسٹ کو صحیح اسکیما کے ساتھ دوبارہ لکھنا تاکہ 'android prefix' کا مسئلہ نہ آئے
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.faisalzar.systempro">
+              
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Final Build Execution
         run: |
           # مینیو اور آئیکون کی موجودگی یقینی بنانا
           if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
@@ -65,10 +76,6 @@ jobs:
           if [ ! -f "app/src/main/res/drawable/ic_launcher.png" ]; then
             touch app/src/main/res/drawable/ic_launcher.png
           fi
-
-          # مینی فیسٹ میں پیکج نیم اور آئیکون پاتھ درست کرنا
-          sed -i 's/package="[^"]*"/package="com.faisalzar.systempro"/' app/src/main/AndroidManifest.xml || true
-          sed -i 's/mipmap\/ic_launcher/drawable\/ic_launcher/g' app/src/main/AndroidManifest.xml || true
 
           chmod +x gradlew
           ./gradlew wrapper --gradle-version 8.5
