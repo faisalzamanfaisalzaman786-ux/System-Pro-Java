@@ -1,97 +1,50 @@
-name: System Pro Auto Builder
-
-on:
-  push:
-    branches: [ main ]
-  repository_dispatch:
-    types: [build-zip-project]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Static Project Setup
+      - name: Force Icon and Manifest Update
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Target Package: $PKG_NAME"
+          
+          # 1. پرانے ڈیفالٹ آئیکنز کو ہر جگہ سے ڈیلیٹ کریں
+          find app/src/main/res -name "ic_launcher*" -delete
+          
+          # 2. نئے آئیکن فولڈرز بنائیں
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
 
-          # 1. تمام پرانے کیشے اور فولڈرز کی مکمل صفائی
-          rm -rf .gradle build app/build
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/drawable/*
-          rm -rf app/src/main/res/mipmap-*
+          # 3. آپ کے فراہم کردہ زپ سے تصویر تلاش کریں
+          ICON_SOURCE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
 
-          # 2. زپ ڈیٹا پروسیسنگ (اگر موجود ہو)
-          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            unzip -o project.zip -d temp_dir/
+          if [ -n "$ICON_SOURCE" ]; then
+            echo "Setting Icon from: $ICON_SOURCE"
+            # سادہ آئیکن کے لیے
+            cp "$ICON_SOURCE" app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp "$ICON_SOURCE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
             
-            # امیج فائلز کے نام فکس کرنا
-            find temp_dir/src/main/res -type f | while read -r file; do
-                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
-                mv "$file" "$new_name" 2>/dev/null || true
-            done
-
-            # جاوا فائلوں میں پیکیج نیم بدلنا
-            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
-            
-            # صحیح فولڈر سٹرکچر بنانا
-            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-            mkdir -p "app/src/main/java/$PKG_PATH"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # آئیکن فکس
-            mkdir -p app/src/main/res/mipmap-hdpi
-            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
-            if [ -n "$ICON_FILE" ]; then
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-            fi
-            rm -rf temp_dir project.zip
+            # ایڈپٹیو آئیکن (Adaptive Icon) کے لیے تاکہ ہر موبائل پر نظر آئے
+            cat <<EOF > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+                <background android:drawable="@android:color/white"/>
+                <foreground android:drawable="@drawable/$(basename "$ICON_SOURCE" .png)"/>
+            </adaptive-icon>
+            EOF
+            cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
           fi
 
-          # 3. گریڈل ورژن کو 8.5 پر مجبور کرنا (9.4.1 سے بچنے کے لیے)
-          chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.5
-
-          # 4. بالکل سادہ اور سٹیٹک build.gradle لکھنا
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
+          # 4. مینی فیسٹ میں آئیکن کا صحیح لنک دینا
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:allowBackup="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
           EOF
-
-      - name: Build APK (Static Mode)
-        run: |
-          # بغیر کسی اضافی فیچر اور کیشے کے بلڈ کرنا
-          ./gradlew clean assembleDebug --no-daemon --no-configuration-cache --stacktrace
-
-      - name: Upload Finished APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/*.apk
