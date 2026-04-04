@@ -1,74 +1,84 @@
-name: System Pro Auto Builder
+Skip to content
+System-Pro-v2
+Repository navigation
+Code
+Issues
+Actions
+System Pro Auto Builder
+Update main.yml #718
+Annotations
+1 error and 1 warning
+build
+failed now in 42s
+1s
+1s
+0s
+0s
+37s
+Run chmod +x gradlew
+Downloading https://services.gradle.org/distributions/gradle-9.4.1-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%..............70%.............80%.............90%.............100%
 
-on:
-  push:
-    branches: [ main ]
-  repository_dispatch:
-    types: [build-zip-project]
+Welcome to Gradle 9.4.1!
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+Here are the highlights of this release:
+ - Java 26 support
+ - Non-class-based JVM tests
+ - Enhanced console progress bar
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+For more details see https://docs.gradle.org/9.4.1/release-notes.html
 
-      - name: Pre-Configure Project
-        run: |
-          # پیکیج نیم حاصل کریں
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "PKG_NAME=$PKG_NAME" >> gradle.properties
-          
-          # پرانا ڈیٹا صاف کریں
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/drawable/*
-          rm -rf app/src/main/res/mipmap-*
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :clean
+> Task :app:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:javaPreCompileDebug
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:mergeDebugResources
+> Task :app:processDebugManifest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources FAILED
 
-          # ڈیٹا ایکسٹریکٹ اور ری نیمنگ
-          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            unzip -o project.zip -d temp_dir/
-            
-            # فائلوں کے نام ٹھیک کرنا
-            find temp_dir/src/main/res -type f | while read -r file; do
-                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
-                mv "$file" "$new_name" 2>/dev/null || true
-            done
+[Incubating] Problems report is available at: file:///home/runner/work/System-Pro-v2/System-Pro-v2/build/reports/problems/problems-report.html
 
-            # جاوا فائلز کا پیکیج فکس کرنا
-            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
-            
-            # فولڈر سٹرکچر سیٹ کرنا
-            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-            mkdir -p "app/src/main/java/$PKG_PATH"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # آئیکن فکس
-            mkdir -p app/src/main/res/mipmap-hdpi
-            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
-            if [ -n "$ICON_FILE" ]; then
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-            fi
-            rm -rf temp_dir project.zip
-          fi
+FAILURE: Build failed with an exception.
 
-      - name: Build with Fixed Properties
-        run: |
-          chmod +x gradlew
-          # اہم: ہم یہاں کوئی پراپرٹی پاس نہیں کر رہے، گریڈل خود فائل سے پڑھے گا
-          ./gradlew clean assembleDebug --no-daemon --no-configuration-cache
+* What went wrong:
+Execution failed for task ':app:processDebugResources'.
+> Cannot mutate the dependencies of configuration ':app:debugCompileClasspath' after the configuration was resolved. After a configuration has been observed, it should not be modified.
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-App
-          path: app/build/outputs/apk/debug/*.apk
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+* Try:
+18 actionable tasks: 18 executed
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 36s
+Error: Process completed with exit code 1.
+0s
+0s
+0s
+0s
