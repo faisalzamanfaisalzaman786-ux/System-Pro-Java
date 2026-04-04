@@ -20,12 +20,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Workspace and Fix Assets
+      - name: Step 1 - Clean and Extract Data
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Target Package: $PKG_NAME"
+          echo "Package Name: $PKG_NAME"
 
-          # پرانا ڈیٹا صاف کرنا
+          # پرانا ڈیٹا ڈیلیٹ کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -34,16 +34,16 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیج فائلوں کے نام ٹھیک کرنا (سپیس اور بریکٹ ختم کرنا)
+            # امیج فائلوں کے نام ٹھیک کرنا (Lowercase only)
             find temp_dir/src/main/res/drawable -type f | while read -r file; do
               new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
               mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
             done
 
-            # جاوا فائلز میں پیکیج ٹھیک کرنا
+            # جاوا فائلوں کا پیکیج نیم ٹھیک کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # صحیح فولڈر سٹرکچر بنانا
+            # فولڈر سٹرکچر سیٹ کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -51,20 +51,56 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Overwrite Build Config and Manifest
+      - name: Step 2 - Create Fresh Build Config
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # build.gradle فائل کو براہ راست اپ ڈیٹ کرنا (تاکہ Mutation ایرر نہ آئے)
-          sed -i "s/namespace .*/namespace \"$PKG_NAME\"/g" app/build.gradle
-          sed -i "s/applicationId .*/applicationId \"$PKG_NAME\"/g" app/build.gradle
+          # اب ہم فائل ایڈٹ نہیں کریں گے، بلکہ نئی فائل لکھیں گے (Overwriting)
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
 
-          # درست مینی فیسٹ فائل بنانا (بغیر پیکیج ایٹریبیوٹ کے)
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: Step 3 - Create Android Manifest
+        run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+              <application 
+                  android:allowBackup="true" 
+                  android:label="System Pro" 
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -75,14 +111,14 @@ jobs:
           </manifest>
           EOF
 
-      - name: Execute Clean Build
+      - name: Final Build Execution
         run: |
           chmod +x gradlew
-          # اب کوئی پیرامیٹر پاس نہیں کریں گے کیونکہ فائلیں پہلے ہی ٹھیک ہو چکی ہیں
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          # بالکل سادہ کمانڈ، گریڈل کو اب کوئی اعتراض نہیں ہوگا
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Save APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build-v2
+          name: System-Pro-Build
           path: app/build/outputs/apk/debug/*.apk
