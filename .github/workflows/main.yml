@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -19,33 +21,36 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Pre-Configure Project
+      - name: Pre-Build Preparation
         run: |
-          # پیکیج نیم حاصل کریں
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "PKG_NAME=$PKG_NAME" >> gradle.properties
-          
-          # پرانا ڈیٹا صاف کریں
+          echo "Building for: $PKG_NAME"
+
+          # 1. پرانے ڈیٹا اور گریڈل کیشے کی مکمل صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/mipmap-*
+          rm -rf .gradle build app/build
 
-          # ڈیٹا ایکسٹریکٹ اور ری نیمنگ
+          # 2. پیکیج نیم کو پراپرٹیز فائل میں محفوظ کرنا
+          echo "PKG_NAME=$PKG_NAME" > gradle.properties
+
+          # 3. زپ ڈیٹا پروسیسنگ
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کے نام ٹھیک کرنا
+            # امیجز کے نام درست کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # جاوا فائلز کا پیکیج فکس کرنا
+            # جاوا فائلز میں پیکیج نیم فکس کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # فولڈر سٹرکچر سیٹ کرنا
+            # صحیح فولڈر سٹرکچر بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
@@ -61,14 +66,45 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Build with Fixed Properties
+      - name: Generate Static Build Script
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          
+          # build.gradle کو مکمل طور پر دوبارہ لکھنا تاکہ کوئی ویریبل رن ٹائم پر نہ بدلے
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildFeatures {
+                  viewBinding true
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+      - name: Execute Clean Build
         run: |
           chmod +x gradlew
-          # اہم: ہم یہاں کوئی پراپرٹی پاس نہیں کر رہے، گریڈل خود فائل سے پڑھے گا
-          ./gradlew clean assembleDebug --no-daemon --no-configuration-cache
+          # بغیر کسی کیشے اور ڈیمن کے بلڈ کرنا
+          ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-V2-Success
           path: app/build/outputs/apk/debug/*.apk
