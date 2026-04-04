@@ -21,95 +21,92 @@ jobs:
 
       - name: Cleanup and Prepare Files
         run: |
-          # پیکیج نیم حاصل کریں
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # پرانے ڈیفالٹ ڈیٹا کی مکمل صفائی
+          # پرانی فائلیں صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/mipmap-*
           rm -rf .gradle build app/build
 
-          # زپ ڈیٹا کو ایکسٹریکٹ کرنا
+          # زپ ڈیٹا پروسیسنگ
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # امیجز کے نام فکس کرنا (لوئر کیس اور نو سپیس)
+            # امیجز کے نام فکس کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # جاوا فائلوں میں پیکیج نیم بدلنا
+            # جاوا پیکیج بدلنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # صحیح فولڈر سٹرکچر بنانا
+            # فولڈر سٹرکچر سیٹ کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             
-            # آئیکن فکس (Adaptive Icon Support)
+            # آئیکن فکس
             mkdir -p app/src/main/res/mipmap-anydpi-v26
             mkdir -p app/src/main/res/mipmap-hdpi
             ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-                
-                # ایڈپٹیو آئیکن کی XML فائل بنانا
                 ICON_NAME=$(basename "$ICON_FILE" .png)
-                cat <<EOF > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-                <?xml version="1.0" encoding="utf-8"?>
-                <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-                    <background android:drawable="@android:color/white"/>
-                    <foreground android:drawable="@drawable/$ICON_NAME"/>
-                </adaptive-icon>
-                EOF
+                cat <<EOF2 > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/white"/>
+    <foreground android:drawable="@drawable/$ICON_NAME"/>
+</adaptive-icon>
+EOF2
                 cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
             fi
             rm -rf temp_dir project.zip
           fi
 
-          # 4. نئی اور سٹیٹک build.gradle لکھنا (تاکہ میوٹیشن نہ ہو)
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
+          # build.gradle فائل بنانا
+          cat <<EOF3 > app/build.gradle
+plugins { id 'com.android.application' }
+android {
+    namespace "$PKG_NAME"
+    compileSdk 34
+    defaultConfig {
+        applicationId "$PKG_NAME"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+}
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+}
+EOF3
 
-          # 5. مینی فیسٹ بنانا
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application 
-                  android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # مینی فیسٹ بنانا
+          cat <<EOF4 > app/src/main/AndroidManifest.xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application 
+        android:label="System Pro" 
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF4
 
       - name: Build and Upload
         run: |
@@ -119,5 +116,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Working
+          name: System-Pro-App
           path: app/build/outputs/apk/debug/*.apk
