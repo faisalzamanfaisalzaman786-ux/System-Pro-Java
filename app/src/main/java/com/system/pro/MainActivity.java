@@ -1,1 +1,35 @@
-package com.systempro.apk;  import android.os.Bundle; import android.os.Handler; import android.widget.TextView; import androidx.appcompat.app.AppCompatActivity; import java.text.SimpleDateFormat; import java.util.Calendar; import java.util.Locale;  public class MainActivity extends AppCompatActivity {      private TextView clockText, dateText;     private final Handler handler = new Handler();      @Override     protected void onCreate(Bundle savedInstanceState) {         super.onCreate(savedInstanceState);         setContentView(R.layout.activity_main);          clockText = findViewById(R.id.clockText);         dateText = findViewById(R.id.dateText);          startClock();     }      private void startClock() {         handler.post(new Runnable() {             @Override             public void run() {                 Calendar calendar = Calendar.getInstance();                                  // وقت فارمیٹ (HH:mm:ss)                 SimpleDateFormat timeFormat = new SimpleDateFormat(HH:mm:ss, Locale.getDe
+package com.faisalzar.systempro;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+
+public class MainActivity extends AppCompatActivity {
+
+    private EditText codeInput;
+    private MaterialButton btnBuild;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        codeInput = findViewById(R.id.code_input);
+        btnBuild = findViewById(R.id.btn_build);
+
+        btnBuild.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String code = codeInput.getText().toString();
+                if (!code.isEmpty()) {
+                    Toast.makeText(MainActivity.this, "Building Project...", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "Please enter some code", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+}
