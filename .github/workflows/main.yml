@@ -20,12 +20,13 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Sync Data and Assets
+      - name: Preparation and Asset Sync
         run: |
+          # پیکیج نیم حاصل کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Target Package: $PKG_NAME"
+          echo "Building for: $PKG_NAME"
 
-          # صفائی
+          # پرانے فولڈرز کی مکمل صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -35,13 +36,13 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # نام درست کرنا (سپیس اور بریکٹ ختم)
+            # امیجز کے نام ٹھیک کرنا
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # آئیکن سیٹ کرنا
+            # آئیکن کو زبردستی اپ ڈیٹ کرنا
             mkdir -p app/src/main/res/mipmap-hdpi
             ICON_FILE=$(find temp_dir/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
@@ -49,44 +50,52 @@ jobs:
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
             fi
 
-            # پیکیج نیم ٹھیک کرنا
+            # تمام جاوا فائلوں میں پیکیج نیم تبدیل کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
+            # جاوا فائلیں نئے فولڈر سٹرکچر میں منتقل کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            
+            # ریسورسز کاپی کرنا
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             rm -rf temp_dir project.zip
           fi
 
-      - name: Hardcode Project Config
+      - name: Generate Static Build Config
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          
-          # 1. gradle.properties میں پیکیج نیم ڈالنا (سب سے اہم سٹیپ)
-          echo "PKG_NAME=$PKG_NAME" >> gradle.properties
 
-          # 2. build.gradle کو دوبارہ لکھنا تاکہ وہ پراپرٹی استعمال کرے
-          cat <<'EOF' > app/build.gradle
-          plugins { id 'com.android.application' }
+          # build.gradle میں براہ راست پیکیج نیم لکھنا (کوئی ویریبل نہیں)
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
           android {
-              namespace project.findProperty("PKG_NAME") ?: "com.torch.systempro"
+              namespace "$PKG_NAME"
               compileSdk 34
               defaultConfig {
-                  applicationId project.findProperty("PKG_NAME") ?: "com.torch.systempro"
+                  applicationId "$PKG_NAME"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
+
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
-          # 3. مینی فیسٹ فکس
+          # مینی فیسٹ فائل بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -105,14 +114,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: Clean Build Execution
+      - name: Final Build
         run: |
           chmod +x gradlew
-          # اب کوئی ایکسٹرا کمانڈ نہیں، سادہ بلڈ
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Download Link
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: System-Pro-V2-Build
           path: app/build/outputs/apk/debug/*.apk
