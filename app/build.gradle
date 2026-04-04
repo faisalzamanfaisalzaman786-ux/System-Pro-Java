@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.faisal.systempro'
+    namespace 'com.faisalzar.systempro'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.faisal.systempro"
+        applicationId "com.faisalzar.systempro"
         minSdk 24
         targetSdk 34
         versionCode 1
@@ -20,28 +20,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-}
-
-// یہ بلاک اب 'android' بلاک سے باہر ہے
-configurations.all {
-    resolutionStrategy {
-        force 'androidx.core:core:1.9.0'
-        force 'androidx.appcompat:appcompat:1.6.1'
-        force 'androidx.lifecycle:lifecycle-livedata-core:2.5.1'
-    }
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    implementation 'androidx.core:core-ktx:1.9.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.5.1'
-    implementation 'androidx.activity:activity-ktx:1.6.0'
 }
