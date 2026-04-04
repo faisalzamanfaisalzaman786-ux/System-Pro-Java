@@ -18,54 +18,50 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Preparation and Force Configuration
+      - name: Single Shot Build
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Target Package: $PKG_NAME"
-
-          # 1. پرانے ڈیٹا اور کیشے کی صفائی
+          
+          # 1. پہلے سے موجود تمام کنفیگریشن صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/mipmap-*
-          rm -rf .gradle
-
+          
+          # 2. ڈیٹا ایکسٹریکٹ اور فکس کرنا
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # 2. تصویروں کے نام درست کرنا (سپیس اور بریکٹ ختم)
+            # امیجز کے نام فکس کرنا (لوئر کیس اور کوئی سپیس نہیں)
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # 3. آئیکن سیٹ اپ (پہلی تصویر کو آئیکن بنانا)
-            mkdir -p app/src/main/res/mipmap-hdpi
-            ICON_FILE=$(find temp_dir/src/main/res/drawable -name "*.png" | head -n 1)
-            if [ -n "$ICON_FILE" ]; then
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
-                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-            fi
-
-            # 4. جاوا فائلز میں پیکیج نیم فکس کرنا
+            # جاوا فائلوں میں پیکیج تبدیل کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
+            # صحیح فولڈر سٹرکچر بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            
+            # آئیکن فکس (پہلی دستیاب پی این جی کو آئیکن بنانا)
+            mkdir -p app/src/main/res/mipmap-hdpi
+            ICON_FILE=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
+            if [ -n "$ICON_FILE" ]; then
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher.png
+                cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            fi
             rm -rf temp_dir project.zip
           fi
 
-          # 5. سٹیٹک build.gradle لکھنا (تاکہ میوٹیشن نہ ہو)
+          # 3. نئی اور سادہ build.gradle لکھنا
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
+          plugins { id 'com.android.application' }
           android {
               namespace "$PKG_NAME"
               compileSdk 34
@@ -76,26 +72,20 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildFeatures {
-                  viewBinding true
-              }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 6. مینی فیسٹ فکس
+          # 4. مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application 
                   android:label="System Pro" 
                   android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -107,14 +97,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Build and Cleanup
-        run: |
+          # 5. اب بلڈ کرنا (صرف ایک کمانڈ میں)
           chmod +x gradlew
-          # کلین بلڈ اور ڈیمن کے بغیر تاکہ میموری سے پرانا ڈیٹا نہ اٹھے
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build-Success
+          name: System-Pro-App
           path: app/build/outputs/apk/debug/*.apk
