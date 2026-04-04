@@ -5,7 +5,9 @@
         android:allowBackup="true"
         android:label="System Pro"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SystemPro"> <activity
+        android:theme="@style/Theme.SystemPro">
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
@@ -13,7 +15,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-    </application>
 
+    </application>
 </manifest>
