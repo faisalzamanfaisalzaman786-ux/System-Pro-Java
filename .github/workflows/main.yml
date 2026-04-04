@@ -20,25 +20,37 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Sync and Dynamic Package Fix
+      - name: Process Project and Fix Zip
         run: |
-          # پیکیج نیم کو پے لوڈ سے حاصل کرنا (ڈیفالٹ: com.faisalzar.systempro)
+          # پیکیج نیم حاصل کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisalzar.systempro' }}"
-          echo "Building with package: $PKG_NAME"
-          
+          echo "Building for: $PKG_NAME"
+
           # پرانا ڈیٹا صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
-          
-          # زپ فائل نکالنا
+
+          # زپ ڈیٹا کو چیک کرنا اور نکالنا
+          if [ -z "${{ github.event.client_payload.zip_data }}" ]; then
+            echo "Error: No zip data received from app!"
+            exit 1
+          fi
+
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          
+          # زپ فائل کی صحت چیک کرنا
+          if ! unzip -t project.zip > /dev/null 2>&1; then
+            echo "Error: project.zip is corrupted or not a valid zip file."
+            exit 1
+          fi
+
           unzip -o project.zip -d temp_dir/
 
-          # جاوا فائلوں میں پیکیج نیم تبدیل کرنا
+          # جاوا پیکج اپ ڈیٹ کرنا
           find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
           
-          # صحیح فولڈر سٹرکچر بنانا
+          # ڈائنامک فولڈر بنانا
           PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
@@ -46,7 +58,11 @@ jobs:
           find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
           cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           
-          # مینی فیسٹ کو ڈائنامک پیکیج کے ساتھ لکھنا
+          rm -rf temp_dir project.zip
+
+      - name: Auto-Generate Manifest
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisalzar.systempro' }}"
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
@@ -63,13 +79,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build APK
+      - name: Build System Pro
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --no-build-cache
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Dynamic-Build
+          name: System-Pro-Release
           path: app/build/outputs/apk/debug/*.apk
