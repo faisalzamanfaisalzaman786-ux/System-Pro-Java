@@ -20,12 +20,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Project and Force Icon
+      - name: Sync Data and Assets
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           echo "Target Package: $PKG_NAME"
 
-          # پرانا ڈیٹا صاف کرنا
+          # صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
@@ -35,14 +35,13 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # 1. تمام امیجز کے نام ٹھیک کرنا
+            # نام درست کرنا (سپیس اور بریکٹ ختم)
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
             done
 
-            # 2. آئیکن فکس: کسی بھی تصویر کو ic_launcher بنانے کی کوشش کرنا
-            # اگر drawable میں کوئی بھی png ہے تو اسے مین آئیکن بنا دو
+            # آئیکن سیٹ کرنا
             mkdir -p app/src/main/res/mipmap-hdpi
             ICON_FILE=$(find temp_dir/src/main/res/drawable -name "*.png" | head -n 1)
             if [ -n "$ICON_FILE" ]; then
@@ -50,7 +49,7 @@ jobs:
                 cp "$ICON_FILE" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
             fi
 
-            # 3. پیکیج نیم اپ ڈیٹ کرنا
+            # پیکیج نیم ٹھیک کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
@@ -60,18 +59,21 @@ jobs:
             rm -rf temp_dir project.zip
           fi
 
-      - name: Final Build Config
+      - name: Hardcode Project Config
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # build.gradle لکھنا
-          cat <<EOF > app/build.gradle
+          # 1. gradle.properties میں پیکیج نیم ڈالنا (سب سے اہم سٹیپ)
+          echo "PKG_NAME=$PKG_NAME" >> gradle.properties
+
+          # 2. build.gradle کو دوبارہ لکھنا تاکہ وہ پراپرٹی استعمال کرے
+          cat <<'EOF' > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace "$PKG_NAME"
+              namespace project.findProperty("PKG_NAME") ?: "com.torch.systempro"
               compileSdk 34
               defaultConfig {
-                  applicationId "$PKG_NAME"
+                  applicationId project.findProperty("PKG_NAME") ?: "com.torch.systempro"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -84,7 +86,7 @@ jobs:
           }
           EOF
 
-          # مینی فیسٹ میں آئیکن کا حوالہ دینا
+          # 3. مینی فیسٹ فکس
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -103,13 +105,14 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build and Release
+      - name: Clean Build Execution
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # اب کوئی ایکسٹرا کمانڈ نہیں، سادہ بلڈ
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Download Link
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Icon-Fixed
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
