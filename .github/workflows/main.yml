@@ -1,51 +1,24 @@
-name: System Pro Auto Builder
-
-on:
-  repository_dispatch:
-    types: [build-zip-project]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
       - name: Process Zip Data
         run: |
           # پرانی فائلیں صاف کرنا
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/*
           
           # زپ ڈیٹا کو ڈی کوڈ کرنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           mkdir -p temp_dir
           unzip -o project.zip -d temp_dir/
           
-          # فائلوں کو درست اینڈرائیڈ اسٹرکچر میں منتقل کرنا
-          # یہ فرض کرتے ہوئے کہ زپ کے اندر 'src' کا فولڈر موجود ہے
-          if [ -d "temp_dir/src" ]; then
-            cp -rv temp_dir/src/* app/src/ || true
-          else
-            # اگر زپ میں براہ راست کوڈ ہے تو اسے یہاں سے سنبھالیں
-            cp -rv temp_dir/* app/src/main/ || true
+          # فائلوں کو صحیح اینڈرائیڈ اسٹرکچر میں منتقل کرنا
+          # اگر زپ میں 'java' اور 'res' فولڈرز ہیں
+          if [ -d "temp_dir/java" ]; then
+            cp -rv temp_dir/java/* app/src/main/java/ || true
           fi
-
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}
-          path: app/build/outputs/apk/debug/*.apk
+          if [ -d "temp_dir/res" ]; then
+            cp -rv temp_dir/res/* app/src/main/res/ || true
+          fi
+          # اگر زپ میں 'src' ہے تو اسے ترجیح دیں
+          if [ -d "temp_dir/src" ]; then
+            cp -rv temp_dir/src/main/java/* app/src/main/java/ || true
+            cp -rv temp_dir/src/main/res/* app/src/main/res/ || true
+          fi
