@@ -22,7 +22,7 @@
         android:layout_height="65dp"
         android:layout_alignParentBottom="true"
         android:layout_margin="20dp"
-        android:text="🚀 پروجیکٹ بلڈ کریں"
+        android:text="🚀 Build Project"
         android:textColor="#000000"
         android:textSize="18sp"
         app:backgroundTint="#00FFC6"
@@ -31,7 +31,7 @@
     <EditText
         android:id="@+id/code_input"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
         android:layout_above="@id/btn_build"
         android:layout_below="@id/title_text"
         android:layout_margin="20dp"
