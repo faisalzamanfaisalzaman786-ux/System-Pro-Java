@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId "com.system.pro"
         minSdk 21
-        targetSdk 33 // اسے 33 کریں تاکہ پرانی لائبریریز کے ساتھ مسئلہ نہ ہو
+        targetSdk 33 // بہتر استحکام کے لیے 33 استعمال کریں
         versionCode 1
         versionName "1.0"
     }
@@ -21,7 +21,8 @@ android {
 }
 
 dependencies {
+    // یہ لائبریریز تھیم اور ڈیزائن کے لیے لازمی ہیں
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0' // ورژن تھوڑا کم کیا تاکہ استحکام رہے
+    implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
