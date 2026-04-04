@@ -20,49 +20,39 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Preparation and Data Processing
+      - name: Data Processing and Sync
         run: |
           # پیکیج نیم حاصل کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          echo "Building for: $PKG_NAME"
+          echo "Target Package: $PKG_NAME"
 
-          # پرانے ریسورسز صاف کرنا
+          # پرانا ڈیٹا صاف کرنا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/drawable/*
 
-          # زپ ڈیٹا چیک کرنا
+          # اگر زپ ڈیٹا موجود ہو
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # پیکج نیم کی درستگی
+            # جاوا فائلز میں پیکیج ٹھیک کرنا
             find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
             
-            # فولڈر سٹرکچر بنانا اور فائلیں منتقل کرنا
+            # صحیح ڈائریکٹری بنانا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             rm -rf temp_dir project.zip
-          else
-            echo "Warning: No zip data received, using baseline files."
           fi
 
-      - name: Generate Manifest and Build
+      - name: Generate Clean Manifest
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
-          
-          # ریسورس فائلوں کے نام ٹھیک کرنا
-          find app/src/main/res/drawable -type f | while read -r file; do
-            new_name=$(basename "$file" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
-            mv "$file" "$(dirname "$file")/$new_name" 2>/dev/null || true
-          done
-
-          # مینی فیسٹ بنانا
+          # نئے گریڈل رولز کے مطابق مینی فیسٹ (بغیر پیکیج ایٹریبیوٹ کے)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
               <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
@@ -76,11 +66,14 @@ jobs:
           </manifest>
           EOF
 
-          # بلڈ شروع کرنا
+      - name: Final Build with Namespace Inject
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          # پیکیج نیم کو براہ راست پراپرٹی کے طور پر پاس کرنا
+          ./gradlew clean assembleDebug -Pandroid.overridePathCheck=true -Pandroid.namespace=$PKG_NAME --no-daemon
 
-      - name: Upload APK
+      - name: Archive Success APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-v2-Build
