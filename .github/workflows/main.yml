@@ -20,7 +20,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Reset Workspace
+      - name: Cleanup and Setup Workspace
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
@@ -29,21 +29,36 @@ jobs:
           mkdir -p app/src/main/java/com/faisalzar/systempro
           mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/res/menu
 
-      - name: Process Resources and Code
+      - name: Extract and Hard Fix Resources
         if: github.event_name == 'repository_dispatch'
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           unzip -o project.zip -d temp_dir/
-          
-          # جاوا فائلز کا پیکیج فکس
+
+          # تمام امیجز کے ناموں سے اسپیس اور بریکٹ ختم کرنا (سخت فلٹر)
+          find temp_dir/src/main/res/drawable -type f | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            # نام سے اسپیس اور بریکٹ ختم کر کے انڈر اسکور لگانا
+            clean_name=$(echo "$base" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._]/_/g')
+            mv "$file" "$dir/$clean_name" 2>/dev/null || true
+          done
+
+          # پہلا امیج بطور ic_launcher سیٹ کرنا
+          first_img=$(find temp_dir/src/main/res/drawable -type f \( -name "*.png" -o -name "*.jpg" \) | head -n 1)
+          if [ -n "$first_img" ]; then
+            cp "$first_img" "app/src/main/res/drawable/ic_launcher.png"
+          fi
+
+          # کوڈ اور باقی ریسورسز منتقل کرنا
           find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package com.faisalzar.systempro;/g" {} +
           find temp_dir/src/main/java -name "*.java" -exec cp {} app/src/main/java/com/faisalzar/systempro/ \;
           cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+          
           rm -rf temp_dir project.zip
 
-      - name: Force Fix Manifest (Torch & Permissions)
+      - name: Force Fix Manifest
         run: |
-          # مکمل مینی فیسٹ کو صحیح اسکیما کے ساتھ دوبارہ لکھنا تاکہ 'android prefix' کا مسئلہ نہ آئے
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -67,22 +82,17 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Build Execution
+      - name: Build APK
         run: |
-          # مینیو اور آئیکون کی موجودگی یقینی بنانا
-          if [ ! -f "app/src/main/res/menu/main_menu.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"><item android:id="@+id/action_settings" android:title="Settings" app:showAsAction="never" /></menu>' > app/src/main/res/menu/main_menu.xml
-          fi
           if [ ! -f "app/src/main/res/drawable/ic_launcher.png" ]; then
             touch app/src/main/res/drawable/ic_launcher.png
           fi
-
           chmod +x gradlew
           ./gradlew wrapper --gradle-version 8.5
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Release' }}
+          name: System-Pro-Release
           path: app/build/outputs/apk/debug/*.apk
