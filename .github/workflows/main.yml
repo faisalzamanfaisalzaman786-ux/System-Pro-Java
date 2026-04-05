@@ -56,19 +56,20 @@ jobs:
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           fi
 
-          # آئیکن چیک: اگر کوئی بھی PNG ملے تو اسے آئیکن بنا دیں، ورنہ ایک عارضی فائل بنائیں
+          # آئیکن چیک: اگر کوئی بھی PNG ملے تو اسے آئیکن بنا دیں
           ICON_FOUND=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
           if [ -n "$ICON_FOUND" ]; then
               cp "$ICON_FOUND" app/src/main/res/mipmap-hdpi/ic_launcher.png
           else
-              # بلڈ کو فیل ہونے سے بچانے کے لیے ایک سادہ ڈمی فائل (اگر تصویر نہ ملے)
+              # ڈمی آئیکن (سرخ رنگ کا 512x512)
               convert -size 512x512 xc:red app/src/main/res/mipmap-hdpi/ic_launcher.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-          # مینی فیسٹ بنانا (انتہائی سادہ)
+          # مینی فیسٹ بنانا (اب CAMERA پرمیشن کے ساتھ)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
               <application 
                   android:label="System Pro" 
                   android:icon="@mipmap/ic_launcher"
