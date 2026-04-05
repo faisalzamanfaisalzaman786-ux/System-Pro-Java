@@ -10,52 +10,44 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Java Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.5
-
-      - name: Universal Prepare and Build
+      - name: Build APK
         run: |
+          # 1. Variables Setup
           RANDOM_ID=$(date +%s | tail -c 4)
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.systempro.app.v$RANDOM_ID}"
           
-          rm -rf .gradle build app/build gradle/ temp_dir/
-          mkdir -p app/src/main/java app/src/main/res app/src/main/assets
+          # 2. Structure Creation
+          rm -rf .gradle build app gradle/ temp_dir/
+          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/mipmap-hdpi
 
+          # 3. Code Processing
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             
-            if [ -d "temp_dir/src/main/res" ]; then
-                cp -rf temp_dir/src/main/res/* app/src/main/res/
-            fi
-
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
-            
-            find temp_dir/src/main/java -name "*.java" | while read -r file; do
-                sed -i "s/^package .*;/package $PKG_NAME;/g" "$file"
-                cp "$file" "app/src/main/java/$PKG_PATH/"
-            done
+            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} \;
+          fi
 
-            # Manifest Creation - Fixed Indentation
-            cat <<EOF > app/src/main/AndroidManifest.xml
+          # 4. Manifest Creation
+          cat <<EOF > app/src/main/AndroidManifest.xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
     <application android:label="System Pro App" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -66,10 +58,9 @@ jobs:
     </application>
 </manifest>
 EOF
-          fi
 
+          # 5. Project Configuration
           echo "include ':app'" > settings.gradle
-
           cat <<EOF > app/build.gradle
 plugins { id 'com.android.application' }
 android {
@@ -94,12 +85,13 @@ dependencies {
 }
 EOF
 
+          # 6. Build Engine
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Universal-APK
+          name: System-Pro-APK
           path: app/build/outputs/apk/debug/*.apk
