@@ -1,13 +1,13 @@
 plugins {
-    id 'com.android.application'
+    id 'com.system.pro'
 }
 
 android {
-    namespace 'com.faisalzar.systempro'
+    namespace 'com.system.pro'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.faisalzar.systempro"
+        applicationId "com.system.pro"
         minSdk 24
         targetSdk 34
         versionCode 1
