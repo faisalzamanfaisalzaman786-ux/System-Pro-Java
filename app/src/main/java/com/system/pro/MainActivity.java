@@ -1,4 +1,4 @@
-package com.system.pro; // آپ کے فولڈر اسٹرکچر (com.system.pro) کے مطابق اپڈیٹ کر دیا گیا ہے
+package com.faisal.systempro;; // آپ کے فولڈر اسٹرکچر (com.system.pro) کے مطابق اپڈیٹ کر دیا گیا ہے
 
 import android.os.Bundle;
 import android.view.View;
