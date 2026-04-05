@@ -24,6 +24,7 @@ jobs:
           # 1. Setup Variables
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.systempro.app}"
+          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           
           # 2. Clean and Create Structure
           rm -rf app temp_dir
@@ -32,7 +33,8 @@ jobs:
           # 3. Create Permanent Universal AndroidManifest
           cat <<'EOF' > app/src/main/AndroidManifest.xml
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="REPLACE_PKG">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="REPLACE_PKG">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -41,9 +43,9 @@ jobs:
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
-    <application 
-        android:label="System Pro" 
-        android:theme="@style/Theme.SystemPro" 
+    <application
+        android:label="System Pro"
+        android:theme="@style/Theme.SystemPro"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:supportsRtl="true">
@@ -57,7 +59,7 @@ jobs:
 </manifest>
 EOF
 
-          # 4. Create Permanent Universal Theme (Glassmorphism Support)
+          # 4. Create Permanent Universal Theme
           cat <<'EOF' > app/src/main/res/values/themes.xml
 <resources>
     <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -68,12 +70,36 @@ EOF
 </resources>
 EOF
 
-          # 5. Create Permanent build.gradle with all Libraries
+          # 5. Create Corrected settings.gradle (Root level)
+          cat <<'EOF' > settings.gradle
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SystemPro"
+include ':app'
+EOF
+
+          # 6. Create Permanent app/build.gradle with all Libraries
           cat <<'EOF' > app/build.gradle
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+}
+
 android {
     namespace "REPLACE_PKG"
     compileSdk 34
+
     defaultConfig {
         applicationId "REPLACE_PKG"
         minSdk 21
@@ -81,11 +107,13 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -97,22 +125,34 @@ dependencies {
 }
 EOF
 
-          # 6. Injection Logic (Package & Code)
+          # 7. Replace Package Name in Manifest and build.gradle
           sed -i "s/REPLACE_PKG/$PKG_NAME/g" app/src/main/AndroidManifest.xml
           sed -i "s/REPLACE_PKG/$PKG_NAME/g" app/build.gradle
 
-          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          # 8. Inject custom resources and Java files from payload (if provided)
+          if [ -n "$ZIP_DATA" ]; then
+            echo "$ZIP_DATA" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            # Copy resources (res folder)
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ 2>/dev/null || true
+            
+            # Copy Java files preserving package structure
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} \;
+            # Find all .java files and copy them into the correct package directory
+            find temp_dir/src/main/java -name "*.java" -type f | while read java_file; do
+                # Get relative path without temp_dir/src/main/java/
+                rel_path="${java_file#temp_dir/src/main/java/}"
+                # Create target directory
+                target_dir="app/src/main/java/$PKG_PATH/$(dirname "$rel_path")"
+                mkdir -p "$target_dir"
+                cp "$java_file" "$target_dir/"
+                # Change package name in the copied file
+                sed -i "s/^package .*;/package $PKG_NAME;/" "$target_dir/$(basename "$java_file")"
+            done
           fi
 
-          # 7. Final Build
-          echo "include ':app'" > settings.gradle
+          # 9. Generate Gradle Wrapper and Build
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
