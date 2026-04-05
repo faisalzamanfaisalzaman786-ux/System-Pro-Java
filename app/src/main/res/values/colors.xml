@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <color name="primaryColor">#00E5FF</color> <color name="primaryDarkColor">#00B2CC</color>
+    <color name="accentColor">#7C4DFF</color> <color name="backgroundColor">#0A0E14</color> <color name="cardBackground">#1A1F2B</color>
+    <color name="glassColor">#33FFFFFF</color> <color name="success">#00FF88</color>
+    <color name="error">#FF3D00</color>
 </resources>
