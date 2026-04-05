@@ -27,59 +27,46 @@ jobs:
 
       - name: Prepare and Build
         run: |
-          # 1. متحرک پیکیج نیم (Dynamic Package Name) تیار کرنا
-          # اگر پے لوڈ میں نام نہ ہو، تو ایک نیا رینڈم نام بنائیں تاکہ ہر بلڈ منفرد ہو
+          # 1. متحرک پیکیج نیم اور ورژننگ
           RANDOM_ID=$(date +%s | tail -c 4)
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.faisal.systempro.b$RANDOM_ID}"
           
           echo "Building with Package Name: $PKG_NAME"
 
-          # پرانی فائلز کی صفائی
-          rm -rf .gradle build app/build gradle/
+          # صفائی اور فولڈرز کی تیاری
+          rm -rf .gradle build app/build gradle/ temp_dir/
           rm -f gradlew gradlew.bat
-          rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
-          
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/drawable app/src/main/res/mipmap-hdpi app/src/main/res/values app/src/main/java
 
-          # 2. زپ فائل پروسیسنگ اور خودکار ریفیکٹرنگ
+          # 2. زپ فائل پروسیسنگ اور جاوا فکسر
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # ریسورس فائلز کے نام درست کرنا
-            find temp_dir/src/main/res -type f | while read -r file; do
-                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
-                if [ "$file" != "$new_name" ]; then
-                    mv "$file" "$new_name" 2>/dev/null || true
-                fi
+            # جاوا فائلز میں پیکیج اور امپورٹس فکس کرنا
+            find temp_dir/src/main/java -name "*.java" | while read -r java_file; do
+                # پیکیج نیم بدلنا
+                sed -i "s/^package .*;/package $PKG_NAME;/g" "$java_file"
+                
+                # ContentValues اور ضروری امپورٹس چیک کرنا اور شامل کرنا (اگر غائب ہوں)
+                grep -q "android.content.ContentValues" "$java_file" || sed -i "/package $PKG_NAME;/a import android.content.ContentValues;" "$java_file"
+                grep -q "android.provider.MediaStore" "$java_file" || sed -i "/package $PKG_NAME;/a import android.provider.MediaStore;" "$java_file"
+                grep -q "androidx.annotation.NonNull" "$java_file" || sed -i "/package $PKG_NAME;/a import androidx.annotation.NonNull;" "$java_file"
             done
             
-            # تمام جاوا فائلز میں پیکیج نیم کو نئے نام سے بدلنا (Refactoring)
-            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
-            
-            # پیکیج سٹرکچر کے مطابق فولڈر بنانا (e.g. com/example/app)
+            # فولڈر سٹرکچر کے مطابق فائلز منتقل کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
-            
-            # فائلز کو نئے فولڈر میں منتقل کرنا
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           fi
 
-          # 3. آئیکن سیٹ اپ
-          ICON_FOUND=$(find app/src/main/res -name "ic_launcher.png" | head -n 1)
+          # 3. آئیکن اور میفیسٹ فکسر
           TARGET_ICON="app/src/main/res/mipmap-hdpi/ic_launcher.png"
-          if [ -n "$ICON_FOUND" ] && [ "$ICON_FOUND" != "$TARGET_ICON" ]; then
-              cp "$ICON_FOUND" "$TARGET_ICON"
-          else
-              touch "$TARGET_ICON"
-          fi
+          ICON_FOUND=$(find app/src/main/res -name "ic_launcher.png" | head -n 1)
+          [ -n "$ICON_FOUND" ] && [ "$ICON_FOUND" != "$TARGET_ICON" ] && cp "$ICON_FOUND" "$TARGET_ICON" || touch "$TARGET_ICON"
 
-          # 4. ضروری فائلز کی جنریشن
           cat <<EOF > settings.gradle
           rootProject.name = "System Pro"
           include ':app'
@@ -105,6 +92,7 @@ jobs:
           </manifest>
           EOF
 
+          # 4. مضبوط build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -114,8 +102,8 @@ jobs:
                   applicationId "$PKG_NAME"
                   minSdk 21
                   targetSdk 34
-                  versionCode $(date +%y%m%d%H)
-                  versionName "$(date +%Y.%m.%d)"
+                  versionCode $(date +%s | tail -c 8)
+                  versionName "1.0"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -133,7 +121,7 @@ jobs:
           }
           EOF
 
-          # 5. گریڈل ریپر بنانا اور فائنل بلڈ
+          # 5. بلڈ ایگزیکیوشن
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
