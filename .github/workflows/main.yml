@@ -26,53 +26,36 @@ jobs:
 
       - name: Universal Prepare and Build
         run: |
-          # 1. Dynamic Package and ID Generation
           RANDOM_ID=$(date +%s | tail -c 4)
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.systempro.app.v$RANDOM_ID}"
-          echo "Processing Application for: $PKG_NAME"
-
-          # Cleanup workspace
+          
           rm -rf .gradle build app/build gradle/ temp_dir/
-          rm -f gradlew gradlew.bat
           mkdir -p app/src/main/java app/src/main/res app/src/main/assets
 
-          # 2. Process ZIP Payload
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # Transfer Resources (Drawables, Layouts etc.)
             if [ -d "temp_dir/src/main/res" ]; then
                 cp -rf temp_dir/src/main/res/* app/src/main/res/
             fi
 
-            # Setup Package Directory Structure
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             
-            # Move and Fix Java Files
             find temp_dir/src/main/java -name "*.java" | while read -r file; do
                 sed -i "s/^package .*;/package $PKG_NAME;/g" "$file"
-                # Auto-inject necessary imports if detected in code
-                grep -q "ContentValues" "$file" && ! grep -q "import android.content.ContentValues" "$file" && sed -i "/package $PKG_NAME;/a import android.content.ContentValues;" "$file"
-                grep -q "MediaStore" "$file" && ! grep -q "import android.provider.MediaStore" "$file" && sed -i "/package $PKG_NAME;/a import android.provider.MediaStore;" "$file"
-                
                 cp "$file" "app/src/main/java/$PKG_PATH/"
             done
 
-            # Manifest Handling with Default Camera Permissions
-            if [ -f "temp_dir/src/main/AndroidManifest.xml" ]; then
-                cp "temp_dir/src/main/AndroidManifest.xml" app/src/main/AndroidManifest.xml
-                sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" app/src/main/AndroidManifest.xml
-            else
-                cat <<EOF > app/src/main/AndroidManifest.xml
+            # Manifest Creation - Fixed Indentation
+            cat <<EOF > app/src/main/AndroidManifest.xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
-    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <application android:label="System Pro App" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -83,10 +66,8 @@ jobs:
     </application>
 </manifest>
 EOF
-            fi
           fi
 
-          # 3. Universal Gradle Project Structure
           echo "include ':app'" > settings.gradle
 
           cat <<EOF > app/build.gradle
@@ -98,19 +79,13 @@ android {
         applicationId "$PKG_NAME"
         minSdk 21
         targetSdk 34
-        versionCode $(date +%y%m%d%H)
+        versionCode 1
         versionName "1.0"
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
     }
 }
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    // Essential CameraX Libraries for your Camera Code
     implementation "androidx.camera:camera-core:1.3.0"
     implementation "androidx.camera:camera-camera2:1.3.0"
     implementation "androidx.camera:camera-lifecycle:1.3.0"
@@ -119,7 +94,6 @@ dependencies {
 }
 EOF
 
-          # 4. Build Engine Trigger
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
