@@ -1,4 +1,31 @@
-        name: Prepare and Build
+name: System Pro Auto Builder
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [build-zip-project]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+          cache-disabled: true
+
+      - name: Prepare and Build
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           
@@ -29,7 +56,6 @@
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           fi
 
-          # فکس: یہاں 'cp' کا ایرر ختم کیا گیا ہے
           ICON_FOUND=$(find app/src/main/res -name "ic_launcher.png" | head -n 1)
           TARGET_ICON="app/src/main/res/mipmap-hdpi/ic_launcher.png"
 
@@ -97,3 +123,9 @@
 
           chmod +x gradlew || true
           ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: app/build/outputs/apk/debug/*.apk
