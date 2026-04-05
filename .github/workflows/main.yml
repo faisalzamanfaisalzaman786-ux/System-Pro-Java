@@ -1,4 +1,4 @@
-name: System Pro Auto Builder
+name: System Pro Universal Builder
 
 on:
   push:
@@ -23,76 +23,76 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
-          cache-disabled: true
 
-      - name: Prepare and Build
+      - name: Universal Prepare and Build
         run: |
-          # 1. متحرک پیکیج نیم اور ورژننگ
+          # 1. متحرک پیکیج نیم اور آئی ڈی
           RANDOM_ID=$(date +%s | tail -c 4)
           USER_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME="${USER_PKG:-com.faisal.systempro.b$RANDOM_ID}"
-          
-          echo "Building with Package Name: $PKG_NAME"
+          PKG_NAME="${USER_PKG:-com.systempro.app.v$RANDOM_ID}"
+          echo "Processing Application for: $PKG_NAME"
 
-          # صفائی اور فولڈرز کی تیاری
+          # صفائی
           rm -rf .gradle build app/build gradle/ temp_dir/
           rm -f gradlew gradlew.bat
-          mkdir -p app/src/main/res/drawable app/src/main/res/mipmap-hdpi app/src/main/res/values app/src/main/java
+          mkdir -p app/src/main/java app/src/main/res app/src/main/assets
 
-          # 2. زپ فائل پروسیسنگ اور جاوا فکسر
+          # 2. زپ فائل پروسیسنگ (Universal Extraction)
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # جاوا فائلز میں پیکیج اور امپورٹس فکس کرنا
-            find temp_dir/src/main/java -name "*.java" | while read -r java_file; do
-                # پیکیج نیم بدلنا
-                sed -i "s/^package .*;/package $PKG_NAME;/g" "$java_file"
-                
-                # ContentValues اور ضروری امپورٹس چیک کرنا اور شامل کرنا (اگر غائب ہوں)
-                grep -q "android.content.ContentValues" "$java_file" || sed -i "/package $PKG_NAME;/a import android.content.ContentValues;" "$java_file"
-                grep -q "android.provider.MediaStore" "$java_file" || sed -i "/package $PKG_NAME;/a import android.provider.MediaStore;" "$java_file"
-                grep -q "androidx.annotation.NonNull" "$java_file" || sed -i "/package $PKG_NAME;/a import androidx.annotation.NonNull;" "$java_file"
-            done
-            
-            # فولڈر سٹرکچر کے مطابق فائلز منتقل کرنا
+            # تمام ریسورسز (res) کو منتقل کرنا
+            if [ -d "temp_dir/src/main/res" ]; then
+                cp -rf temp_dir/src/main/res/* app/src/main/res/
+            fi
+
+            # تمام جاوا فائلز کو ریفیکٹر کرنا اور منتقل کرنا
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            
+            find temp_dir/src/main/java -name "*.java" | while read -r file; do
+                # پیکیج نیم اور ضروری امپورٹس کا خودکار اضافہ
+                sed -i "s/^package .*;/package $PKG_NAME;/g" "$file"
+                # ContentValues اور MediaStore جیسے عام امپورٹس کو یقینی بنانا
+                grep -q "ContentValues" "$file" && ! grep -q "import android.content.ContentValues" "$file" && sed -i "/package $PKG_NAME;/a import android.content.ContentValues;" "$file"
+                grep -q "MediaStore" "$file" && ! grep -q "import android.provider.MediaStore" "$file" && sed -i "/package $PKG_NAME;/a import android.provider.MediaStore;" "$file"
+                
+                cp "$file" "app/src/main/java/$PKG_PATH/"
+            done
+
+            # اگر زپ میں مینی فیسٹ ہے تو اسے اٹھائیں، ورنہ ڈیفالٹ بنائیں
+            if [ -f "temp_dir/src/main/AndroidManifest.xml" ]; then
+                cp "temp_dir/src/main/AndroidManifest.xml" app/src/main/AndroidManifest.xml
+                # مینی فیسٹ میں پیکیج نیم اپ ڈیٹ کریں
+                sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" app/src/main/AndroidManifest.xml
+            else
+                cat <<EOF > app/src/main/AndroidManifest.xml
+                <?xml version="1.0" encoding="utf-8"?>
+                <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
+                    <uses-permission android:name="android.permission.INTERNET" />
+                    <uses-permission android:name="android.permission.CAMERA" />
+                    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+                    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+                    <application android:label="System Pro App" android:theme="@style/Theme.AppCompat.Light.NoActionBar" android:icon="@mipmap/ic_launcher">
+                        <activity android:name=".MainActivity" android:exported="true">
+                            <intent-filter>
+                                <action android:name="android.intent.action.MAIN" />
+                                <category android:name="android.intent.category.LAUNCHER" />
+                            </intent-filter>
+                        </activity>
+                    </application>
+                </manifest>
+                EOF
+            fi
           fi
 
-          # 3. آئیکن اور میفیسٹ فکسر
-          TARGET_ICON="app/src/main/res/mipmap-hdpi/ic_launcher.png"
-          ICON_FOUND=$(find app/src/main/res -name "ic_launcher.png" | head -n 1)
-          [ -n "$ICON_FOUND" ] && [ "$ICON_FOUND" != "$TARGET_ICON" ] && cp "$ICON_FOUND" "$TARGET_ICON" || touch "$TARGET_ICON"
-
+          # 3. یونیورسل گریڈل کنفیگریشن
           cat <<EOF > settings.gradle
-          rootProject.name = "System Pro"
+          rootProject.name = "SystemProUniversal"
           include ':app'
           EOF
 
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-              <application 
-                  android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 4. مضبوط build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -102,7 +102,7 @@ jobs:
                   applicationId "$PKG_NAME"
                   minSdk 21
                   targetSdk 34
-                  versionCode $(date +%s | tail -c 8)
+                  versionCode $(date +%y%m%d%H)
                   versionName "1.0"
               }
               compileOptions {
@@ -113,6 +113,9 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              
+              // CameraX & Common Utils
               implementation "androidx.camera:camera-core:1.3.0"
               implementation "androidx.camera:camera-camera2:1.3.0"
               implementation "androidx.camera:camera-lifecycle:1.3.0"
@@ -121,7 +124,7 @@ jobs:
           }
           EOF
 
-          # 5. بلڈ ایگزیکیوشن
+          # 4. بلڈ انجن
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
@@ -129,5 +132,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V2-Final
+          name: System-Pro-Universal-APK
           path: app/build/outputs/apk/debug/*.apk
