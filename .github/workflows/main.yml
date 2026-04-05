@@ -35,123 +35,125 @@ jobs:
           mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/values
 
           # ===========================================
-          # 3. Create AndroidManifest.xml (with all permissions)
+          # 3. Delete any existing root build.gradle (to avoid conflict)
+          # ===========================================
+          rm -f build.gradle
+
+          # ===========================================
+          # 4. Create AndroidManifest.xml (with all permissions)
           # ===========================================
           cat <<'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="REPLACE_PKG">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-feature android:name="android.hardware.camera" android:required="true" />
-              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="REPLACE_PKG">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
-              <application
-                  android:label="System Pro"
-                  android:theme="@style/Theme.SystemPro"
-                  android:icon="@mipmap/ic_launcher"
-                  android:allowBackup="true"
-                  android:supportsRtl="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+    <application
+        android:label="System Pro"
+        android:theme="@style/Theme.SystemPro"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
 
           # ===========================================
-          # 4. Create themes.xml (Glassmorphism ready)
+          # 5. Create themes.xml
           # ===========================================
           cat <<'EOF' > app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-                  <item name="android:statusBarColor">#02040C</item>
-                  <item name="android:windowBackground">#02040C</item>
-              </style>
-          </resources>
-          EOF
+<resources>
+    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#00FFCC</item>
+        <item name="android:statusBarColor">#02040C</item>
+        <item name="android:windowBackground">#02040C</item>
+    </style>
+</resources>
+EOF
 
           # ===========================================
-          # 5. Create settings.gradle (Root level)
+          # 6. Create settings.gradle (without FAIL_ON_PROJECT_REPOS)
           # ===========================================
           cat <<'EOF' > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "SystemPro"
-          include ':app'
-          EOF
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SystemPro"
+include ':app'
+EOF
 
           # ===========================================
-          # 6. Create app/build.gradle (with CameraX and libraries)
+          # 7. Create app/build.gradle (with CameraX and libraries)
           # ===========================================
           cat <<'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+plugins {
+    id 'com.android.application'
+}
 
-          android {
-              namespace "REPLACE_PKG"
-              compileSdk 34
+android {
+    namespace "REPLACE_PKG"
+    compileSdk 34
 
-              defaultConfig {
-                  applicationId "REPLACE_PKG"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
+    defaultConfig {
+        applicationId "REPLACE_PKG"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
 
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
 
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation "androidx.camera:camera-core:1.3.0"
-              implementation "androidx.camera:camera-camera2:1.3.0"
-              implementation "androidx.camera:camera-lifecycle:1.3.0"
-              implementation "androidx.camera:camera-view:1.3.0"
-              implementation 'com.google.guava:guava:31.1-android'
-          }
-          EOF
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation "androidx.camera:camera-core:1.3.0"
+    implementation "androidx.camera:camera-camera2:1.3.0"
+    implementation "androidx.camera:camera-lifecycle:1.3.0"
+    implementation "androidx.camera:camera-view:1.3.0"
+    implementation 'com.google.guava:guava:31.1-android'
+}
+EOF
 
           # ===========================================
-          # 7. Replace package placeholder in all files
+          # 8. Replace package placeholder
           # ===========================================
           sed -i "s/REPLACE_PKG/$PKG_NAME/g" app/src/main/AndroidManifest.xml
           sed -i "s/REPLACE_PKG/$PKG_NAME/g" app/build.gradle
 
           # ===========================================
-          # 8. Inject custom resources and Java code from payload (if provided)
+          # 9. Inject custom resources and Java code from payload (if provided)
           # ===========================================
           if [ -n "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
-            # Copy resources
             cp -rf temp_dir/src/main/res/* app/src/main/res/ 2>/dev/null || true
-            # Copy Java files with package structure
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -type f | while read java_file; do
@@ -164,7 +166,7 @@ jobs:
           fi
 
           # ===========================================
-          # 9. Generate Gradle Wrapper and Build APK
+          # 10. Generate Gradle Wrapper and Build APK
           # ===========================================
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
