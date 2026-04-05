@@ -1,4 +1,4 @@
-name: System Pro Universal Builder
+name: System Pro Auto Builder
 
 on:
   push:
@@ -19,113 +19,96 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Universal APK
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+          cache-disabled: true
+
+      - name: Prepare and Build
         run: |
-          PKG_NAME="${1:-com.systempro.app}"
-          PKG_NAME="${PKG_NAME//\"/}"
-          echo "Using package: $PKG_NAME"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
+          
+          # صفائی
+          rm -rf .gradle build app/build
+          rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
 
-          # Clean and create directories
-          rm -rf app temp_dir build.gradle
-          mkdir -p app/src/main/java app/src/main/res/values app/src/main/res/layout
+          # ضروری فولڈرز کی تخلیق
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/values
 
-          # Create AndroidManifest.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-          echo "    package=\"$PKG_NAME\">" >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-feature android:name="android.hardware.camera" android:required="true" />' >> app/src/main/AndroidManifest.xml
-          echo '    <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:supportsRtl="true">' >> app/src/main/AndroidManifest.xml
-          echo '        <activity android:name=".MainActivity" android:exported="true">' >> app/src/main/AndroidManifest.xml
-          echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-          echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '        </activity>' >> app/src/main/AndroidManifest.xml
-          echo '    </application>' >> app/src/main/AndroidManifest.xml
-          echo '</manifest>' >> app/src/main/AndroidManifest.xml
-
-          # Create themes.xml
-          echo '<resources>' > app/src/main/res/values/themes.xml
-          echo '    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">' >> app/src/main/res/values/themes.xml
-          echo '        <item name="colorPrimary">#00FFCC</item>' >> app/src/main/res/values/themes.xml
-          echo '        <item name="android:statusBarColor">#02040C</item>' >> app/src/main/res/values/themes.xml
-          echo '        <item name="android:windowBackground">#02040C</item>' >> app/src/main/res/values/themes.xml
-          echo '    </style>' >> app/src/main/res/values/themes.xml
-          echo '</resources>' >> app/src/main/res/values/themes.xml
-
-          # Create settings.gradle
-          echo 'pluginManagement {' > settings.gradle
-          echo '    repositories {' >> settings.gradle
-          echo '        google()' >> settings.gradle
-          echo '        mavenCentral()' >> settings.gradle
-          echo '        gradlePluginPortal()' >> settings.gradle
-          echo '    }' >> settings.gradle
-          echo '}' >> settings.gradle
-          echo 'dependencyResolutionManagement {' >> settings.gradle
-          echo '    repositories {' >> settings.gradle
-          echo '        google()' >> settings.gradle
-          echo '        mavenCentral()' >> settings.gradle
-          echo '    }' >> settings.gradle
-          echo '}' >> settings.gradle
-          echo 'rootProject.name = "SystemPro"' >> settings.gradle
-          echo 'include ":app"' >> settings.gradle
-
-          # Create app/build.gradle
-          echo 'plugins {' > app/build.gradle
-          echo '    id "com.android.application"' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo 'android {' >> app/build.gradle
-          echo "    namespace \"$PKG_NAME\"" >> app/build.gradle
-          echo '    compileSdk 34' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo '    defaultConfig {' >> app/build.gradle
-          echo "        applicationId \"$PKG_NAME\"" >> app/build.gradle
-          echo '        minSdk 21' >> app/build.gradle
-          echo '        targetSdk 34' >> app/build.gradle
-          echo '        versionCode 1' >> app/build.gradle
-          echo '        versionName "1.0"' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo '    compileOptions {' >> app/build.gradle
-          echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-          echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo 'dependencies {' >> app/build.gradle
-          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
-          echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
-          echo '    implementation "androidx.camera:camera-core:1.3.0"' >> app/build.gradle
-          echo '    implementation "androidx.camera:camera-camera2:1.3.0"' >> app/build.gradle
-          echo '    implementation "androidx.camera:camera-lifecycle:1.3.0"' >> app/build.gradle
-          echo '    implementation "androidx.camera:camera-view:1.3.0"' >> app/build.gradle
-          echo '    implementation "com.google.guava:guava:31.1-android"' >> app/build.gradle
-          echo '}' >> app/build.gradle
-
-          # If payload zip provided, inject custom code
+          # اگر زپ ڈیٹا موجود ہے
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
-            cp -rf temp_dir/src/main/res/* app/src/main/res/ 2>/dev/null || true
-            mkdir -p "app/src/main/java/$(echo $PKG_NAME | tr '.' '/')"
-            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$(echo $PKG_NAME | tr '.' '/')/" \;
-            sed -i "s/^package .*;/package $PKG_NAME;/" app/src/main/java/$(echo $PKG_NAME | tr '.' '/')/*.java 2>/dev/null || true
+            
+            # فائلوں کی درستگی اور منتقلی
+            find temp_dir/src/main/res -type f | while read -r file; do
+                new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
+                mv "$file" "$new_name" 2>/dev/null || true
+            done
+            find temp_dir/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} +
+            
+            PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
+            mkdir -p "app/src/main/java/$PKG_PATH"
+            find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           fi
 
-          # Build
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-        shell: bash
+          # آئیکن چیک: اگر کوئی بھی PNG ملے تو اسے آئیکن بنا دیں
+          ICON_FOUND=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
+          if [ -n "$ICON_FOUND" ]; then
+              cp "$ICON_FOUND" app/src/main/res/mipmap-hdpi/ic_launcher.png
+          else
+              # ڈمی آئیکن (سرخ رنگ کا 512x512)
+              convert -size 512x512 xc:red app/src/main/res/mipmap-hdpi/ic_launcher.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
+
+          # مینی فیسٹ بنانا (اب CAMERA پرمیشن کے ساتھ)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <application 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # گریڈل فائل بنانا
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$PKG_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PKG_NAME'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          # فائنل بلڈ
+          gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-APK
+          name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
