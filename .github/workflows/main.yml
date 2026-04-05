@@ -29,21 +29,17 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.torch.systempro' }}"
           
-          # صفائی
           rm -rf .gradle build app/build
           rm -rf app/src/main/java/* app/src/main/res/drawable/* app/src/main/res/mipmap-*
 
-          # ضروری فولڈرز کی تخلیق
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/values
 
-          # اگر زپ ڈیٹا موجود ہے
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # فائلوں کی درستگی اور منتقلی
             find temp_dir/src/main/res -type f | while read -r file; do
                 new_name=$(echo "$file" | tr ' ' '_' | tr -d '()' | tr '[:upper:]' '[:lower:]')
                 mv "$file" "$new_name" 2>/dev/null || true
@@ -56,16 +52,14 @@ jobs:
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
           fi
 
-          # آئیکن چیک: اگر کوئی بھی PNG ملے تو اسے آئیکن بنا دیں
           ICON_FOUND=$(find app/src/main/res/drawable -name "*.png" | head -n 1)
           if [ -n "$ICON_FOUND" ]; then
               cp "$ICON_FOUND" app/src/main/res/mipmap-hdpi/ic_launcher.png
           else
-              # ڈمی آئیکن (سرخ رنگ کا 512x512)
               convert -size 512x512 xc:red app/src/main/res/mipmap-hdpi/ic_launcher.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-          # مینی فیسٹ بنانا (اب CAMERA پرمیشن کے ساتھ)
+          # IMPORTANT: Manifest with CAMERA permission
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -84,7 +78,6 @@ jobs:
           </manifest>
           EOF
 
-          # گریڈل فائل بنانا
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -104,7 +97,6 @@ jobs:
           }
           EOF
 
-          # فائنل بلڈ
           gradle assembleDebug --no-daemon
 
       - name: Upload APK
