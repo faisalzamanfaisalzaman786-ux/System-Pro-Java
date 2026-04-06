@@ -26,26 +26,42 @@ jobs:
           EXT_STYLES_URL="${{ github.event.client_payload.styles_url }}"
           
           rm -rf app temp_dir
-          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-hdpi
 
+          # 1. Styles Handling
           if [ -n "$EXT_STYLES_URL" ]; then
             curl -L "$EXT_STYLES_URL" -o app/src/main/res/values/styles.xml
           else
             printf "<resources>\n    <style name=\"CalcButton\">\n        <item name=\"android:layout_width\">0dp</item>\n        <item name=\"android:layout_height\">80dp</item>\n        <item name=\"android:layout_columnWeight\">1</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
           fi
 
-          printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"$PKG_NAME\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"System Pro\" android:theme=\"@style/Theme.AppCompat.Light.NoActionBar\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
-
+          # 2. ZIP Processing (Including Icon Extraction)
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
+            
+            # Extract Layouts
             cp -rf temp_dir/src/main/res/layout/* app/src/main/res/layout/ || true
+            
+            # Extract Icon from ZIP if exists
+            if [ -d "temp_dir/src/main/res/mipmap-hdpi" ]; then
+              cp -rf temp_dir/src/main/res/mipmap* app/src/main/res/
+              ICON_ATTR="android:icon=\"@mipmap/ic_launcher\""
+            else
+              ICON_ATTR=""
+            fi
+
+            # Java Files Processing
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} \;
           fi
 
+          # 3. Final Manifest
+          printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"$PKG_NAME\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"System Pro\" $ICON_ATTR android:theme=\"@style/Theme.AppCompat.Light.NoActionBar\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
+
+          # 4. Gradle & Build
           printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '$PKG_NAME'\n    compileSdk 34\n    defaultConfig {\n        applicationId '$PKG_NAME'\n        minSdk 21\n        targetSdk 34\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'\n}" > app/build.gradle
           
           echo "include ':app'" > settings.gradle
