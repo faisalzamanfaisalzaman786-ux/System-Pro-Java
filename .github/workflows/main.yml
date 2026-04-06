@@ -1,4 +1,4 @@
-name: System Pro Universal Builder
+name: System Pro Ultimate Strong Builder
 
 on:
   push:
@@ -19,38 +19,53 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Ultimate Logic Linker & Build
+      - name: Execute Strong Build Engine
         run: |
+          # 1. Variables & Environment Setup
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.system.pro.id$(date +%s)}"
+          echo "Target Package: $PKG_NAME"
           
           rm -rf app temp_dir
           mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-hdpi
 
-          # 1. Permanent Style Support
-          printf "<resources>\n    <style name=\"CalcButton\">\n        <item name=\"android:layout_width\">0dp</item>\n        <item name=\"android:layout_height\">80dp</item>\n        <item name=\"android:layout_columnWeight\">1</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
+          # 2. Universal Styles Injection (Prevents AAPT Errors)
+          printf "<resources>\n    <style name=\"CalcButton\">\n        <item name=\"android:layout_width\">0dp</item>\n        <item name=\"android:layout_height\">80dp</item>\n        <item name=\"android:layout_columnWeight\">1</item>\n        <item name=\"android:textAllCaps\">false</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
 
-          # 2. Advanced ZIP Processing
+          # 3. Payload Processing & Deep Linking
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
+            # Copy all resources
             cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
             
+            # Setup Dynamic Package Path
             PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
             mkdir -p "app/src/main/java/$PKG_PATH"
             
-            # تمام جاوا فائلوں کو کاپی کریں
+            # Move Java files and STRONGLY fix every reference
             find temp_dir/src/main/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             
-            # ہارڈ کور لاجک فکسنگ: پیکیج، امپورٹ اور R فائل کو اپ ڈیٹ کرنا
+            # --- THE STRONG FIX START ---
+            # Fix 1: Change package declaration
             find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/^package .*;/package $PKG_NAME;/g" {} \;
-            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/import .*\.R;/import $PKG_NAME.R;/g" {} \;
+            
+            # Fix 2: Remove any old R imports and force the NEW package R import
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "/import .*\.R;/d" {} \;
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "2i import $PKG_NAME.R;" {} \;
+            
+            # Fix 3: Global search and replace for any hardcoded R references
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/\bR\.id\./$PKG_NAME.R.id./g" {} \;
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/\bR\.layout\./$PKG_NAME.R.layout./g" {} \;
+            find "app/src/main/java/$PKG_PATH/" -name "*.java" -exec sed -i "s/\bR\.style\./$PKG_NAME.R.style./g" {} \;
+            # --- THE STRONG FIX END ---
           fi
 
-          # 3. Dynamic Manifest & Build Setup
+          # 4. Final Manifest Generation
           printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"$PKG_NAME\">\n    <application android:label=\"System Pro\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.AppCompat.Light.NoActionBar\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
 
+          # 5. Gradle Build Configuration
           printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '$PKG_NAME'\n    compileSdk 34\n    defaultConfig {\n        applicationId '$PKG_NAME'\n        minSdk 21\n        targetSdk 34\n        versionCode $(date +%s)\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'\n}" > app/build.gradle
           
           echo "include ':app'" > settings.gradle
@@ -61,5 +76,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V9-Final
+          name: System-Pro-Strong-V11
           path: app/build/outputs/apk/debug/*.apk
