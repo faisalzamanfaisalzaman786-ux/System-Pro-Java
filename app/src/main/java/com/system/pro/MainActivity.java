@@ -1,125 +1,89 @@
-package com.faisal.systempro;
+package com.system.pro;
 
-import android.Manifest;
-import android.content.ContentValues; // یہ امپورٹ غائب تھا
-import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.provider.MediaStore; // یہ بھی ضروری ہے
+import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
-import androidx.annotation.NonNull;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.CameraSelector;
-import androidx.camera.core.ImageCapture;
-import androidx.camera.core.ImageCaptureException;
-import androidx.camera.core.Preview;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import com.google.common.util.concurrent.ListenableFuture;
-import java.text.SimpleDateFormat;
-import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
-    private ImageCapture imageCapture;
-    private ExecutorService cameraExecutor;
-    private PreviewView viewFinder;
-
-    // تمام ضروری پرمیشنز کی لسٹ
-    private static final String[] REQUIRED_PERMISSIONS = {
-        Manifest.permission.CAMERA,
-        Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.WRITE_EXTERNAL_STORAGE
-    };
+    private TextView display;
+    private String currentInput = "";
+    private String lastOperator = "";
+    private double firstValue = Double.NaN;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        viewFinder = findViewById(R.id.viewFinder);
-        Button captureButton = findViewById(R.id.image_capture_button);
+        display = findViewById(R.id.display);
 
-        // ایپ کھلتے ہی تمام پرمیشنز ایک ساتھ مانگنا
-        if (allPermissionsGranted()) {
-            startCamera();
+        // تمام بٹنز کے ID کے مطابق Listeners سیٹ کریں
+        int[] buttonIds = {
+            R.id.btn_0, R.id.btn_1, R.id.btn_2, R.id.btn_3, R.id.btn_4,
+            R.id.btn_5, R.id.btn_6, R.id.btn_7, R.id.btn_8, R.id.btn_9,
+            R.id.btn_add, R.id.btn_sub, R.id.btn_mult, R.id.btn_div,
+            R.id.btn_clear, R.id.btn_del, R.id.btn_equal
+        };
+
+        View.OnClickListener listener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Button b = (Button) v;
+                String text = b.getText().toString();
+
+                if ("0123456789".contains(text)) {
+                    currentInput += text;
+                    display.setText(currentInput);
+                } else if (text.equals("C")) {
+                    currentInput = "";
+                    firstValue = Double.NaN;
+                    display.setText("0");
+                } else if (text.equals("DEL")) {
+                    if (currentInput.length() > 0) {
+                        currentInput = currentInput.substring(0, currentInput.length() - 1);
+                        display.setText(currentInput.isEmpty() ? "0" : currentInput);
+                    }
+                } else if (text.equals("=")) {
+                    calculate();
+                    lastOperator = "";
+                } else {
+                    if (!currentInput.isEmpty()) {
+                        calculate();
+                        lastOperator = text;
+                        currentInput = "";
+                    }
+                }
+            }
+        };
+
+        for (int id : buttonIds) {
+            View btn = findViewById(id);
+            if (btn != null) btn.setOnClickListener(listener);
+        }
+    }
+
+    private void calculate() {
+        if (!Double.isNaN(firstValue)) {
+            if (!currentInput.isEmpty()) {
+                double secondValue = Double.parseDouble(currentInput);
+                switch (lastOperator) {
+                    case "+": firstValue += secondValue; break;
+                    case "-": firstValue -= secondValue; break;
+                    case "*": firstValue *= secondValue; break;
+                    case "/": 
+                        if (secondValue != 0) firstValue /= secondValue;
+                        else display.setText("Error");
+                        break;
+                }
+                display.setText(String.valueOf(firstValue));
+            }
         } else {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, 10);
-        }
-
-        captureButton.setOnClickListener(v -> takePhoto());
-        cameraExecutor = Executors.newSingleThreadExecutor();
-    }
-
-    private void startCamera() {
-        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
-
-        cameraProviderFuture.addListener(() -> {
             try {
-                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
-                Preview preview = new Preview.Builder().build();
-                preview.setSurfaceProvider(viewFinder.getSurfaceProvider());
-
-                imageCapture = new ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                        .build();
-
-                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
-
-                cameraProvider.unbindAll();
-                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }, ContextCompat.getMainExecutor(this));
-    }
-
-    private void takePhoto() {
-        if (imageCapture == null) return;
-
-        String name = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
-                .format(System.currentTimeMillis());
-        
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
-        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg");
-
-        ImageCapture.OutputFileOptions outputOptions = new ImageCapture.OutputFileOptions.Builder(
-                getContentResolver(), 
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, 
-                contentValues).build();
-
-        imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(this),
-                new ImageCapture.OnImageSavedCallback() {
-                    @Override
-                    public void onImageSaved(@NonNull ImageCapture.OutputFileResults results) {
-                        Toast.makeText(MainActivity.this, "Photo Saved!", Toast.LENGTH_SHORT).show();
-                    }
-
-                    @Override
-                    public void onError(@NonNull ImageCaptureException exception) {
-                        Toast.makeText(MainActivity.this, "Error: " + exception.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                });
-    }
-
-    private boolean allPermissionsGranted() {
-        for (String permission : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
+                firstValue = Double.parseDouble(currentInput);
+            } catch (Exception e) { }
         }
-        return true;
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        cameraExecutor.shutdown();
     }
 }
