@@ -12,6 +12,9 @@ android {
         targetSdk 34
         versionCode 1
         versionName "2.0"
+
+        // ملٹی ڈیکس سپورٹ (اگر لائبریریز بہت زیادہ ہوں تو یہ ضروری ہے)
+        multiDexEnabled true
     }
 
     buildTypes {
@@ -28,12 +31,13 @@ android {
 }
 
 dependencies {
-    // UI Libraries
+    // Core & UI Libraries
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.multidex:multidex:2.0.1'
 
-    // CameraX Core Libraries
+    // ========== CAMERAX LIBRARIES (Updated & Fixed) ==========
     def camerax_version = "1.3.0"
     implementation "androidx.camera:camera-core:${camerax_version}"
     implementation "androidx.camera:camera-camera2:${camerax_version}"
@@ -42,42 +46,32 @@ dependencies {
     implementation "androidx.camera:camera-view:${camerax_version}"
     implementation "androidx.camera:camera-extensions:${camerax_version}"
 
-    // ListenableFuture and Guava
+    // ListenableFuture and Guava (CameraX کے لیے لازمی ہے)
     implementation 'com.google.guava:guava:31.1-android'
 
-    // ========== 20 ADDITIONAL DEPENDENCIES ==========
-    // RecyclerView
+    // ========== ADDITIONAL LIBRARIES (Sorted) ==========
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
-
-    // CardView
     implementation 'androidx.cardview:cardview:1.0.0'
 
-    // Lifecycle components (ViewModel + LiveData)
+    // Lifecycle (ViewModel & LiveData)
     def lifecycle_version = "2.7.0"
     implementation "androidx.lifecycle:lifecycle-viewmodel:$lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-livedata:$lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-runtime:$lifecycle_version"
 
-    // Navigation Component
+    // Navigation
     def nav_version = "2.7.6"
     implementation "androidx.navigation:navigation-fragment:$nav_version"
     implementation "androidx.navigation:navigation-ui:$nav_version"
 
-    // Kotlin Coroutines
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-
-    // Retrofit (Networking)
+    // Networking & Data
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-
-    // OkHttp
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
-
-    // Gson
     implementation 'com.google.code.gson:gson:2.10.1'
 
-    // Glide (Image loading)
+    // Image Loading (Glide)
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
 
@@ -86,65 +80,13 @@ dependencies {
     implementation "androidx.room:room-runtime:$room_version"
     annotationProcessor "androidx.room:room-compiler:$room_version"
 
-    // WorkManager
+    // Utilities & Hardware
     implementation 'androidx.work:work-runtime:2.9.0'
-
-    // Preference
-    implementation 'androidx.preference:preference:1.2.1'
-
-    // ViewPager2
-    implementation 'androidx.viewpager2:viewpager2:1.0.0'
-
-    // SwipeRefreshLayout
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-
-    // EasyPermissions
-    implementation 'com.vmadalin:easypermissions-ktx:1.0.0'
-
-    // Timber (Logging)
-    implementation 'com.jakewharton.timber:timber:5.0.1'
-
-    // EventBus
-    implementation 'org.greenrobot:eventbus:3.3.1'
-
-    // Lottie (Animations)
-    implementation 'com.airbnb.android:lottie:6.2.0'
-
-    // Circular ImageView
-    implementation 'de.hdodenhof:circleimageview:3.1.0'
-
-    // Material Dialogs
-    implementation 'com.afollestad.material-dialogs:core:3.3.0'
-
-    // ========== 10 HARDWARE DEPENDENCIES ==========
-    // Google Play Services Location (GPS)
-    implementation 'com.google.android.gms:play-services-location:21.0.1'
-
-    // AndroidX Biometric (fingerprint, face unlock)
     implementation 'androidx.biometric:biometric:1.1.0'
-
-    // RxAndroidBLE – Bluetooth Low Energy
-    implementation 'com.polidea.rxandroidble2:rxandroidble:1.13.1'
-
-    // Google Play Services NFC
-    implementation 'com.google.android.gms:play-services-nfc:19.0.0'
-
-    // USB Serial for Android
-    implementation 'com.github.mik3y:usb-serial-for-android:3.5.1'
-
-    // CameraView (advanced camera control)
-    implementation 'com.otaliastudios:cameraview:2.7.2'
-
-    // Kontakt.io SDK – Bluetooth beacons
-    implementation 'com.kontaktio:sdk:4.3.0'
-
-    // PermissionsDispatcher
-    implementation 'com.github.hotchemi:permissionsdispatcher:4.9.3'
-    annotationProcessor 'com.github.hotchemi:permissionsdispatcher-processor:4.9.3'
-
-    // RxPermissions
-    implementation 'com.github.tbruyelle:rxpermissions:0.12'
-
-    // MPAndroidChart – hardware sensor data visualisation
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation 'com.airbnb.android:lottie:6.2.0'
+    implementation 'de.hdodenhof:circleimageview:3.1.0'
+    
+    // Charts for Sensor Data
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
 }
