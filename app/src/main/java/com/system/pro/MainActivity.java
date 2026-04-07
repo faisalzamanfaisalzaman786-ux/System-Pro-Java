@@ -1,89 +1,86 @@
-package com.system.pro;
+package com.faisal.systempro;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+// CameraX imports
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+
+// Guava import for ListenableFuture
+import com.google.common.util.concurrent.ListenableFuture;
+
+import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
 
-    private TextView display;
-    private String currentInput = "";
-    private String lastOperator = "";
-    private double firstValue = Double.NaN;
+    private PreviewView viewFinder;
+    private static final int REQUEST_CODE_PERMISSIONS = 10;
+    private static final String[] REQUIRED_PERMISSIONS = new String[]{Manifest.permission.CAMERA};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        display = findViewById(R.id.display);
+        viewFinder = findViewById(R.id.viewFinder);
 
-        // تمام بٹنز کے ID کے مطابق Listeners سیٹ کریں
-        int[] buttonIds = {
-            R.id.btn_0, R.id.btn_1, R.id.btn_2, R.id.btn_3, R.id.btn_4,
-            R.id.btn_5, R.id.btn_6, R.id.btn_7, R.id.btn_8, R.id.btn_9,
-            R.id.btn_add, R.id.btn_sub, R.id.btn_mult, R.id.btn_div,
-            R.id.btn_clear, R.id.btn_del, R.id.btn_equal
-        };
-
-        View.OnClickListener listener = new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Button b = (Button) v;
-                String text = b.getText().toString();
-
-                if ("0123456789".contains(text)) {
-                    currentInput += text;
-                    display.setText(currentInput);
-                } else if (text.equals("C")) {
-                    currentInput = "";
-                    firstValue = Double.NaN;
-                    display.setText("0");
-                } else if (text.equals("DEL")) {
-                    if (currentInput.length() > 0) {
-                        currentInput = currentInput.substring(0, currentInput.length() - 1);
-                        display.setText(currentInput.isEmpty() ? "0" : currentInput);
-                    }
-                } else if (text.equals("=")) {
-                    calculate();
-                    lastOperator = "";
-                } else {
-                    if (!currentInput.isEmpty()) {
-                        calculate();
-                        lastOperator = text;
-                        currentInput = "";
-                    }
-                }
-            }
-        };
-
-        for (int id : buttonIds) {
-            View btn = findViewById(id);
-            if (btn != null) btn.setOnClickListener(listener);
+        if (allPermissionsGranted()) {
+            startCamera();
+        } else {
+            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
     }
 
-    private void calculate() {
-        if (!Double.isNaN(firstValue)) {
-            if (!currentInput.isEmpty()) {
-                double secondValue = Double.parseDouble(currentInput);
-                switch (lastOperator) {
-                    case "+": firstValue += secondValue; break;
-                    case "-": firstValue -= secondValue; break;
-                    case "*": firstValue *= secondValue; break;
-                    case "/": 
-                        if (secondValue != 0) firstValue /= secondValue;
-                        else display.setText("Error");
-                        break;
-                }
-                display.setText(String.valueOf(firstValue));
-            }
-        } else {
+    private void startCamera() {
+        final ListenableFuture<ProcessCameraProvider> cameraProviderFuture = 
+                ProcessCameraProvider.getInstance(this);
+
+        cameraProviderFuture.addListener(() -> {
             try {
-                firstValue = Double.parseDouble(currentInput);
-            } catch (Exception e) { }
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(viewFinder.getSurfaceProvider());
+
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(this, cameraSelector, preview);
+
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private boolean allPermissionsGranted() {
+        for (String permission : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (allPermissionsGranted()) {
+                startCamera();
+            } else {
+                Toast.makeText(this, "Permissions not granted", Toast.LENGTH_SHORT).show();
+                finish();
+            }
         }
     }
 }
