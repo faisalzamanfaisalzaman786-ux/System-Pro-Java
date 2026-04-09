@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   repository_dispatch:
-    types: [build-zip-project]
+    types: [android-studio-build] # HTML میں یہی ٹائپ استعمال ہوئی ہے
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Execute Universal Engine
         run: |
-          # 1. ڈائنامک پیکیج اور ایپ کا نام
+          # 1. پیکیج اور ایپ ڈیٹا حاصل کرنا
           USER_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME="${USER_PKG:-com.system.pro.universal}"
           PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
@@ -32,31 +32,39 @@ jobs:
           
           echo "Building: $FINAL_APP_NAME"
 
-          # 2. ڈائریکٹری سٹرکچر
+          # 2. ڈائریکٹری سٹرکچر کی تیاری
           rm -rf app temp_dir
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable # ڈیفالٹ ڈرا ایبل فولڈر
+          mkdir -p app/src/main/res/drawable
 
-          # 3. بنیادی ریسورسز (بشمول CalcButton سٹائل)
-          printf "<resources>\n    <color name=\"colorPrimary\">#2196F3</color>\n    <color name=\"colorPrimaryDark\">#1976D2</color>\n    <color name=\"colorAccent\">#FF4081</color>\n</resources>" > app/src/main/res/values/colors.xml
+          # 3. ڈیفالٹ ریسورسز (اگر زپ میں نہ ہوں)
+          printf "<resources>\n    <color name=\"colorPrimary\">#2196F3</color>\n    <color name=\"colorPrimaryDark\">#1976D2</color>\n    <color name=\"colorAccent\">#FF4081</color>\n    <color name=\"purple_200\">#FFBB86FC</color>\n</resources>" > app/src/main/res/values/colors.xml
           
-          printf "<resources>\n    <style name=\"Theme.SystemPro\" parent=\"Theme.MaterialComponents.Light.NoActionBar\">\n        <item name=\"colorPrimary\">@color/colorPrimary</item>\n        <item name=\"colorPrimaryDark\">@color/colorPrimaryDark</item>\n    </style>\n\n    <style name=\"CalcButton\" parent=\"Widget.MaterialComponents.Button\">\n        <item name=\"android:layout_width\">0dp</item>\n        <item name=\"android:layout_height\">80dp</item>\n        <item name=\"android:layout_columnWeight\">1</item>\n        <item name=\"android:layout_margin\">4dp</item>\n        <item name=\"android:textSize\">20sp</item>\n        <item name=\"android:backgroundTint\">#252525</item>\n        <item name=\"android:textColor\">#FFFFFF</item>\n        <item name=\"android:onClick\">onButtonClick</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
+          printf "<resources>\n    <style name=\"Theme.SystemPro\" parent=\"Theme.MaterialComponents.Light.NoActionBar\">\n        <item name=\"colorPrimary\">@color/colorPrimary</item>\n        <item name=\"colorPrimaryDark\">@color/colorPrimaryDark</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
           
           printf "<resources>\n    <string name=\"app_name\">$FINAL_APP_NAME</string>\n</resources>" > app/src/main/res/values/strings.xml
 
-          # 4. زپ فائل پروسیسنگ اور کوڈ انجکشن
+          # 4. زپ فائل پروسیسنگ (HTML کے مطابق)
           if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # زپ سے ریسورسز کاپی کرنا
-            [ -d "temp_dir/src/main/res" ] && cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
+            # زپ سے ریسورسز (Icons, Layouts) کاپی کرنا
+            if [ -d "temp_dir/src/main/res" ]; then
+              cp -rf temp_dir/src/main/res/* app/src/main/res/
+            fi
             
-            # جاوا فائلز کی منتقلی
+            # مینی فیسٹ فائل کو کاپی کرنا (جو HTML میں ایڈٹ کی گئی ہے)
+            if [ -f "temp_dir/src/main/AndroidManifest.xml" ]; then
+              mkdir -p app/src/main/
+              cp -f temp_dir/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            fi
+            
+            # تمام جاوا فائلز کو نئے پیکیج پاتھ میں منتقل کرنا
             find temp_dir -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             
-            # پیکیج فکسر
+            # پیکیج فکسر: فائلز کے اندر پیکیج نیم درست کرنا
             find "app/src/main/java/$PKG_PATH/" -name "*.java" -type f | while read -r file; do
               sed -i "1s|^package .*|package $PKG_NAME;|" "$file"
               sed -i "/import .*\.R;/d" "$file"
@@ -64,10 +72,7 @@ jobs:
             done
           fi
 
-          # 5. مینی فیسٹ (آئیکن ایرر ختم کرنے کے لیے ڈیفالٹ سسٹم آئیکن استعمال کیا ہے)
-          printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <application android:label=\"@string/app_name\" android:icon=\"@android:drawable/sym_def_app_icon\" android:theme=\"@style/Theme.SystemPro\" android:allowBackup=\"true\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
-
-          # 6. گریڈل کنفیگریشن
+          # 5. گریڈل کنفیگریشن
           printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '$PKG_NAME'\n    compileSdk 34\n    defaultConfig {\n        applicationId '$PKG_NAME'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n        multiDexEnabled true\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'\n    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'\n}" > app/build.gradle
           
           echo "include ':app'" > settings.gradle
