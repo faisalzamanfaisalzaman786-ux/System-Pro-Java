@@ -22,9 +22,8 @@ jobs:
 
       - name: Execute Universal Engine
         run: |
-          # 1. یوزر کے منتخب کردہ پیکیج نیم کو حاصل کرنا
+          # 1. ڈائنامک پیکیج اور ایپ کا نام
           USER_PKG="${{ github.event.client_payload.package_name }}"
-          # اگر یوزر نے پیکیج نہیں دیا تو ڈیفالٹ استعمال ہوگا
           PKG_NAME="${USER_PKG:-com.system.pro.universal}"
           PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
           
@@ -34,15 +33,17 @@ jobs:
           echo "Building: $FINAL_APP_NAME"
           echo "Target Package: $PKG_NAME"
 
-          # 2. ڈائریکٹری سٹرکچر کی تیاری
+          # 2. ڈائریکٹری سٹرکچر
           rm -rf app temp_dir
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          # 3. بنیادی ریسورسز (Defaults)
+          # 3. بنیادی ریسورسز (بشمول CalcButton سٹائل)
           printf "<resources>\n    <color name=\"colorPrimary\">#2196F3</color>\n    <color name=\"colorPrimaryDark\">#1976D2</color>\n    <color name=\"colorAccent\">#FF4081</color>\n</resources>" > app/src/main/res/values/colors.xml
-          printf "<resources>\n    <style name=\"Theme.SystemPro\" parent=\"Theme.MaterialComponents.Light.NoActionBar\">\n        <item name=\"colorPrimary\">@color/colorPrimary</item>\n        <item name=\"colorPrimaryDark\">@color/colorPrimaryDark</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
+          
+          printf "<resources>\n    <style name=\"Theme.SystemPro\" parent=\"Theme.MaterialComponents.Light.NoActionBar\">\n        <item name=\"colorPrimary\">@color/colorPrimary</item>\n        <item name=\"colorPrimaryDark\">@color/colorPrimaryDark</item>\n    </style>\n\n    <style name=\"CalcButton\" parent=\"Widget.MaterialComponents.Button\">\n        <item name=\"android:layout_width\">0dp</item>\n        <item name=\"android:layout_height\">80dp</item>\n        <item name=\"android:layout_columnWeight\">1</item>\n        <item name=\"android:layout_margin\">4dp</item>\n        <item name=\"android:textSize\">20sp</item>\n        <item name=\"android:backgroundTint\">#252525</item>\n        <item name=\"android:textColor\">#FFFFFF</item>\n        <item name=\"android:onClick\">onButtonClick</item>\n    </style>\n</resources>" > app/src/main/res/values/styles.xml
+          
           printf "<resources>\n    <string name=\"app_name\">$FINAL_APP_NAME</string>\n</resources>" > app/src/main/res/values/strings.xml
 
           # 4. زپ فائل پروسیسنگ اور کوڈ انجکشن
@@ -50,19 +51,12 @@ jobs:
             echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
             unzip -o project.zip -d temp_dir/
             
-            # زپ سے ریسورسز کاپی کرنا
             [ -d "temp_dir/src/main/res" ] && cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # تمام جاوا فائلز کو نئے پیکیج پاتھ میں منتقل کرنا
             find temp_dir -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
             
-            # ہر جاوا فائل کے اندر پیکیج نیم اور امپورٹس کو درست کرنا
             find "app/src/main/java/$PKG_PATH/" -name "*.java" -type f | while read -r file; do
-              # پہلی لائن (package ...) کو نئے پیکیج نیم سے بدلنا
               sed -i "1s|^package .*|package $PKG_NAME;|" "$file"
-              # پرانے R امپورٹس ختم کرنا
               sed -i "/import .*\.R;/d" "$file"
-              # نیا درست R امپورٹ شامل کرنا (پیکیج ڈیکلریشن کے فوراً بعد)
               sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$file"
             done
           fi
