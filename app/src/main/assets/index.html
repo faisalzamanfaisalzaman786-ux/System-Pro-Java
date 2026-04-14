@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Universal App Builder · Multi-Type Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: radial-gradient(ellipse at 30% 20%, #0c1122, #02040c); font-family: 'Inter', sans-serif; color: #eef5ff; padding: 1rem; min-height: 100vh; }
+        .app-container { max-width: 1300px; margin: 0 auto; }
+        .glass-header { background: rgba(15, 25, 45, 0.7); backdrop-filter: blur(12px); border-radius: 1.8rem; padding: 0.8rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(0, 255, 204, 0.35); }
+        .logo-area h1 { font-size: 1.4rem; font-weight: 800; background: linear-gradient(125deg, #00FFCC, #c084fc); background-clip: text; -webkit-background-clip: text; color: transparent; }
+        .settings-toggle { background: rgba(255,255,255,0.06); border: 1px solid rgba(0,255,204,0.6); padding: 0.5rem 1.2rem; border-radius: 2rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+        .builder-grid { display: flex; flex-direction: column; gap: 1.3rem; }
+        .code-card { background: rgba(8, 14, 28, 0.8); border-radius: 1.8rem; border: 1px solid #2a3a60; padding: 1rem; }
+        .tab-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid #2e3d60; padding-bottom: 0.6rem; overflow-x: auto; flex-wrap: wrap; }
+        .tab { background: none; border: none; padding: 0.5rem 1.1rem; border-radius: 2rem; font-weight: 600; color: #9bb3e0; cursor: pointer; font-size: 0.8rem; white-space: nowrap; transition: 0.3s; }
+        .tab.active { background: linear-gradient(120deg, #00FFCC20, #a855f730); color: #00FFCC; box-shadow: 0 0 6px #00ffcc40; }
+        .editor { width: 100%; height: 320px; background: #010612; border: 1px solid #2c3d62; border-radius: 1.2rem; padding: 0.8rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #d6e6ff; outline: none; white-space: pre-wrap; }
+        .panel-section { background: #010612; border-radius: 1.2rem; padding: 1.5rem; height: auto; overflow-y: auto; }
+        .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.8rem; }
+        .perm-item { display: flex; align-items: center; gap: 10px; background: #0a1122; padding: 0.6rem; border-radius: 1rem; font-size: 0.75rem; border: 1px solid #1f2a44; }
+        .image-upload-box { text-align: center; border: 2px dashed #2a3a60; padding: 2rem; border-radius: 1.5rem; cursor: pointer; transition: 0.3s; }
+        .image-upload-box:hover { border-color: #00FFCC; background: rgba(0, 255, 204, 0.05); }
+        .preview-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 1.5rem; }
+        .img-preview { width: 80px; height: 80px; object-fit: cover; border-radius: 12px; border: 1px solid #00FFCC; }
+        .build-panel { background: rgba(8, 14, 28, 0.8); border-radius: 1.8rem; border: 1px solid #2a3a60; padding: 1.2rem; }
+        .btn-primary { background: linear-gradient(95deg, #00FFCC, #1c9eff); border: none; width: 100%; padding: 0.9rem; border-radius: 3rem; font-weight: 800; font-size: 1rem; cursor: pointer; margin-bottom: 1rem; color: #02040c; transition: 0.2s; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: rgba(255,255,255,0.1); border: 1px solid #00FFCC; width: 100%; padding: 0.7rem; border-radius: 3rem; font-weight: 600; font-size: 0.9rem; cursor: pointer; margin-bottom: 0.5rem; color: #00FFCC; transition: 0.2s; }
+        .log-box { background: #030812; border-radius: 1.2rem; padding: 0.8rem; height: 140px; overflow-y: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid #1f2a44; color: #8ba3d4; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-container { background: #0f172a; width: 90%; max-width: 500px; border-radius: 2rem; border: 1px solid #00FFCC; padding: 1.5rem; max-height: 80vh; overflow-y: auto; }
+        .setting-input, .select-input, .firebase-input { width: 100%; background: #030617; border: 1px solid #2f4170; padding: 0.7rem; border-radius: 1rem; color: white; margin-bottom: 10px; font-size: 0.8rem; }
+        .select-input { cursor: pointer; }
+        .firebase-input { font-family: monospace; height: 200px; }
+        .app-type-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 5px; font-size: 0.8rem; color: #9bb3e0; }
+        .warning { color: #ffaa44; }
+        .error { color: #ff5555; }
+        .success { color: #00ffaa; }
+        .download-area { margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="glass-header">
+        <div class="logo-area">
+            <h1><i class="fas fa-mobile-alt"></i> Universal App Builder</h1>
+        </div>
+        <div class="settings-toggle" id="openSettings"><i class="fas fa-sliders-h"></i> Settings</div>
+    </div>
+
+    <div class="builder-grid">
+        <div class="code-card">
+            <div class="tab-bar">
+                <button class="tab active" data-target="java"><i class="fab fa-java"></i> Java (Editable)</button>
+                <button class="tab" data-target="xml"><i class="fas fa-code"></i> XML (Editable)</button>
+                <button class="tab" data-target="images"><i class="fas fa-images"></i> Images</button>
+                <button class="tab" data-target="perms"><i class="fas fa-shield-alt"></i> Permissions</button>
+            </div>
+            
+            <textarea id="javaEditor" class="editor" spellcheck="false"></textarea>
+            <textarea id="xmlEditor" class="editor" style="display:none;" spellcheck="false"></textarea>
+            
+            <div id="imagesPanel" class="panel-section" style="display:none;">
+                <div class="image-upload-box" onclick="document.getElementById('imageInput').click()">
+                    <i class="fas fa-cloud-upload-alt fa-2x"></i>
+                    <p style="margin-top:10px;">Click to select App Images (PNG/JPG) - first image becomes launcher icon</p>
+                    <p style="font-size:0.7rem;">Max total 1MB</p>
+                    <input type="file" id="imageInput" multiple accept="image/*" style="display:none;">
+                </div>
+                <div class="preview-container" id="previewArea"></div>
+            </div>
+
+            <div id="permsPanel" class="panel-section" style="display:none;">
+                <div class="perm-grid" id="permGrid"></div>
+            </div>
+        </div>
+
+        <div class="build-panel">
+            <button id="buildBtn" class="btn-primary"><i class="fas fa-rocket"></i> LAUNCH BUILD</button>
+            <button id="downloadBtn" class="btn-secondary" style="display:none;"><i class="fas fa-download"></i> Download Latest APK</button>
+            <div id="logArea" class="log-box">> System Ready. Select app type in Settings.</div>
+        </div>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-container">
+        <h2 style="color:#00FFCC; margin-bottom:1rem;">Project Configuration</h2>
+        <div class="app-type-group">
+            <label>App Type</label>
+            <select id="appType" class="select-input">
+                <option value="torch">Torch (Flashlight)</option>
+                <option value="calculator">Calculator</option>
+                <option value="camera">Camera (Basic Photo)</option>
+                <option value="todo">To-Do List (Local)</option>
+                <option value="firebase">Firebase To-Do + Auth</option>
+            </select>
+        </div>
+        <input type="text" id="appName" class="setting-input" placeholder="App Name (e.g., MyTorch)" value="MyApp">
+        <input type="text" id="pkgName" class="setting-input" placeholder="Package Name (e.g., com.myapp.torch)" value="com.myapp.torch">
+        <input type="password" id="ghToken" class="setting-input" placeholder="GitHub Classic Token">
+        <input type="text" id="ghRepo" class="setting-input" placeholder="Owner/Repository (e.g., user/repo)">
+        
+        <div id="firebaseConfig" style="display:none;">
+            <label>google-services.json (paste JSON content)</label>
+            <textarea id="googleServicesJson" class="firebase-input" placeholder='Paste content of google-services.json here...'></textarea>
+            <p class="warning">For Firebase, you need to create a Firebase project and download google-services.json. The file will be included in the app.</p>
+        </div>
+        
+        <button id="saveSettings" class="btn-primary" style="margin-top:10px;">Save Configuration & Generate Code</button>
+    </div>
+</div>
+
+<script>
+    // ---------- App Type Templates ----------
+    const templates = {
+        torch: {
+            java: `package com.example.app;
+
+import android.app.Activity;
+import android.content.Context;
+import android.hardware.camera2.CameraManager;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.Toast;
+
+public class MainActivity extends Activity {
+    private Button btnToggle;
+    private boolean isFlashOn = false;
+    private CameraManager cameraManager;
+    private String cameraId;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        btnToggle = findViewById(R.id.btn_toggle);
+        cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        try {
+            String[] list = cameraManager.getCameraIdList();
+            if (list.length > 0) cameraId = list[0];
+        } catch (Exception e) { e.printStackTrace(); }
+        btnToggle.setOnClickListener(v -> {
+            if (cameraId == null) {
+                Toast.makeText(MainActivity.this, "No flash available", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try {
+                if (isFlashOn) {
+                    cameraManager.setTorchMode(cameraId, false);
+                    btnToggle.setText("Turn ON");
+                } else {
+                    cameraManager.setTorchMode(cameraId, true);
+                    btnToggle.setText("Turn OFF");
+                }
+                isFlashOn = !isFlashOn;
+            } catch (Exception e) {
+                Toast.makeText(MainActivity.this, "Error toggling flash", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (isFlashOn) {
+            try { cameraManager.setTorchMode(cameraId, false); } catch (Exception e) {}
+        }
+    }
+}`,
+            xml: `<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#02040C">
+    <Button
+        android:id="@+id/btn_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Turn ON"
+        android:textSize="24sp"
+        android:padding="16dp"
+        android:layout_centerInParent="true"/>
+</RelativeLayout>`,
+            permissions: ["CAMERA"],
+            dependencies: []
+        },
+        calculator: {
+            java: `package com.example.app;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private TextView display;
+    private String currentInput = "";
+    private String operator = "";
+    private double firstValue = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        display = findViewById(R.id.display);
+    }
+    public void onDigitClick(View view) {
+        Button btn = (Button) view;
+        currentInput += btn.getText().toString();
+        display.setText(currentInput);
+    }
+    public void onOperatorClick(View view) {
+        Button btn = (Button) view;
+        if (!currentInput.isEmpty()) {
+            firstValue = Double.parseDouble(currentInput);
+            operator = btn.getText().toString();
+            currentInput = "";
+        }
+    }
+    public void onEqualClick(View view) {
+        if (!currentInput.isEmpty() && !operator.isEmpty()) {
+            double secondValue = Double.parseDouble(currentInput);
+            double result = 0;
+            switch (operator) {
+                case "+": result = firstValue + secondValue; break;
+                case "-": result = firstValue - secondValue; break;
+                case "*": result = firstValue * secondValue; break;
+                case "/": result = firstValue / secondValue; break;
+            }
+            display.setText(String.valueOf(result));
+            currentInput = String.valueOf(result);
+            operator = "";
+        }
+    }
+    public void onClearClick(View view) {
+        currentInput = "";
+        operator = "";
+        firstValue = 0;
+        display.setText("0");
+    }
+}`,
+            xml: `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#02040C">
+    <TextView
+        android:id="@+id/display"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:text="0"
+        android:textSize="48sp"
+        android:textColor="#00FFCC"
+        android:gravity="end|center_vertical"
+        android:background="#1A1A2E"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp"/>
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:rowCount="4"
+        android:columnCount="4">
+        <Button android:text="7" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="8" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="9" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="/" android:onClick="onOperatorClick" style="@style/CalcButton"/>
+        <Button android:text="4" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="5" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="6" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="*" android:onClick="onOperatorClick" style="@style/CalcButton"/>
+        <Button android:text="1" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="2" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="3" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="-" android:onClick="onOperatorClick" style="@style/CalcButton"/>
+        <Button android:text="C" android:onClick="onClearClick" style="@style/CalcButton"/>
+        <Button android:text="0" android:onClick="onDigitClick" style="@style/CalcButton"/>
+        <Button android:text="=" android:onClick="onEqualClick" style="@style/CalcButton"/>
+        <Button android:text="+" android:onClick="onOperatorClick" style="@style/CalcButton"/>
+    </GridLayout>
+</LinearLayout>`,
+            permissions: [],
+            dependencies: []
+        },
+        camera: {
+            java: `package com.example.app;
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+public class MainActivity extends AppCompatActivity {
+    private static final int CAMERA_REQUEST = 100;
+    private static final int PERMISSION_REQUEST = 101;
+    private ImageView imageView;
+    private Button btnCapture;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        imageView = findViewById(R.id.imageView);
+        btnCapture = findViewById(R.id.btnCapture);
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, PERMISSION_REQUEST);
+        }
+        btnCapture.setOnClickListener(v -> {
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            startActivityForResult(intent, CAMERA_REQUEST);
+        });
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == CAMERA_REQUEST && resultCode == RESULT_OK) {
+            Bitmap photo = (Bitmap) data.getExtras().get("data");
+            imageView.setImageBitmap(photo);
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQUEST && grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Camera permission required", Toast.LENGTH_SHORT).show();
+        }
+    }
+}`,
+            xml: `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp"
+    android:background="#02040C">
+    <Button
+        android:id="@+id/btnCapture"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Capture Photo"
+        android:layout_marginBottom="24dp"/>
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
+        android:scaleType="centerCrop"/>
+</LinearLayout>`,
+            permissions: ["CAMERA"],
+            dependencies: []
+        },
+        todo: {
+            java: `package com.example.app;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ListView;
+import androidx.appcompat.app.AppCompatActivity;
+import java.util.ArrayList;
+
+public class MainActivity extends AppCompatActivity {
+    private ArrayList<String> items;
+    private ArrayAdapter<String> adapter;
+    private EditText editText;
+    private ListView listView;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        items = new ArrayList<>();
+        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items);
+        listView = findViewById(R.id.listView);
+        editText = findViewById(R.id.editText);
+        Button btnAdd = findViewById(R.id.btnAdd);
+        listView.setAdapter(adapter);
+        btnAdd.setOnClickListener(v -> {
+            String text = editText.getText().toString();
+            if (!text.isEmpty()) {
+                items.add(text);
+                adapter.notifyDataSetChanged();
+                editText.setText("");
+            }
+        });
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            items.remove(position);
+            adapter.notifyDataSetChanged();
+        });
+    }
+}`,
+            xml: `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#02040C">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:id="@+id/editText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Enter task"
+            android:textColor="#FFFFFF"/>
+        <Button
+            android:id="@+id/btnAdd"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add"/>
+    </LinearLayout>
+    <ListView
+        android:id="@+id/listView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+</LinearLayout>`,
+            permissions: [],
+            dependencies: []
+        },
+        firebase: {
+            java: `package com.example.app;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ListView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import java.util.ArrayList;
+
+public class MainActivity extends AppCompatActivity {
+    private FirebaseAuth auth;
+    private DatabaseReference ref;
+    private ArrayList<String> items;
+    private ArrayAdapter<String> adapter;
+    private EditText editText;
+    private ListView listView;
+    private FirebaseUser user;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        auth = FirebaseAuth.getInstance();
+        // Anonymous sign-in for simplicity (you can change to email/password)
+        auth.signInAnonymously().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                user = auth.getCurrentUser();
+                ref = FirebaseDatabase.getInstance().getReference("todos").child(user.getUid());
+                loadTodos();
+            } else {
+                Toast.makeText(this, "Auth failed", Toast.LENGTH_SHORT).show();
+            }
+        });
+        items = new ArrayList<>();
+        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items);
+        listView = findViewById(R.id.listView);
+        editText = findViewById(R.id.editText);
+        Button btnAdd = findViewById(R.id.btnAdd);
+        listView.setAdapter(adapter);
+        btnAdd.setOnClickListener(v -> {
+            String text = editText.getText().toString();
+            if (!text.isEmpty() && ref != null) {
+                String key = ref.push().getKey();
+                ref.child(key).setValue(text);
+                editText.setText("");
+            }
+        });
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            if (ref != null && position < items.size()) {
+                // In real app, you need to map item to key; simplified: remove by value
+                ref.orderByValue().equalTo(items.get(position)).addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        for (DataSnapshot child : snapshot.getChildren()) {
+                            child.getRef().removeValue();
+                        }
+                    }
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) { }
+                });
+            }
+        });
+    }
+    private void loadTodos() {
+        ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                items.clear();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    String todo = data.getValue(String.class);
+                    if (todo != null) items.add(todo);
+                }
+                adapter.notifyDataSetChanged();
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) { }
+        });
+    }
+}`,
+            xml: `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#02040C">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:id="@+id/editText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Enter task"
+            android:textColor="#FFFFFF"/>
+        <Button
+            android:id="@+id/btnAdd"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add"/>
+    </LinearLayout>
+    <ListView
+        android:id="@+id/listView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+</LinearLayout>`,
+            permissions: ["INTERNET"],
+            dependencies: ["com.google.firebase:firebase-auth:23.0.0", "com.google.firebase:firebase-database:21.0.0"]
+        }
+    };
+
+    let selectedImages = [];
+
+    function loadConfigAndGenerate() {
+        const savedConfig = localStorage.getItem('sp_studio_cfg');
+        let config = { appType: 'torch', appName: 'MyApp', pkgName: 'com.myapp.torch', ghToken: '', ghRepo: '', googleServicesJson: '' };
+        if (savedConfig) {
+            config = JSON.parse(savedConfig);
+        }
+        document.getElementById('appType').value = config.appType || 'torch';
+        document.getElementById('appName').value = config.appName || 'MyApp';
+        document.getElementById('pkgName').value = config.pkgName || 'com.myapp.torch';
+        document.getElementById('ghToken').value = config.ghToken || '';
+        document.getElementById('ghRepo').value = config.ghRepo || '';
+        if (config.googleServicesJson) document.getElementById('googleServicesJson').value = config.googleServicesJson;
+        updateCodeFromType();
+        updateFirebaseVisibility();
+    }
+
+    function updateCodeFromType() {
+        const type = document.getElementById('appType').value;
+        const template = templates[type];
+        if (template) {
+            let javaCode = template.java.replace(/package com\.example\.app;/g, `package ${document.getElementById('pkgName').value.trim() || 'com.example.app'};`);
+            document.getElementById('javaEditor').value = javaCode;
+            document.getElementById('xmlEditor').value = template.xml;
+            const permGrid = document.getElementById('permGrid');
+            const allPerms = ["INTERNET", "CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "ACCESS_FINE_LOCATION", "VIBRATE"];
+            permGrid.innerHTML = '';
+            allPerms.forEach(p => {
+                let checked = template.permissions.includes(p);
+                permGrid.innerHTML += `<div class="perm-item"><input type="checkbox" value="${p}" ${checked ? 'checked' : ''}> <label>${p}</label></div>`;
+            });
+        }
+    }
+
+    function updateFirebaseVisibility() {
+        const type = document.getElementById('appType').value;
+        document.getElementById('firebaseConfig').style.display = type === 'firebase' ? 'block' : 'none';
+    }
+
+    document.getElementById('appType').addEventListener('change', () => {
+        updateCodeFromType();
+        updateFirebaseVisibility();
+    });
+    document.getElementById('pkgName').addEventListener('input', () => updateCodeFromType());
+
+    document.getElementById('imageInput').onchange = (e) => {
+        const files = e.target.files;
+        const area = document.getElementById('previewArea');
+        area.innerHTML = '';
+        selectedImages = [];
+        Array.from(files).forEach(file => {
+            selectedImages.push(file);
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = document.createElement('img');
+                img.src = ev.target.result;
+                img.className = 'img-preview';
+                area.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+        log(`${files.length} Images selected.`);
+    };
+
+    const modal = document.getElementById('settingsModal');
+    document.getElementById('openSettings').onclick = () => {
+        loadConfigAndGenerate();
+        modal.style.display = 'flex';
+    };
+    document.getElementById('saveSettings').onclick = () => {
+        const repo = document.getElementById('ghRepo').value.trim();
+        if (repo && !repo.includes('/')) {
+            alert("Repository must be in format 'owner/repo'");
+            return;
+        }
+        const data = {
+            appType: document.getElementById('appType').value,
+            appName: document.getElementById('appName').value.trim() || "MyApp",
+            pkgName: document.getElementById('pkgName').value.trim() || "com.example.app",
+            ghToken: document.getElementById('ghToken').value.trim(),
+            ghRepo: repo,
+            googleServicesJson: document.getElementById('googleServicesJson').value.trim()
+        };
+        localStorage.setItem('sp_studio_cfg', JSON.stringify(data));
+        updateCodeFromType();
+        modal.style.display = 'none';
+        log("Settings saved. Code regenerated.");
+    };
+
+    function log(msg, isError = false) {
+        const area = document.getElementById('logArea');
+        const cls = isError ? 'error' : '';
+        area.innerHTML += `<div class="${cls}">> ${msg}</div>`;
+        area.scrollTop = area.scrollHeight;
+    }
+
+    // Function to fetch latest artifact URL
+    async function fetchLatestArtifactUrl(repo, token) {
+        try {
+            // Get the latest workflow run that was triggered by repository_dispatch and succeeded
+            const runsUrl = `https://api.github.com/repos/${repo}/actions/runs?event=repository_dispatch&status=success&per_page=1`;
+            const runsResp = await fetch(runsUrl, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+            });
+            if (!runsResp.ok) throw new Error(`Failed to fetch runs: ${runsResp.status}`);
+            const runsData = await runsResp.json();
+            if (!runsData.workflow_runs || runsData.workflow_runs.length === 0) {
+                throw new Error("No successful runs found");
+            }
+            const latestRun = runsData.workflow_runs[0];
+            // Get artifacts for this run
+            const artifactsUrl = `https://api.github.com/repos/${repo}/actions/runs/${latestRun.id}/artifacts`;
+            const artifactsResp = await fetch(artifactsUrl, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+            });
+            if (!artifactsResp.ok) throw new Error(`Failed to fetch artifacts: ${artifactsResp.status}`);
+            const artifactsData = await artifactsResp.json();
+            if (!artifactsData.artifacts || artifactsData.artifacts.length === 0) {
+                throw new Error("No artifacts found for the latest run");
+            }
+            // Find artifact that contains APK (name starts with SystemPro-Build)
+            const apkArtifact = artifactsData.artifacts.find(a => a.name && a.name.startsWith("SystemPro-Build"));
+            if (!apkArtifact) throw new Error("APK artifact not found");
+            return apkArtifact.archive_download_url;
+        } catch (err) {
+            log(`Download error: ${err.message}`, true);
+            return null;
+        }
+    }
+
+    // Download button handler
+    document.getElementById('downloadBtn').onclick = async () => {
+        const cfgRaw = localStorage.getItem('sp_studio_cfg');
+        if (!cfgRaw) {
+            log("No configuration found. Please save settings first.", true);
+            return;
+        }
+        const cfg = JSON.parse(cfgRaw);
+        if (!cfg.ghToken || !cfg.ghRepo) {
+            log("GitHub token or repository missing in settings.", true);
+            return;
+        }
+        log("Fetching latest APK artifact from GitHub...");
+        const downloadUrl = await fetchLatestArtifactUrl(cfg.ghRepo, cfg.ghToken);
+        if (downloadUrl) {
+            // The download URL requires a temporary token; we can open it directly (GitHub will redirect)
+            // We need to add authorization header? Actually the URL is pre-authed with a short-lived token, but we can open in new tab.
+            window.open(downloadUrl, '_blank');
+            log("Download started. Check your browser downloads.");
+        } else {
+            log("Could not retrieve APK. Make sure a build has completed successfully.", true);
+        }
+    };
+
+    // Build trigger
+    document.getElementById('buildBtn').onclick = async () => {
+        const btn = document.getElementById('buildBtn');
+        btn.disabled = true;
+        btn.textContent = "⏳ Building...";
+        try {
+            const cfgRaw = localStorage.getItem('sp_studio_cfg');
+            if (!cfgRaw) throw new Error("No configuration. Open settings and save.");
+            const cfg = JSON.parse(cfgRaw);
+            if (!cfg.ghToken) throw new Error("GitHub token missing.");
+            if (!cfg.ghRepo || !cfg.ghRepo.includes('/')) throw new Error("Repository must be owner/repo.");
+            if (!cfg.pkgName) throw new Error("Package name required.");
+            
+            log("🚀 Generating project...");
+            const zip = new JSZip();
+            const pkgPath = cfg.pkgName.replace(/\./g, '/');
+            const javaContent = document.getElementById('javaEditor').value;
+            const xmlContent = document.getElementById('xmlEditor').value;
+            
+            zip.file(`src/main/java/${pkgPath}/MainActivity.java`, javaContent);
+            zip.file(`src/main/res/layout/activity_main.xml`, xmlContent);
+            
+            for (let i = 0; i < selectedImages.length; i++) {
+                const file = selectedImages[i];
+                const buffer = await file.arrayBuffer();
+                let safeName = file.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_.]/g, '_');
+                if (i === 0) zip.file(`src/main/res/mipmap-hdpi/ic_launcher.png`, buffer);
+                zip.file(`src/main/res/drawable/${safeName}`, buffer);
+            }
+            
+            const perms = Array.from(document.querySelectorAll('#permGrid input:checked')).map(i => `    <uses-permission android:name="android.permission.${i.value}" />`).join('\n');
+            const manifest = `<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${cfg.pkgName}">\n${perms}\n<application android:label="${cfg.appName}" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" android:icon="@mipmap/ic_launcher">\n<activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>`;
+            zip.file(`src/main/AndroidManifest.xml`, manifest);
+            
+            const styles = `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="CalcButton">\n        <item name="android:layout_width">0dp</item>\n        <item name="android:layout_height">wrap_content</item>\n        <item name="android:layout_weight">1</item>\n        <item name="android:textSize">24sp</item>\n        <item name="android:padding">16dp</item>\n    </style>\n</resources>`;
+            zip.file(`src/main/res/values/styles.xml`, styles);
+            
+            let buildGradleApp = `plugins {
+    id 'com.android.application'
+}
+android {
+    namespace '${cfg.pkgName}'
+    compileSdk 34
+    defaultConfig {
+        applicationId '${cfg.pkgName}'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+`;
+            if (cfg.appType === 'firebase') {
+                buildGradleApp += `    implementation platform('com.google.firebase:firebase-bom:33.1.0')
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-database'
+`;
+                const topLevelGradle = `plugins {
+    id 'com.android.application' version '8.9.0' apply false
+    id 'com.google.gms.google-services' version '4.4.2' apply false
+}`;
+                zip.file(`build.gradle`, topLevelGradle);
+                if (cfg.googleServicesJson) {
+                    zip.file(`app/google-services.json`, cfg.googleServicesJson);
+                } else {
+                    log("⚠️ Warning: No google-services.json provided. Firebase features may not work.", true);
+                }
+                buildGradleApp += `}\napply plugin: 'com.google.gms.google-services'`;
+            } else {
+                const topLevelGradle = `plugins {
+    id 'com.android.application' version '8.9.0' apply false
+}`;
+                zip.file(`build.gradle`, topLevelGradle);
+                buildGradleApp += `}`;
+            }
+            zip.file(`app/build.gradle`, buildGradleApp);
+            
+            const settingsGradle = `pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "AppBuilder"
+include ':app'`;
+            zip.file(`settings.gradle`, settingsGradle);
+            zip.file(`gradle.properties`, `org.gradle.jvmargs=-Xmx2048m\nandroid.useAndroidX=true\nandroid.enableJetifier=true`);
+            
+            log("Generating ZIP...");
+            const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+            log(`ZIP size: ${(zipBlob.size / 1024).toFixed(1)} KB`);
+            const base64 = await blobToBase64(zipBlob);
+            if (base64.length > 60000) throw new Error(`Base64 too large (${base64.length} chars). Reduce images.`);
+            
+            log("Sending to GitHub...");
+            const res = await fetch(`https://api.github.com/repos/${cfg.ghRepo}/dispatches`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${cfg.ghToken}`, 'Accept': 'application/vnd.github.v3+json' },
+                body: JSON.stringify({
+                    event_type: 'build-zip-project',
+                    client_payload: { zip_data: base64, package_name: cfg.pkgName, app_name: cfg.appName }
+                })
+            });
+            if (res.ok) {
+                log("✅ Dispatch sent! Check GitHub Actions. After build completes, click 'Download Latest APK'.");
+                document.getElementById('downloadBtn').style.display = 'block';
+            } else {
+                const errText = await res.text();
+                log(`❌ GitHub error ${res.status}: ${errText.substring(0,200)}`, true);
+            }
+        } catch (err) {
+            log(`❌ Build failed: ${err.message}`, true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "🚀 LAUNCH BUILD";
+        }
+    };
+    
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+    
+    // Tab logic
+    document.querySelectorAll('.tab').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            const target = btn.dataset.target;
+            document.getElementById('javaEditor').style.display = target === 'java' ? 'block' : 'none';
+            document.getElementById('xmlEditor').style.display = target === 'xml' ? 'block' : 'none';
+            document.getElementById('imagesPanel').style.display = target === 'images' ? 'block' : 'none';
+            document.getElementById('permsPanel').style.display = target === 'perms' ? 'block' : 'none';
+        };
+    });
+    
+    loadConfigAndGenerate();
+</script>
+</body>
+</html>
