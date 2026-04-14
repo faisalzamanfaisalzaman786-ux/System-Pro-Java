@@ -3,38 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>System Pro - Dynamic UI</title>
+    <title>System Pro - Ultimate Theme Studio</title>
     <style>
-        /* ----- CSS Custom Properties (Variables) ----- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         :root {
-            /* Light theme (default) */
             --bg-primary: #ffffff;
-            --bg-secondary: #f5f7fa;
-            --text-primary: #1e293b;
+            --bg-secondary: #f8fafc;
+            --text-primary: #0f172a;
             --text-secondary: #475569;
-            --accent-cyan: #00b4d8;
-            --accent-orange: #f97316;
-            --accent-purple: #8b5cf6;
+            --accent-primary: #00b4d8;
+            --accent-secondary: #f97316;
             --card-bg: rgba(0, 180, 216, 0.08);
             --border-color: #e2e8f0;
             --btn-primary-bg: #00b4d8;
             --btn-primary-text: #0f172a;
             --btn-secondary-bg: #f1f5f9;
             --btn-secondary-text: #1e293b;
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            transition: all 0.2s ease;
+            --success-bg: #10b981;
+            --danger-bg: #ef4444;
         }
 
-        /* Dark theme */
         [data-theme="dark"] {
             --bg-primary: #0f172a;
             --bg-secondary: #1e293b;
             --text-primary: #f1f5f9;
             --text-secondary: #cbd5e1;
-            --accent-cyan: #2dd4bf;
-            --accent-orange: #fb923c;
-            --accent-purple: #a78bfa;
+            --accent-primary: #2dd4bf;
+            --accent-secondary: #fb923c;
             --card-bg: rgba(45, 212, 191, 0.1);
             --border-color: #334155;
             --btn-primary-bg: #2dd4bf;
@@ -43,97 +43,107 @@
             --btn-secondary-text: #f1f5f9;
         }
 
-        /* Blue theme */
-        [data-theme="blue"] {
-            --bg-primary: #eef2ff;
-            --bg-secondary: #e0e7ff;
-            --text-primary: #1e3a8a;
-            --text-secondary: #1e40af;
-            --accent-cyan: #3b82f6;
-            --accent-orange: #f59e0b;
-            --accent-purple: #8b5cf6;
-            --card-bg: rgba(59, 130, 246, 0.1);
-            --border-color: #bfdbfe;
-            --btn-primary-bg: #2563eb;
-            --btn-primary-text: #ffffff;
-            --btn-secondary-bg: #bfdbfe;
-            --btn-secondary-text: #1e3a8a;
-        }
-
-        /* Midnight theme */
-        [data-theme="midnight"] {
-            --bg-primary: #0c0a2a;
-            --bg-secondary: #1e1b4b;
-            --text-primary: #e0e7ff;
-            --text-secondary: #a5b4fc;
-            --accent-cyan: #c084fc;
-            --accent-orange: #fbbf24;
-            --accent-purple: #d8b4fe;
-            --card-bg: rgba(192, 132, 252, 0.1);
-            --border-color: #4c1d95;
-            --btn-primary-bg: #8b5cf6;
-            --btn-primary-text: #ffffff;
-            --btn-secondary-bg: #2e1065;
-            --btn-secondary-text: #e9d5ff;
-        }
-
-        /* Forest theme */
-        [data-theme="forest"] {
-            --bg-primary: #ecfdf5;
-            --bg-secondary: #d1fae5;
-            --text-primary: #064e3b;
-            --text-secondary: #047857;
-            --accent-cyan: #10b981;
-            --accent-orange: #f97316;
-            --accent-purple: #a78bfa;
-            --card-bg: rgba(16, 185, 129, 0.08);
-            --border-color: #a7f3d0;
-            --btn-primary-bg: #059669;
-            --btn-primary-text: #ffffff;
-            --btn-secondary-bg: #a7f3d0;
-            --btn-secondary-text: #064e3b;
-        }
-
-        /* Apply variables */
         body {
             background-color: var(--bg-primary);
             color: var(--text-primary);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             padding: 20px;
-            margin: 0;
             min-height: 100vh;
-            transition: background-color 0.3s ease, color 0.2s ease;
+            transition: background-color 0.2s, color 0.2s;
         }
 
         .container {
-            max-width: 600px;
+            max-width: 700px;
             margin: 0 auto;
         }
 
         h1 {
-            color: var(--accent-cyan);
+            color: var(--accent-primary);
+            font-size: 1.8rem;
             margin-bottom: 0.5rem;
-            font-size: 2rem;
         }
 
-        .subtitle {
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
+        .section {
+            background-color: var(--bg-secondary);
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-primary);
+        }
+
+        .theme-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .theme-btn {
+            padding: 8px 20px;
+            border-radius: 40px;
+            background-color: var(--btn-secondary-bg);
+            color: var(--btn-secondary-text);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-btn.active {
+            background-color: var(--accent-primary);
+            color: var(--btn-primary-text);
+            border-color: var(--accent-primary);
+        }
+
+        .color-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .color-label {
+            font-weight: 500;
+            min-width: 120px;
+        }
+
+        input[type="color"] {
+            width: 60px;
+            height: 40px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            background: var(--bg-primary);
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
         }
 
         button {
-            padding: 12px 20px;
-            margin: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
+            padding: 10px 20px;
             border-radius: 40px;
+            border: none;
+            font-weight: 600;
             cursor: pointer;
-            transition: transform 0.1s ease, background-color 0.2s ease;
+            transition: transform 0.1s, background 0.2s;
             background-color: var(--btn-secondary-bg);
             color: var(--btn-secondary-text);
-            box-shadow: var(--shadow-sm);
         }
 
         button:active {
@@ -145,291 +155,318 @@
             color: var(--btn-primary-text);
         }
 
-        .btn-secondary {
-            background-color: var(--btn-secondary-bg);
-            color: var(--btn-secondary-text);
+        .btn-success {
+            background-color: var(--success-bg);
+            color: white;
         }
 
-        .card {
-            background-color: var(--card-bg);
-            backdrop-filter: blur(4px);
-            padding: 20px;
-            border-radius: 24px;
-            margin-top: 24px;
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow-md);
-        }
-
-        .theme-selector {
+        .dynamic-buttons-area {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            gap: 12px;
-            margin: 20px 0;
+            gap: 10px;
+            margin-top: 16px;
         }
 
-        .theme-btn {
-            padding: 8px 16px;
-            border-radius: 40px;
+        .dynamic-btn {
+            background-color: var(--accent-secondary);
+            color: white;
+            padding: 6px 14px;
             font-size: 14px;
-            background-color: var(--btn-secondary-bg);
-            color: var(--btn-secondary-text);
-            border: 1px solid var(--border-color);
-        }
-
-        .theme-btn.active {
-            background-color: var(--accent-cyan);
-            color: var(--btn-primary-text);
-            border-color: var(--accent-cyan);
-        }
-
-        .dynamic-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 12px;
-            margin: 20px 0;
         }
 
         footer {
-            margin-top: 40px;
+            text-align: center;
             font-size: 12px;
             color: var(--text-secondary);
+            margin-top: 32px;
         }
 
-        select {
-            padding: 8px 16px;
-            border-radius: 40px;
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
+        .apk-status {
+            margin-top: 12px;
             font-size: 14px;
-            cursor: pointer;
+            padding: 8px;
+            border-radius: 12px;
+            background: var(--card-bg);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1 id="heading">System Pro Studio</h1>
-        <p class="subtitle">مکمل تھیم اور کلر سکیم ہینڈلنگ</p>
+<div class="container">
+    <h1>🎨 System Pro Studio</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">مکمل تھیم کنٹرول + اپنے رنگ + APK جنریشن</p>
 
-        <!-- Theme dropdown (additional) -->
-        <div>
-            <select id="themeSelect" aria-label="تھیم منتخب کریں">
-                <option value="light">روشنی (Light)</option>
-                <option value="dark">اندھیرا (Dark)</option>
-                <option value="blue">نیلا (Blue)</option>
-                <option value="midnight">نصف شب (Midnight)</option>
-                <option value="forest">جنگل (Forest)</option>
-            </select>
-        </div>
-
-        <!-- Quick theme buttons -->
-        <div class="theme-selector" id="themeButtons">
+    <!-- تھیم سلیکشن -->
+    <div class="section">
+        <div class="section-title">📁 پری سیٹ تھیمز</div>
+        <div class="theme-grid" id="themeGrid">
             <button class="theme-btn" data-theme="light">روشنی</button>
             <button class="theme-btn" data-theme="dark">اندھیرا</button>
-            <button class="theme-btn" data-theme="blue">نیلا</button>
-            <button class="theme-btn" data-theme="midnight">نصف شب</button>
-            <button class="theme-btn" data-theme="forest">جنگل</button>
+            <button class="theme-btn" data-theme="custom">اپنا تھیم (کسٹم)</button>
         </div>
-
-        <div class="dynamic-buttons">
-            <button class="btn-primary" id="changeTextBtn">ٹیکسٹ بدلیں</button>
-            <button class="btn-secondary" id="addButtonBtn">نیا بٹن شامل کریں</button>
-            <button class="btn-secondary" id="resetDynamicBtn">ڈائنامک بٹن ری سیٹ</button>
+        <div class="color-row">
+            <span class="color-label">✨ پرائمری کلر:</span>
+            <input type="color" id="primaryColorPicker" value="#00b4d8">
         </div>
-
-        <div id="dynamicArea" class="card">
-            <p>یہاں آپ ڈائنامک تبدیلیاں دیکھ سکتے ہیں۔</p>
-            <p>تھیم تبدیل کریں، نیے بٹن بنائیں، اور تمام تبدیلیاں <strong>محفوظ</strong> ہو جائیں گی۔</p>
+        <div class="color-row">
+            <span class="color-label">🌟 سیکنڈری کلر:</span>
+            <input type="color" id="secondaryColorPicker" value="#f97316">
         </div>
-
-        <footer>
-            <span id="version">System Pro v2.0 - تھیمز اب زیادہ مضبوط</span>
-        </footer>
+        <div class="button-group">
+            <button id="applyCustomBtn" class="btn-primary">اپنے رنگ لگائیں</button>
+            <button id="resetCustomBtn">ری سیٹ</button>
+        </div>
     </div>
 
-    <script>
-        // ---------- مضبوط تھیم ہینڈلنگ ----------
-        // تمام دستیاب تھیمز
-        const THEMES = ['light', 'dark', 'blue', 'midnight', 'forest'];
-        
-        // محفوظ کردہ تھیم حاصل کریں یا سسٹم کی ترجیح
-        function getSavedTheme() {
-            const saved = localStorage.getItem('app_theme');
-            if (saved && THEMES.includes(saved)) return saved;
-            // سسٹم کی ترجیح چیک کریں (اگر ڈارک موڈ پسند ہو)
-            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                return 'dark';
+    <!-- ڈائنامک بٹن اور ٹیکسٹ -->
+    <div class="section">
+        <div class="section-title">⚡ ڈائنامک کنٹرولز</div>
+        <div class="button-group">
+            <button id="changeTextBtn" class="btn-primary">ہیڈنگ بدلیں</button>
+            <button id="addDynamicBtn" class="btn-primary">نیا بٹن بنائیں</button>
+            <button id="resetDynamicBtns" class="btn-primary">تمام نئے بٹن ہٹائیں</button>
+        </div>
+        <div id="dynamicButtonsContainer" class="dynamic-buttons-area"></div>
+    </div>
+
+    <!-- APK جنریشن سیکشن (Android کے ساتھ انٹرفیس) -->
+    <div class="section">
+        <div class="section-title">📦 اے پی کے جنریٹر</div>
+        <p>موجودہ تھیم اور ڈیزائن کے ساتھ ایک نیا APK تیار کریں۔</p>
+        <div class="button-group">
+            <button id="generateApkBtn" class="btn-success">✨ Generate APK from Current Theme</button>
+        </div>
+        <div id="apkStatus" class="apk-status"></div>
+    </div>
+
+    <footer>
+        <span id="versionText">System Pro v3.0 | Custom Colors + APK Bridge</span>
+    </footer>
+</div>
+
+<script>
+    // ---------- مضبوط تھیم اور کلر سکیم ہینڈلنگ ----------
+    const defaultLight = {
+        primary: "#00b4d8",
+        secondary: "#f97316"
+    };
+    const defaultDark = {
+        primary: "#2dd4bf",
+        secondary: "#fb923c"
+    };
+
+    // محفوظ کردہ ویلیوز لوڈ کریں
+    let currentThemeType = localStorage.getItem("current_theme_type") || "light";
+    let customPrimary = localStorage.getItem("custom_primary") || defaultLight.primary;
+    let customSecondary = localStorage.getItem("custom_secondary") || defaultLight.secondary;
+
+    // DOM عناصر
+    const root = document.documentElement;
+    const primaryPicker = document.getElementById("primaryColorPicker");
+    const secondaryPicker = document.getElementById("secondaryColorPicker");
+    const applyCustomBtn = document.getElementById("applyCustomBtn");
+    const resetCustomBtn = document.getElementById("resetCustomBtn");
+    const themeBtns = document.querySelectorAll(".theme-btn");
+
+    // تھیم لگانے کا فنکشن
+    function applyTheme(themeType, primaryColor = null, secondaryColor = null) {
+        let pri = primaryColor, sec = secondaryColor;
+        if (themeType === "light") {
+            pri = defaultLight.primary;
+            sec = defaultLight.secondary;
+        } else if (themeType === "dark") {
+            pri = defaultDark.primary;
+            sec = defaultDark.secondary;
+        } else if (themeType === "custom") {
+            if (!pri) pri = customPrimary;
+            if (!sec) sec = customSecondary;
+        }
+        // CSS متغیرات اپ ڈیٹ کریں
+        root.style.setProperty("--accent-primary", pri);
+        root.style.setProperty("--accent-secondary", sec);
+        root.style.setProperty("--btn-primary-bg", pri);
+        // اگر تھیم ڈارک ہے تو بیس کلرز بھی سیٹ کریں
+        if (themeType === "dark") {
+            root.setAttribute("data-theme", "dark");
+        } else if (themeType === "light") {
+            root.setAttribute("data-theme", "light");
+        } else {
+            // کسٹم تھیم میں data-theme ہٹا دیں تاکہ وہ اوور رائڈ نہ ہو
+            root.removeAttribute("data-theme");
+        }
+        // محفوظ کریں
+        localStorage.setItem("current_theme_type", themeType);
+        if (themeType === "custom") {
+            localStorage.setItem("custom_primary", pri);
+            localStorage.setItem("custom_secondary", sec);
+            customPrimary = pri;
+            customSecondary = sec;
+            primaryPicker.value = pri;
+            secondaryPicker.value = sec;
+        }
+        // ایکٹو بٹن کو نمایاں کریں
+        themeBtns.forEach(btn => {
+            if (btn.getAttribute("data-theme") === themeType) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
             }
-            return 'light';  // ڈیفالٹ
-        }
+        });
+    }
 
-        // تھیم لگائیں
-        function applyTheme(themeName) {
-            document.documentElement.setAttribute('data-theme', themeName);
-            localStorage.setItem('app_theme', themeName);
-            
-            // تھیم سلیکٹ ڈراپ ڈاؤن کو اپ ڈیٹ کریں
-            const select = document.getElementById('themeSelect');
-            if (select) select.value = themeName;
-            
-            // ایکٹو تھیم بٹن کو نمایاں کریں
-            document.querySelectorAll('.theme-btn').forEach(btn => {
-                if (btn.getAttribute('data-theme') === themeName) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
+    // کسٹم کلرز لگائیں
+    function applyCustomColors() {
+        const pri = primaryPicker.value;
+        const sec = secondaryPicker.value;
+        applyTheme("custom", pri, sec);
+    }
 
-        // تھیم تبدیل کرنے کے لیے ایونٹ لسٹنرز
-        function setupThemeListeners() {
-            // ڈراپ ڈاؤن سے
-            const select = document.getElementById('themeSelect');
-            if (select) {
-                select.addEventListener('change', (e) => {
-                    applyTheme(e.target.value);
-                });
+    // ری سیٹ کسٹم (پہلے لائٹ پر جائیں)
+    function resetToLight() {
+        applyTheme("light");
+        primaryPicker.value = defaultLight.primary;
+        secondaryPicker.value = defaultLight.secondary;
+    }
+
+    // تھیم بٹنوں کے ایونٹس
+    themeBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const theme = btn.getAttribute("data-theme");
+            if (theme === "custom") {
+                applyCustomColors();
+            } else {
+                applyTheme(theme);
             }
-            
-            // بٹنوں سے
-            document.querySelectorAll('.theme-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const theme = btn.getAttribute('data-theme');
-                    if (theme) applyTheme(theme);
-                });
+        });
+    });
+
+    applyCustomBtn.addEventListener("click", applyCustomColors);
+    resetCustomBtn.addEventListener("click", resetToLight);
+
+    // پہلے سے محفوظ تھیم لوڈ کریں
+    function loadSavedTheme() {
+        const savedType = localStorage.getItem("current_theme_type");
+        if (savedType === "light") applyTheme("light");
+        else if (savedType === "dark") applyTheme("dark");
+        else if (savedType === "custom") {
+            const pri = localStorage.getItem("custom_primary") || defaultLight.primary;
+            const sec = localStorage.getItem("custom_secondary") || defaultLight.secondary;
+            applyTheme("custom", pri, sec);
+        } else {
+            applyTheme("light");
+        }
+    }
+
+    // ---------- ڈائنامک بٹن ہینڈلنگ (مستقل) ----------
+    let dynamicButtons = [];
+    let buttonCounter = parseInt(localStorage.getItem("dynamic_button_counter") || "0");
+
+    function saveDynamicButtons() {
+        // بٹنوں کے ٹیکسٹ کو محفوظ کریں
+        const btnTexts = dynamicButtons.map(btn => btn.innerText);
+        localStorage.setItem("dynamic_buttons_texts", JSON.stringify(btnTexts));
+        localStorage.setItem("dynamic_button_counter", buttonCounter);
+    }
+
+    function createDynamicButton(text = null) {
+        buttonCounter++;
+        const btnText = text || `نیا بٹن ${buttonCounter}`;
+        const newBtn = document.createElement("button");
+        newBtn.innerText = btnText;
+        newBtn.classList.add("dynamic-btn");
+        newBtn.addEventListener("click", () => {
+            alert(`آپ نے "${btnText}" دبایا!`);
+        });
+        document.getElementById("dynamicButtonsContainer").appendChild(newBtn);
+        dynamicButtons.push(newBtn);
+        saveDynamicButtons();
+    }
+
+    function restoreDynamicButtons() {
+        const savedTexts = localStorage.getItem("dynamic_buttons_texts");
+        if (savedTexts) {
+            const texts = JSON.parse(savedTexts);
+            texts.forEach(txt => {
+                buttonCounter++;
+                const btn = document.createElement("button");
+                btn.innerText = txt;
+                btn.classList.add("dynamic-btn");
+                btn.addEventListener("click", () => alert(`آپ نے "${txt}" دبایا!`));
+                document.getElementById("dynamicButtonsContainer").appendChild(btn);
+                dynamicButtons.push(btn);
             });
+            const savedCounter = localStorage.getItem("dynamic_button_counter");
+            if (savedCounter) buttonCounter = parseInt(savedCounter);
         }
+    }
 
-        // ---------- ٹیکسٹ چینج ہینڈلنگ (مضبوط) ----------
-        let textIndex = 0;
-        const texts = [
-            "System Pro Studio", 
-            "اپنی مرضی کی ایپ", 
-            "Dynamic UI with Themes", 
-            "No Server Needed", 
-            "Powerful & Reliable"
-        ];
-        
-        function changeHeadingText() {
-            const heading = document.getElementById('heading');
-            textIndex = (textIndex + 1) % texts.length;
-            heading.innerText = texts[textIndex];
-            // صارف کی ترجیح محفوظ کریں
-            localStorage.setItem('last_text_index', textIndex);
-        }
-        
-        // محفوظ شدہ ٹیکسٹ انڈیکس لوڈ کریں
-        function loadSavedText() {
-            const savedIndex = localStorage.getItem('last_text_index');
-            if (savedIndex !== null && !isNaN(parseInt(savedIndex))) {
-                textIndex = parseInt(savedIndex) % texts.length;
-                document.getElementById('heading').innerText = texts[textIndex];
-            }
-        }
+    function resetAllDynamicButtons() {
+        dynamicButtons.forEach(btn => btn.remove());
+        dynamicButtons = [];
+        buttonCounter = 0;
+        localStorage.removeItem("dynamic_buttons_texts");
+        localStorage.removeItem("dynamic_button_counter");
+    }
 
-        // ---------- ڈائنامک بٹن ہینڈلنگ (مضبوط) ----------
-        let dynamicButtons = [];  // بٹن ریفرنسز کو ٹریک کرنے کے لیے
-        let buttonCounter = parseInt(localStorage.getItem('button_counter') || '0');
-        
-        function createNewButton() {
-            buttonCounter++;
-            const newBtn = document.createElement('button');
-            newBtn.innerText = `نیا بٹن ${buttonCounter}`;
-            newBtn.className = 'btn-secondary';
-            // ہر بٹن پر کلک کرنے پر کچھ ایکشن
-            newBtn.addEventListener('click', () => {
-                alert(`آپ نے بٹن ${buttonCounter} دبایا! تھیم: ${document.documentElement.getAttribute('data-theme')}`);
-            });
-            // اسے body میں container کے اندر شامل کریں
-            const container = document.querySelector('.container');
-            // dynamicArea سے پہلے شامل کریں یا آخر میں
-            const dynamicArea = document.getElementById('dynamicArea');
-            container.insertBefore(newBtn, dynamicArea);
-            dynamicButtons.push(newBtn);
-            // کاؤنٹر محفوظ کریں
-            localStorage.setItem('button_counter', buttonCounter);
-            // بٹنوں کی لسٹ محفوظ کریں (صرف تعداد محفوظ ہے، نئے بٹن دوبارہ بن جائیں گے)
-            saveButtonsList();
-        }
-        
-        // تمام ڈائنامک بٹن ہٹائیں
-        function resetDynamicButtons() {
-            dynamicButtons.forEach(btn => btn.remove());
-            dynamicButtons = [];
-            buttonCounter = 0;
-            localStorage.setItem('button_counter', 0);
-            localStorage.removeItem('saved_buttons');
-        }
-        
-        // بٹنوں کی موجودہ تعداد محفوظ کریں (ری لوڈ پر دوبارہ بنانے کے لیے)
-        function saveButtonsList() {
-            localStorage.setItem('saved_buttons', JSON.stringify(dynamicButtons.map(btn => btn.innerText)));
-        }
-        
-        // محفوظ بٹنوں کو بحال کریں (صرف تعداد کی بنیاد پر)
-        function restoreDynamicButtons() {
-            const savedCount = localStorage.getItem('button_counter');
-            if (savedCount && !isNaN(parseInt(savedCount))) {
-                const count = parseInt(savedCount);
-                for (let i = 1; i <= count; i++) {
-                    buttonCounter = i;
-                    const newBtn = document.createElement('button');
-                    newBtn.innerText = `نیا بٹن ${i}`;
-                    newBtn.className = 'btn-secondary';
-                    newBtn.addEventListener('click', () => {
-                        alert(`آپ نے بٹن ${i} دبایا! تھیم: ${document.documentElement.getAttribute('data-theme')}`);
-                    });
-                    const container = document.querySelector('.container');
-                    const dynamicArea = document.getElementById('dynamicArea');
-                    container.insertBefore(newBtn, dynamicArea);
-                    dynamicButtons.push(newBtn);
-                }
-                buttonCounter = count;
-            }
-        }
+    // ہیڈنگ ٹیکسٹ بدلیں
+    let headingIndex = parseInt(localStorage.getItem("heading_index") || "0");
+    const headings = ["System Pro Studio", "Colorful Themes", "APK Builder", "Your Own App"];
+    function changeHeading() {
+        const h1 = document.querySelector("h1");
+        headingIndex = (headingIndex + 1) % headings.length;
+        h1.innerText = headings[headingIndex];
+        localStorage.setItem("heading_index", headingIndex);
+    }
+    function restoreHeading() {
+        const h1 = document.querySelector("h1");
+        h1.innerText = headings[headingIndex % headings.length];
+    }
 
-        // ---------- سسٹم تھیم میں تبدیلی سنیں (مثلاً ڈیوائس ڈارک موڈ) ----------
-        function watchSystemTheme() {
-            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-            darkModeMedia.addEventListener('change', (e) => {
-                // صرف اس صورت میں جب صارف نے پہلے سے کوئی تھیم محفوظ نہ کیا ہو
-                const saved = localStorage.getItem('app_theme');
-                if (!saved) {
-                    const newTheme = e.matches ? 'dark' : 'light';
-                    applyTheme(newTheme);
-                }
-            });
-        }
+    // ---------- Android کے ساتھ APK جنریشن انٹرفیس ----------
+    const generateBtn = document.getElementById("generateApkBtn");
+    const apkStatusDiv = document.getElementById("apkStatus");
 
-        // ---------- انیشیلائزیشن ----------
-        function init() {
-            // پہلے محفوظ شدہ تھیم لگائیں
-            const savedTheme = getSavedTheme();
-            applyTheme(savedTheme);
-            
-            // تھیم لسٹنرز سیٹ اپ کریں
-            setupThemeListeners();
-            
-            // ٹیکسٹ بحال کریں
-            loadSavedText();
-            
-            // ڈائنامک بٹن بحال کریں
-            restoreDynamicButtons();
-            
-            // ایونٹ لسٹنرز
-            document.getElementById('changeTextBtn').addEventListener('click', changeHeadingText);
-            document.getElementById('addButtonBtn').addEventListener('click', createNewButton);
-            document.getElementById('resetDynamicBtn').addEventListener('click', resetDynamicButtons);
-            
-            // سسٹم تھیم چینج سنیں
-            watchSystemTheme();
+    function sendToAndroidForApk() {
+        // موجودہ تھیم کی معلومات جمع کریں
+        const themeData = {
+            themeType: localStorage.getItem("current_theme_type") || "light",
+            primaryColor: getComputedStyle(root).getPropertyValue("--accent-primary").trim(),
+            secondaryColor: getComputedStyle(root).getPropertyValue("--accent-secondary").trim(),
+            headingText: document.querySelector("h1").innerText,
+            dynamicButtonsCount: dynamicButtons.length,
+            timestamp: Date.now()
+        };
+        // اگر Android WebView میں JavaScript interface موجود ہو تو اسے کال کریں
+        if (window.AndroidBridge && typeof window.AndroidBridge.generateApk === "function") {
+            window.AndroidBridge.generateApk(JSON.stringify(themeData));
+            apkStatusDiv.innerHTML = "⏳ APK تیار ہو رہا ہے... براہ کرم صبر کریں۔";
+        } else {
+            // ڈیمو موڈ - صارف کو بتائیں کہ یہ اصلی Android ایپ میں کام کرے گا
+            apkStatusDiv.innerHTML = "⚠️ یہ فیچر صرف Android ایپ میں کام کرے گا جب JavaScript interface شامل ہو۔ ڈیمو ڈیٹا: " + JSON.stringify(themeData);
+            console.log("APK Request Data:", themeData);
         }
-        
-        // جب صفحہ مکمل لوڈ ہو جائے
-        window.addEventListener('DOMContentLoaded', init);
-    </script>
+    }
+
+    generateBtn.addEventListener("click", sendToAndroidForApk);
+
+    // Android سے پیغام وصول کرنے کے لیے (اگر APK بننے کی اطلاع دی جائے)
+    window.receiveApkStatus = function(status) {
+        apkStatusDiv.innerHTML = status;
+        setTimeout(() => {
+            if (apkStatusDiv.innerHTML === status) apkStatusDiv.innerHTML = "✅ تیار!";
+        }, 3000);
+    };
+
+    // ---------- انیشیلائزیشن ----------
+    function init() {
+        loadSavedTheme();
+        restoreDynamicButtons();
+        restoreHeading();
+        document.getElementById("changeTextBtn").addEventListener("click", changeHeading);
+        document.getElementById("addDynamicBtn").addEventListener("click", () => createDynamicButton());
+        document.getElementById("resetDynamicBtns").addEventListener("click", resetAllDynamicButtons);
+    }
+
+    init();
+</script>
 </body>
 </html>
