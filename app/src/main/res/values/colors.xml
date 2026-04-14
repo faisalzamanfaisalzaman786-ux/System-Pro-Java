@@ -1,10 +1,253 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- ============================================================ -->
+    <!-- 1. BASIC NEUTRAL COLORS (always available)                  -->
+    <!-- ============================================================ -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    
-    <color name="primaryColor">#00E5FF</color> <color name="primaryDarkColor">#00B2CC</color>
-    <color name="accentColor">#7C4DFF</color> <color name="backgroundColor">#0A0E14</color> <color name="cardBackground">#1A1F2B</color>
-    <color name="glassColor">#33FFFFFF</color> <color name="success">#00FF88</color>
-    <color name="error">#FF3D00</color>
+    <color name="transparent">#00000000</color>
+
+    <!-- ============================================================ -->
+    <!-- 2. MATERIAL DESIGN 3 CORE COLOR SYSTEM (Light & Dark)       -->
+    ================================================================ -->
+    <!-- Light theme colors -->
+    <color name="md3_light_primary">#00E5FF</color>
+    <color name="md3_light_onPrimary">#000000</color>
+    <color name="md3_light_primaryContainer">#B2F5FF</color>
+    <color name="md3_light_onPrimaryContainer">#001F24</color>
+    <color name="md3_light_secondary">#7C4DFF</color>
+    <color name="md3_light_onSecondary">#FFFFFF</color>
+    <color name="md3_light_secondaryContainer">#E5DEFF</color>
+    <color name="md3_light_onSecondaryContainer">#1C006B</color>
+    <color name="md3_light_tertiary">#006D6F</color>
+    <color name="md3_light_onTertiary">#FFFFFF</color>
+    <color name="md3_light_tertiaryContainer">#6EF7FA</color>
+    <color name="md3_light_onTertiaryContainer">#002021</color>
+    <color name="md3_light_error">#FF3D00</color>
+    <color name="md3_light_onError">#FFFFFF</color>
+    <color name="md3_light_errorContainer">#FFDAD4</color>
+    <color name="md3_light_onErrorContainer">#410000</color>
+    <color name="md3_light_background">#0A0E14</color>
+    <color name="md3_light_onBackground">#FFFFFF</color>
+    <color name="md3_light_surface">#1A1F2B</color>
+    <color name="md3_light_onSurface">#FFFFFF</color>
+    <color name="md3_light_surfaceVariant">#2C3140</color>
+    <color name="md3_light_onSurfaceVariant">#C4C9D6</color>
+    <color name="md3_light_outline">#8E939E</color>
+
+    <!-- Dark theme colors (following the same naming pattern) -->
+    <color name="md3_dark_primary">#00E5FF</color>
+    <color name="md3_dark_onPrimary">#000000</color>
+    <color name="md3_dark_primaryContainer">#004F5C</color>
+    <color name="md3_dark_onPrimaryContainer">#B2F5FF</color>
+    <color name="md3_dark_secondary">#C0A6FF</color>
+    <color name="md3_dark_onSecondary">#2C006B</color>
+    <color name="md3_dark_secondaryContainer">#5E2ED6</color>
+    <color name="md3_dark_onSecondaryContainer">#E5DEFF</color>
+    <color name="md3_dark_tertiary">#4FDADE</color>
+    <color name="md3_dark_onTertiary">#003739</color>
+    <color name="md3_dark_tertiaryContainer">#005052</color>
+    <color name="md3_dark_onTertiaryContainer">#6EF7FA</color>
+    <color name="md3_dark_error">#FF8A65</color>
+    <color name="md3_dark_onError">#000000</color>
+    <color name="md3_dark_errorContainer">#A92500</color>
+    <color name="md3_dark_onErrorContainer">#FFDAD4</color>
+    <color name="md3_dark_background">#0A0E14</color>
+    <color name="md3_dark_onBackground">#FFFFFF</color>
+    <color name="md3_dark_surface">#1A1F2B</color>
+    <color name="md3_dark_onSurface">#FFFFFF</color>
+    <color name="md3_dark_surfaceVariant">#2C3140</color>
+    <color name="md3_dark_onSurfaceVariant">#C4C9D6</color>
+    <color name="md3_dark_outline">#8E939E</color>
+
+    <!-- ============================================================ -->
+    <!-- 3. DYNAMIC COLOR SUPPORT (Material You – Android 12+)       -->
+    <!-- These will be overridden by system if dynamic color is on   -->
+    <!-- ============================================================ -->
+    <color name="dynamic_primary">@color/md3_light_primary</color>
+    <color name="dynamic_onPrimary">@color/md3_light_onPrimary</color>
+    <color name="dynamic_primaryContainer">@color/md3_light_primaryContainer</color>
+    <color name="dynamic_onPrimaryContainer">@color/md3_light_onPrimaryContainer</color>
+    <color name="dynamic_secondary">@color/md3_light_secondary</color>
+    <color name="dynamic_onSecondary">@color/md3_light_onSecondary</color>
+    <color name="dynamic_secondaryContainer">@color/md3_light_secondaryContainer</color>
+    <color name="dynamic_onSecondaryContainer">@color/md3_light_onSecondaryContainer</color>
+    <color name="dynamic_tertiary">@color/md3_light_tertiary</color>
+    <color name="dynamic_onTertiary">@color/md3_light_onTertiary</color>
+    <color name="dynamic_tertiaryContainer">@color/md3_light_tertiaryContainer</color>
+    <color name="dynamic_onTertiaryContainer">@color/md3_light_onTertiaryContainer</color>
+    <color name="dynamic_error">@color/md3_light_error</color>
+    <color name="dynamic_onError">@color/md3_light_onError</color>
+    <color name="dynamic_errorContainer">@color/md3_light_errorContainer</color>
+    <color name="dynamic_onErrorContainer">@color/md3_light_onErrorContainer</color>
+    <color name="dynamic_background">@color/md3_light_background</color>
+    <color name="dynamic_onBackground">@color/md3_light_onBackground</color>
+    <color name="dynamic_surface">@color/md3_light_surface</color>
+    <color name="dynamic_onSurface">@color/md3_light_onSurface</color>
+    <color name="dynamic_surfaceVariant">@color/md3_light_surfaceVariant</color>
+    <color name="dynamic_onSurfaceVariant">@color/md3_light_onSurfaceVariant</color>
+    <color name="dynamic_outline">@color/md3_light_outline</color>
+
+    <!-- ============================================================ -->
+    <!-- 4. EXTENDED MATERIAL COLOR PALETTE (Shades 50-900)          -->
+    <!-- Use these for fine-tuned theming, charts, or custom views   -->
+    <!-- ============================================================ -->
+    <!-- Red -->
+    <color name="red_50">#FFEBEE</color>   <color name="red_100">#FFCDD2</color>
+    <color name="red_200">#EF9A9A</color>   <color name="red_300">#E57373</color>
+    <color name="red_400">#EF5350</color>   <color name="red_500">#F44336</color>
+    <color name="red_600">#E53935</color>   <color name="red_700">#D32F2F</color>
+    <color name="red_800">#C62828</color>   <color name="red_900">#B71C1C</color>
+    <!-- Pink -->
+    <color name="pink_50">#FCE4EC</color>   <color name="pink_100">#F8BBD0</color>
+    <color name="pink_200">#F48FB1</color>   <color name="pink_300">#F06292</color>
+    <color name="pink_400">#EC407A</color>   <color name="pink_500">#E91E63</color>
+    <color name="pink_600">#D81B60</color>   <color name="pink_700">#C2185B</color>
+    <color name="pink_800">#AD1457</color>   <color name="pink_900">#880E4F</color>
+    <!-- Purple -->
+    <color name="purple_50">#F3E5F5</color>   <color name="purple_100">#E1BEE7</color>
+    <color name="purple_200">#CE93D8</color>   <color name="purple_300">#BA68C8</color>
+    <color name="purple_400">#AB47BC</color>   <color name="purple_500">#9C27B0</color>
+    <color name="purple_600">#8E24AA</color>   <color name="purple_700">#7B1FA2</color>
+    <color name="purple_800">#6A1B9A</color>   <color name="purple_900">#4A148C</color>
+    <!-- Deep Purple -->
+    <color name="deepPurple_50">#EDE7F6</color> <color name="deepPurple_100">#D1C4E9</color>
+    <color name="deepPurple_200">#B39DDB</color> <color name="deepPurple_300">#9575CD</color>
+    <color name="deepPurple_400">#7E57C2</color> <color name="deepPurple_500">#673AB7</color>
+    <color name="deepPurple_600">#5E35B1</color> <color name="deepPurple_700">#512DA8</color>
+    <color name="deepPurple_800">#4527A0</color> <color name="deepPurple_900">#311B92</color>
+    <!-- Indigo -->
+    <color name="indigo_50">#E8EAF6</color>   <color name="indigo_100">#C5CAE9</color>
+    <color name="indigo_200">#9FA8DA</color>   <color name="indigo_300">#7986CB</color>
+    <color name="indigo_400">#5C6BC0</color>   <color name="indigo_500">#3F51B5</color>
+    <color name="indigo_600">#3949AB</color>   <color name="indigo_700">#303F9F</color>
+    <color name="indigo_800">#283593</color>   <color name="indigo_900">#1A237E</color>
+    <!-- Blue -->
+    <color name="blue_50">#E3F2FD</color>     <color name="blue_100">#BBDEFB</color>
+    <color name="blue_200">#90CAF9</color>     <color name="blue_300">#64B5F6</color>
+    <color name="blue_400">#42A5F5</color>     <color name="blue_500">#2196F3</color>
+    <color name="blue_600">#1E88E5</color>     <color name="blue_700">#1976D2</color>
+    <color name="blue_800">#1565C0</color>     <color name="blue_900">#0D47A1</color>
+    <!-- Light Blue -->
+    <color name="lightBlue_50">#E1F5FE</color> <color name="lightBlue_100">#B3E5FC</color>
+    <color name="lightBlue_200">#81D4FA</color> <color name="lightBlue_300">#4FC3F7</color>
+    <color name="lightBlue_400">#29B6F6</color> <color name="lightBlue_500">#03A9F4</color>
+    <color name="lightBlue_600">#039BE5</color> <color name="lightBlue_700">#0288D1</color>
+    <color name="lightBlue_800">#0277BD</color> <color name="lightBlue_900">#01579B</color>
+    <!-- Cyan -->
+    <color name="cyan_50">#E0F7FA</color>     <color name="cyan_100">#B2EBF2</color>
+    <color name="cyan_200">#80DEEA</color>     <color name="cyan_300">#4DD0E1</color>
+    <color name="cyan_400">#26C6DA</color>     <color name="cyan_500">#00BCD4</color>
+    <color name="cyan_600">#00ACC1</color>     <color name="cyan_700">#0097A7</color>
+    <color name="cyan_800">#00838F</color>     <color name="cyan_900">#006064</color>
+    <!-- Teal -->
+    <color name="teal_50">#E0F2F1</color>     <color name="teal_100">#B2DFDB</color>
+    <color name="teal_200">#80CBC4</color>     <color name="teal_300">#4DB6AC</color>
+    <color name="teal_400">#26A69A</color>     <color name="teal_500">#009688</color>
+    <color name="teal_600">#00897B</color>     <color name="teal_700">#00796B</color>
+    <color name="teal_800">#00695C</color>     <color name="teal_900">#004D40</color>
+    <!-- Green -->
+    <color name="green_50">#E8F5E9</color>    <color name="green_100">#C8E6C9</color>
+    <color name="green_200">#A5D6A7</color>    <color name="green_300">#81C784</color>
+    <color name="green_400">#66BB6A</color>    <color name="green_500">#4CAF50</color>
+    <color name="green_600">#43A047</color>    <color name="green_700">#388E3C</color>
+    <color name="green_800">#2E7D32</color>    <color name="green_900">#1B5E20</color>
+    <!-- Light Green -->
+    <color name="lightGreen_50">#F1F8E9</color> <color name="lightGreen_100">#DCEDC8</color>
+    <color name="lightGreen_200">#C5E1A5</color> <color name="lightGreen_300">#AED581</color>
+    <color name="lightGreen_400">#9CCC65</color> <color name="lightGreen_500">#8BC34A</color>
+    <color name="lightGreen_600">#7CB342</color> <color name="lightGreen_700">#689F38</color>
+    <color name="lightGreen_800">#558B2F</color> <color name="lightGreen_900">#33691E</color>
+    <!-- Lime -->
+    <color name="lime_50">#F9FBE7</color>     <color name="lime_100">#F0F4C3</color>
+    <color name="lime_200">#E6EE9C</color>     <color name="lime_300">#DCE775</color>
+    <color name="lime_400">#D4E157</color>     <color name="lime_500">#CDDC39</color>
+    <color name="lime_600">#C0CA33</color>     <color name="lime_700">#A4B42B</color>
+    <color name="lime_800">#9E9D24</color>     <color name="lime_900">#827717</color>
+    <!-- Yellow -->
+    <color name="yellow_50">#FFFDE7</color>    <color name="yellow_100">#FFF9C4</color>
+    <color name="yellow_200">#FFF590</color>    <color name="yellow_300">#FFF176</color>
+    <color name="yellow_400">#FFEE58</color>    <color name="yellow_500">#FFEB3B</color>
+    <color name="yellow_600">#FDD835</color>    <color name="yellow_700">#FBC02D</color>
+    <color name="yellow_800">#F9A825</color>    <color name="yellow_900">#F57F17</color>
+    <!-- Amber -->
+    <color name="amber_50">#FFF8E1</color>     <color name="amber_100">#FFECB3</color>
+    <color name="amber_200">#FFE082</color>     <color name="amber_300">#FFD54F</color>
+    <color name="amber_400">#FFCA28</color>     <color name="amber_500">#FFC107</color>
+    <color name="amber_600">#FFB300</color>     <color name="amber_700">#FFA000</color>
+    <color name="amber_800">#FF8F00</color>     <color name="amber_900">#FF6F00</color>
+    <!-- Orange -->
+    <color name="orange_50">#FFF3E0</color>    <color name="orange_100">#FFE0B2</color>
+    <color name="orange_200">#FFCC80</color>    <color name="orange_300">#FFB74D</color>
+    <color name="orange_400">#FFA726</color>    <color name="orange_500">#FF9800</color>
+    <color name="orange_600">#FB8C00</color>    <color name="orange_700">#F57C00</color>
+    <color name="orange_800">#EF6C00</color>    <color name="orange_900">#E65100</color>
+    <!-- Deep Orange -->
+    <color name="deepOrange_50">#FBE9E7</color> <color name="deepOrange_100">#FFCCBC</color>
+    <color name="deepOrange_200">#FFAB91</color> <color name="deepOrange_300">#FF8A65</color>
+    <color name="deepOrange_400">#FF7043</color> <color name="deepOrange_500">#FF5722</color>
+    <color name="deepOrange_600">#F4511E</color> <color name="deepOrange_700">#E64A19</color>
+    <color name="deepOrange_800">#D84315</color> <color name="deepOrange_900">#BF360C</color>
+    <!-- Brown -->
+    <color name="brown_50">#EFEBE9</color>     <color name="brown_100">#D7CCC8</color>
+    <color name="brown_200">#BCAAA4</color>     <color name="brown_300">#A1887F</color>
+    <color name="brown_400">#8D6E63</color>     <color name="brown_500">#795548</color>
+    <color name="brown_600">#6D4C41</color>     <color name="brown_700">#5D4037</color>
+    <color name="brown_800">#4E342E</color>     <color name="brown_900">#3E2723</color>
+    <!-- Grey -->
+    <color name="grey_50">#FAFAFA</color>      <color name="grey_100">#F5F5F5</color>
+    <color name="grey_200">#EEEEEE</color>      <color name="grey_300">#E0E0E0</color>
+    <color name="grey_400">#BDBDBD</color>      <color name="grey_500">#9E9E9E</color>
+    <color name="grey_600">#757575</color>      <color name="grey_700">#616161</color>
+    <color name="grey_800">#424242</color>      <color name="grey_900">#212121</color>
+    <!-- Blue Grey -->
+    <color name="blueGrey_50">#ECEFF1</color>   <color name="blueGrey_100">#CFD8DC</color>
+    <color name="blueGrey_200">#B0BEC5</color>   <color name="blueGrey_300">#90A4AE</color>
+    <color name="blueGrey_400">#78909C</color>   <color name="blueGrey_500">#607D8B</color>
+    <color name="blueGrey_600">#546E7A</color>   <color name="blueGrey_700">#455A64</color>
+    <color name="blueGrey_800">#37474F</color>   <color name="blueGrey_900">#263238</color>
+
+    <!-- ============================================================ -->
+    <!-- 5. SEMANTIC / UTILITY COLORS (for specific UI states)       -->
+    <!-- ============================================================ -->
+    <color name="success">#00FF88</color>           <!-- Green success state -->
+    <color name="error">#FF3D00</color>             <!-- Red error state -->
+    <color name="warning">#FFC107</color>           <!-- Amber warning -->
+    <color name="info">#2196F3</color>              <!-- Blue info -->
+    <color name="divider">#33FFFFFF</color>         <!-- Semi-transparent divider -->
+    <color name="shadow">#26000000</color>          <!-- 15% black for shadows -->
+    <color name="overlay_light">#0A000000</color>   <!-- 4% black overlay -->
+    <color name="overlay_medium">#1A000000</color>  <!-- 10% black overlay -->
+    <color name="overlay_dark">#33000000</color>    <!-- 20% black overlay -->
+    <color name="glassColor">#33FFFFFF</color>      <!-- Glassmorphism effect -->
+
+    <!-- ============================================================ -->
+    <!-- 6. CUSTOM BRAND / PROJECT SPECIFIC COLORS                    -->
+    <!-- Change these to match your app's branding                    -->
+    <!-- ============================================================ -->
+    <color name="primaryColor">#00E5FF</color>
+    <color name="primaryDarkColor">#00B2CC</color>
+    <color name="accentColor">#7C4DFF</color>
+    <color name="backgroundColor">#0A0E14</color>
+    <color name="cardBackground">#1A1F2B</color>
+    <color name="brand_text_primary">#FFFFFF</color>
+    <color name="brand_text_secondary">#B0B3B8</color>
+    <color name="brand_text_hint">#757981</color>
+
+    <!-- ============================================================ -->
+    <!-- 7. GRADIENT COLOR PAIRS (start & end colors)                 -->
+    <!-- Use these in drawable/gradient_*.xml files                  -->
+    <!-- ============================================================ -->
+    <color name="gradient_start_cyan">#00E5FF</color>
+    <color name="gradient_end_cyan">#00B2CC</color>
+    <color name="gradient_start_purple">#7C4DFF</color>
+    <color name="gradient_end_purple">#3D1C9E</color>
+    <color name="gradient_start_blue">#2196F3</color>
+    <color name="gradient_end_blue">#0D47A1</color>
+    <color name="gradient_start_orange">#FF9800</color>
+    <color name="gradient_end_orange">#E65100</color>
+    <color name="gradient_start_green">#4CAF50</color>
+    <color name="gradient_end_green">#1B5E20</color>
+    <color name="gradient_start_pink">#E91E63</color>
+    <color name="gradient_end_pink">#880E4F</color>
 </resources>
