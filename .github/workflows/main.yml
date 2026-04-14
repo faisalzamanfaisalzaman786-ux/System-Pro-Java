@@ -176,10 +176,10 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      - name: Setup Gradle Wrapper (version 8.9)
+      - name: Setup Gradle Wrapper (version 8.11.1)
         working-directory: ./android_project
         run: |
-          gradle wrapper --gradle-version 8.9 --distribution-type bin
+          gradle wrapper --gradle-version 8.11.1 --distribution-type bin
           chmod +x gradlew
 
       - name: Build APK
