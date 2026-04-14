@@ -1,30 +1,82 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/primaryColor</item>
-        <item name="colorPrimaryVariant">@color/primaryDarkColor</item>
-        <item name="colorOnPrimary">@color/white</item>
-        
-        <item name="colorSecondary">@color/accentColor</item>
-        <item name="android:windowBackground">@color/backgroundColor</item>
-        
-        <item name="materialButtonStyle">@style/CustomButtonStyle</item>
-    </style>
-
-    <style name="CustomButtonStyle" parent="Widget.MaterialComponents.Button">
-        <item name="cornerRadius">12dp</item>
-        <item name="backgroundTint">@color/primaryColor</item>
-        <item name="android:padding">12dp</item>
-    </style>
-</resources>
 <resources>
-    <style name="CalcButton">
-        <item name="android:layout_width">0dp</item>
-        <item name="android:layout_height">80dp</item>
-        <item name="android:layout_columnWeight">1</item>
-        <item name="android:layout_margin">4dp</item>
-        <item name="android:textSize">24sp</item>
-        <item name="android:textColor">#FFFFFF</item>
-        <item name="android:backgroundTint">#333333</item>
+    <!-- ==================== بیس تھیم (والد) ==================== -->
+    <style name="BaseAppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- بنیادی کلرز (آپ اپنی مرضی سے بدل سکتے ہیں) -->
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryVariant">#3700B3</item>
+        <item name="colorSecondary">#03DAC5</item>
+        <item name="colorSecondaryVariant">#018786</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorError">#B00020</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnSecondary">#000000</item>
+        <item name="colorOnSurface">#000000</item>
+        <item name="colorOnSurfaceVariant">#757575</item>
+        <item name="colorOnError">#FFFFFF</item>
+
+        <!-- سٹیٹس بار اور نیویگیشن بار -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        
+        <!-- ونڈو بیک گراؤنڈ -->
+        <item name="android:windowBackground">?attr/colorSurface</item>
+        
+        <!-- ڈیفالٹ ٹیکسٹ کلر -->
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/colorOnSurfaceVariant</item>
     </style>
 
+    <!-- ==================== لائٹ تھیم ==================== -->
+    <style name="LightTheme" parent="BaseAppTheme">
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryVariant">#3700B3</item>
+        <item name="colorSecondary">#03DAC5</item>
+        <item name="colorSecondaryVariant">#018786</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorError">#B00020</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnSecondary">#000000</item>
+        <item name="colorOnSurface">#000000</item>
+        <item name="colorOnSurfaceVariant">#757575</item>
+        <item name="colorOnError">#FFFFFF</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+
+    <!-- ==================== ڈارک تھیم ==================== -->
+    <style name="DarkTheme" parent="BaseAppTheme">
+        <item name="colorPrimary">#BB86FC</item>
+        <item name="colorPrimaryVariant">#3700B3</item>
+        <item name="colorSecondary">#03DAC5</item>
+        <item name="colorSecondaryVariant">#018786</item>
+        <item name="colorSurface">#121212</item>
+        <item name="colorError">#CF6679</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorOnSecondary">#000000</item>
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorOnSurfaceVariant">#9E9E9E</item>
+        <item name="colorOnError">#000000</item>
+        <item name="android:windowBackground">#121212</item>
+        <item name="android:statusBarColor">#000000</item>
+    </style>
+
+    <!-- ==================== ایمبیڈڈ تھیمز (اگر آپ کو مزید چاہییں) ==================== -->
+    <style name="BlueTheme" parent="BaseAppTheme">
+        <item name="colorPrimary">#2196F3</item>
+        <item name="colorPrimaryVariant">#1976D2</item>
+        <item name="colorSecondary">#03A9F4</item>
+        <item name="colorSurface">#FFFFFF</item>
+    </style>
+
+    <style name="GreenTheme" parent="BaseAppTheme">
+        <item name="colorPrimary">#4CAF50</item>
+        <item name="colorPrimaryVariant">#388E3C</item>
+        <item name="colorSecondary">#8BC34A</item>
+        <item name="colorSurface">#FFFFFF</item>
+    </style>
+
+    <style name="DarkBlueTheme" parent="DarkTheme">
+        <item name="colorPrimary">#64B5F6</item>
+        <item name="colorPrimaryVariant">#1E88E5</item>
+        <item name="colorSecondary">#42A5F5</item>
+    </style>
 </resources>
