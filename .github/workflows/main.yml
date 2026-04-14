@@ -14,22 +14,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug - Print full event payload
-        run: |
-          echo "=== Full github.event ==="
-          echo '${{ toJson(github.event) }}'
-          echo "=== client_payload ==="
-          echo '${{ toJson(github.event.client_payload) }}'
-          echo "=== zip_data length ==="
-          ZIP_LEN=$(echo -n '${{ github.event.client_payload.zip_data }}' | wc -c)
-          echo "Length: $ZIP_LEN"
-          if [ "$ZIP_LEN" -eq 0 ]; then
-            echo "❌ zip_data is EMPTY"
-            exit 1
-          else
-            echo "✅ zip_data received"
-          fi
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -130,18 +114,15 @@ jobs:
       - name: Create Gradle Build Files
         working-directory: ./android_project
         run: |
+          # Top-level build.gradle (only plugin management, no repositories)
           cat > build.gradle << EOF
+          // Top-level build file
           plugins {
               id 'com.android.application' version '8.5.0' apply false
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
           EOF
           
+          # app/build.gradle
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
           if [ -z "$PACKAGE_NAME" ]; then PACKAGE_NAME="com.system.pro.universal"; fi
           cat > app/build.gradle << EOF
@@ -169,6 +150,7 @@ jobs:
           }
           EOF
           
+          # settings.gradle (use PREFER_SETTINGS to avoid conflict)
           cat > settings.gradle << EOF
           pluginManagement {
               repositories {
@@ -178,7 +160,7 @@ jobs:
               }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories {
                   google()
                   mavenCentral()
@@ -188,6 +170,7 @@ jobs:
           include ':app'
           EOF
           
+          # gradle.properties
           cat > gradle.properties << EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
