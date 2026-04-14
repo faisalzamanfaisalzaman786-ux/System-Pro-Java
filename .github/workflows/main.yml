@@ -4,7 +4,13 @@ on:
   push:
     branches: [ main ]
   repository_dispatch:
-    types: [android-studio-build]
+    # Match the event_type sent by the UI
+    types: [build-zip-project]
+
+# Required permissions to write artifacts and potentially create releases
+permissions:
+  contents: write
+  actions: read
 
 jobs:
   build:
@@ -18,62 +24,264 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Execute Universal Engine
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+
+      - name: Decode and Extract Project ZIP
+        env:
+          ZIP_BASE64: ${{ github.event.client_payload.zip_data }}
+          PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # 1. Variables Setup
-          USER_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME="${USER_PKG:-com.system.pro.universal}"
-          PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          FINAL_APP_NAME="${APP_NAME:-System Pro App}"
-
-          # 2. Clean and Create Directory Structure
-          rm -rf app temp_dir
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p "app/src/main/res/values"
-          mkdir -p "app/src/main/res/drawable"
-          mkdir -p "app/src/main"
-
-          # 3. Zip Extraction and Merging
-          if [ -n "${{ github.event.client_payload.zip_data }}" ]; then
-            echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-            unzip -o project.zip -d temp_dir/
-            
-            # Copy Resources
-            [ -d "temp_dir/src/main/res" ] && cp -rf temp_dir/src/main/res/* app/src/main/res/ || true
-            
-            # Copy Manifest if exists
-            [ -f "temp_dir/src/main/AndroidManifest.xml" ] && cp -f temp_dir/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
-            
-            # Copy and Fix Java Files
-            find temp_dir -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            find "app/src/main/java/$PKG_PATH/" -name "*.java" -type f | while read -r file; do
-              sed -i "1s|^package .*|package $PKG_NAME;|" "$file"
-              sed -i "/import .*\.R;/d" "$file"
-              sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$file"
-            done
+          # Validate payload
+          if [ -z "$ZIP_BASE64" ]; then
+            echo "❌ No zip_data received in dispatch payload"
+            exit 1
           fi
-
-          # 4. Mandatory Files Check (Safety Net)
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"$PKG_NAME\">\n    <application android:label=\"@string/app_name\" android:theme=\"@style/Theme.MaterialComponents.Light.NoActionBar\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
-          fi
-
-          # 5. Build Script Generation
-          printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '$PKG_NAME'\n    compileSdk 34\n    defaultConfig {\n        applicationId '$PKG_NAME'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'\n}" > app/build.gradle
           
-          printf "<resources>\n    <string name=\"app_name\">$FINAL_APP_NAME</string>\n</resources>" > app/src/main/res/values/strings.xml
-          echo "include ':app'" > settings.gradle
+          # Create a clean workspace
+          rm -rf android_project
+          mkdir -p android_project
+          cd android_project
+          
+          # Decode base64 and unzip
+          echo "$ZIP_BASE64" | base64 -d > project.zip
+          unzip -o project.zip
+          rm project.zip
+          
+          # Fix package name if needed (ensure consistency)
+          if [ -n "$PACKAGE_NAME" ]; then
+            echo "📦 Ensuring package: $PACKAGE_NAME"
+            # Update manifest package attribute
+            if [ -f "src/main/AndroidManifest.xml" ]; then
+              sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" src/main/AndroidManifest.xml
+            fi
+          fi
+          
+          # Ensure the correct directory structure exists
+          mkdir -p src/main/java
+          mkdir -p src/main/res/values
+          mkdir -p src/main/res/layout
+          mkdir -p src/main/res/drawable
+          mkdir -p src/main/res/mipmap-hdpi
 
-          # 6. Build Command
-          gradle wrapper --gradle-version 8.5
+      - name: Generate Missing Build Files
+        working-directory: ./android_project
+        run: |
+          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
+          if [ -z "$PACKAGE_NAME" ]; then
+            # Extract package from manifest if not provided
+            if [ -f "src/main/AndroidManifest.xml" ]; then
+              PACKAGE_NAME=$(grep -oP 'package="\K[^"]+' src/main/AndroidManifest.xml | head -1)
+            fi
+            # Fallback
+            if [ -z "$PACKAGE_NAME" ]; then
+              PACKAGE_NAME="com.system.pro.universal"
+            fi
+          fi
+          echo "🏷️ Using package: $PACKAGE_NAME"
+          
+          # Extract app name from manifest or set default
+          APP_NAME="System Pro App"
+          if [ -f "src/main/AndroidManifest.xml" ]; then
+            # Try to extract android:label value
+            LABEL=$(grep -oP 'android:label="\K[^"]+' src/main/AndroidManifest.xml | head -1)
+            if [ -n "$LABEL" ]; then
+              APP_NAME="$LABEL"
+            fi
+          fi
+          echo "📱 App name: $APP_NAME"
+          
+          # Ensure strings.xml exists
+          if [ ! -f "src/main/res/values/strings.xml" ]; then
+            cat > src/main/res/values/strings.xml << EOF
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+            echo "✅ Created strings.xml"
+          fi
+          
+          # Ensure a default layout exists if missing
+          if [ ! -f "src/main/res/layout/activity_main.xml" ] && [ -f "src/main/res/layout/activity_main.xml" ]; then
+            : # already there
+          elif [ ! -f "src/main/res/layout/activity_main.xml" ]; then
+            cat > src/main/res/layout/activity_main.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#02040C">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="System Pro Studio"
+                  android:textColor="#00FFCC"
+                  android:textSize="24sp"
+                  android:layout_centerInParent="true"/>
+          </RelativeLayout>
+          EOF
+            echo "✅ Created fallback activity_main.xml"
+          fi
+          
+          # Generate build.gradle for the app module
+          cat > build.gradle << EOF
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId '$PACKAGE_NAME'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              
+              buildTypes {
+                  debug {
+                      debuggable true
+                  }
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+          echo "✅ Generated app/build.gradle"
+          
+          # Generate settings.gradle
+          cat > settings.gradle << EOF
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SystemProBuilder"
+          include ':app'
+          EOF
+          echo "✅ Generated settings.gradle"
+          
+          # Generate gradle.properties
+          cat > gradle.properties << EOF
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+          
+          # Ensure AndroidManifest.xml is valid
+          if [ ! -f "src/main/AndroidManifest.xml" ]; then
+            cat > src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PACKAGE_NAME">
+              <application
+                  android:label="$APP_NAME"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:icon="@mipmap/ic_launcher">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+            echo "✅ Generated fallback AndroidManifest.xml"
+          fi
+          
+          # Ensure MainActivity.java exists
+          PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+          if [ ! -f "src/main/java/$PKG_PATH/MainActivity.java" ]; then
+            mkdir -p "src/main/java/$PKG_PATH"
+            cat > "src/main/java/$PKG_PATH/MainActivity.java" << EOF
+          package $PACKAGE_NAME;
+          
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+          EOF
+            echo "✅ Generated fallback MainActivity.java"
+          else
+            # Fix package declaration and R import in existing Java files
+            find src/main/java -name "*.java" -type f | while read file; do
+              sed -i "1s/^package .*;/package $PACKAGE_NAME;/" "$file"
+              if ! grep -q "import $PACKAGE_NAME.R;" "$file"; then
+                sed -i "/package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" "$file"
+              fi
+            done
+            echo "✅ Fixed Java files package and R imports"
+          fi
+
+      - name: Setup Gradle Wrapper
+        working-directory: ./android_project
+        run: |
+          # Generate Gradle wrapper
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Build APK
+        working-directory: ./android_project
+        run: |
+          # Give execute permission
+          chmod +x gradlew
+          # Clean and build debug APK
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemPro-Build-${{ github.run_id }}
+          path: android_project/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release APK (if generated)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Release-${{ github.run_id }}
+          path: android_project/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+      - name: Post Build Summary
+        run: |
+          echo "## ✅ Build Completed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Package: ${{ github.event.client_payload.package_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run ID: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APK artifacts are attached below" >> $GITHUB_STEP_SUMMARY
