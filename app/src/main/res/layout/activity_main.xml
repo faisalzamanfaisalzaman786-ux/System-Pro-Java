@@ -7,9 +7,20 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello from System Pro Studio!"
+        android:text="System Pro Flashlight"
         android:textColor="#00FFCC"
         android:textSize="24sp"
-        android:layout_centerInParent="true"/>
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="50dp"/>
+
+    <Button
+        android:id="@+id/btn_toggle"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:text="Turn ON"
+        android:textSize="18sp"
+        android:layout_centerInParent="true"
+        android:background="#00FFCC"
+        android:textColor="#02040C"/>
 
 </RelativeLayout>
