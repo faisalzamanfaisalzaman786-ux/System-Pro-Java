@@ -114,10 +114,10 @@ jobs:
       - name: Create Gradle Build Files
         working-directory: ./android_project
         run: |
-          # Top-level build.gradle
+          # Top-level build.gradle with AGP 8.9.0
           cat > build.gradle << EOF
           plugins {
-              id 'com.android.application' version '8.7.2' apply false
+              id 'com.android.application' version '8.9.0' apply false
           }
           EOF
           
@@ -149,7 +149,7 @@ jobs:
           }
           EOF
           
-          # settings.gradle (use PREFER_SETTINGS to avoid conflict)
+          # settings.gradle
           cat > settings.gradle << EOF
           pluginManagement {
               repositories {
@@ -176,10 +176,10 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      - name: Setup Gradle Wrapper (version 8.7)
+      - name: Setup Gradle Wrapper (version 8.9)
         working-directory: ./android_project
         run: |
-          gradle wrapper --gradle-version 8.7 --distribution-type bin
+          gradle wrapper --gradle-version 8.9 --distribution-type bin
           chmod +x gradlew
 
       - name: Build APK
