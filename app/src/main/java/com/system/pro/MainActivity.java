@@ -1,4 +1,4 @@
-package com.example.systempro;
+package com.system.pro;   // ← یہ آپ کے فولڈر ڈھانچے کے مطابق ہے
 
 import android.app.Activity;
 import android.content.Context;
@@ -14,34 +14,39 @@ public class MainActivity extends Activity {
     private Button btnToggle;
     private boolean isFlashOn = false;
     private CameraManager cameraManager;
-    private String cameraId;
+    private String cameraId = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        btnToggle = (Button) findViewById(R.id.btn_toggle);
+        btnToggle = findViewById(R.id.btn_toggle);  // جدید Android میں cast کی ضرورت نہیں
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
 
+        // کیمرہ آئی ڈی حاصل کریں (جس میں فلش ہو)
         try {
-            // Find the camera ID that has a flash
-            String[] list = cameraManager.getCameraIdList();
-            if (list.length > 0) {
-                cameraId = list[0]; 
+            String[] cameraList = cameraManager.getCameraIdList();
+            for (String id : cameraList) {
+                // کچھ ڈیوائسز پر پہلا کیمرہ (بیک) ہی فلش رکھتا ہے
+                cameraId = id;
+                break;  // پہلا والا ہی کافی ہے
             }
-        } catch (Exception e) {
+        } catch (CameraAccessException e) {
+            Toast.makeText(this, "کیمرہ تک رسائی ممکن نہیں", Toast.LENGTH_SHORT).show();
             e.printStackTrace();
+        }
+
+        if (cameraId == null) {
+            Toast.makeText(this, "اس ڈیوائس پر فلش موجود نہیں", Toast.LENGTH_LONG).show();
+            btnToggle.setEnabled(false);
+            btnToggle.setText("No Flash");
+            return;
         }
 
         btnToggle.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (cameraId == null) {
-                    Toast.makeText(MainActivity.this, "No Camera Found", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                
                 try {
                     if (isFlashOn) {
                         cameraManager.setTorchMode(cameraId, false);
@@ -52,8 +57,8 @@ public class MainActivity extends Activity {
                         isFlashOn = true;
                         btnToggle.setText("Turn OFF");
                     }
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Flash Error", Toast.LENGTH_SHORT).show();
+                } catch (CameraAccessException e) {
+                    Toast.makeText(MainActivity.this, "فلش آن/آف کرنے میں خرابی", Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -62,12 +67,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Turn off flash if user leaves the app to save battery
+        // جب صارف ایپ سے باہر جائے تو فلش بند کر دیں
         if (isFlashOn) {
             try {
                 cameraManager.setTorchMode(cameraId, false);
                 isFlashOn = false;
-                btnToggle.setText("Turn ON");
+                if (btnToggle != null) {
+                    btnToggle.setText("Turn ON");
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
