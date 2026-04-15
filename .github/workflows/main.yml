@@ -1,4 +1,4 @@
-name: Ultimate APK Builder (No Manifest Parse)
+name: Ultimate APK Builder (No Manifest Package)
 
 on:
   repository_dispatch:
@@ -25,7 +25,7 @@ jobs:
       - name: Write AndroidManifest.xml
         run: echo '${{ github.event.client_payload.manifest }}' > app/src/main/AndroidManifest.xml
 
-      - name: Get package name and app name from payload
+      - name: Get package and app name from payload
         id: names
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
