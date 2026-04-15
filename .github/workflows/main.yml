@@ -1,13 +1,30 @@
-name: Ultimate APK Builder (No Manifest Package)
+name: Ultimate APK Builder (Auto + UI Dispatch)
 
 on:
+  # UI کے ذریعے dispatch
   repository_dispatch:
     types: [build-app]
+
+  # خودکار جب آپ فائلیں push کریں
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'MainActivity.java'
+      - 'activity_main.xml'
+      - 'AndroidManifest.xml'
+      - 'styles.xml'
+      - 'colors.xml'
+      - 'strings.xml'
+      - 'images/**'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code (for push trigger)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+
       - name: Create project structure
         run: |
           mkdir -p app/src/main/java/com/placeholder
@@ -16,38 +33,61 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/drawable
 
-      - name: Write MainActivity.java
+      # ---- Push trigger: فائلیں repo سے لیں ----
+      - name: Copy files from repo (push)
+        if: github.event_name == 'push'
+        run: |
+          cp MainActivity.java app/src/main/java/com/placeholder/ 2>/dev/null || true
+          cp activity_main.xml app/src/main/res/layout/ 2>/dev/null || true
+          cp AndroidManifest.xml app/src/main/ 2>/dev/null || true
+          cp styles.xml app/src/main/res/values/ 2>/dev/null || true
+          cp colors.xml app/src/main/res/values/ 2>/dev/null || true
+          cp strings.xml app/src/main/res/values/ 2>/dev/null || true
+          if [ -d images ]; then cp -r images/* app/src/main/res/drawable/ 2>/dev/null || true; fi
+
+      # ---- Dispatch trigger: فائلیں payload سے لیں ----
+      - name: Write MainActivity.java (dispatch)
+        if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
           ${{ github.event.client_payload.java }}
           EOF
 
-      - name: Write activity_main.xml
+      - name: Write activity_main.xml (dispatch)
+        if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           ${{ github.event.client_payload.xml }}
           EOF
 
-      - name: Write AndroidManifest.xml
+      - name: Write AndroidManifest.xml (dispatch)
+        if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      - name: Get package and app name from payload
+      - name: Get package and app name
         id: names
         run: |
-          PKG="${{ github.event.client_payload.package_name }}"
-          APP_NAME="${{ github.event.client_payload.app_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Manifest سے پڑھیں
+            PKG=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
+            APP_NAME=$(grep -oP 'android:label="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
+          else
+            PKG="${{ github.event.client_payload.package_name }}"
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+          fi
           if [ -z "$PKG" ]; then PKG="com.example.app"; fi
           if [ -z "$APP_NAME" ]; then APP_NAME="MyApp"; fi
           echo "PKG=$PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
-          mv app/src/main/java/com/placeholder/MainActivity.java app/src/main/java/$PKG_PATH/
+          mv app/src/main/java/com/placeholder/MainActivity.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
 
-      - name: Write extra resources (styles, colors, strings)
+      - name: Write extra resources (dispatch)
+        if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
           if [ -n "${{ github.event.client_payload.styles }}" ]; then
@@ -60,12 +100,20 @@ jobs:
             printf '%s\n' "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
           fi
 
-      - name: Handle images (base64 zip)
+      - name: Handle images (dispatch)
+        if: github.event_name == 'repository_dispatch'
         run: |
           if [ -n "${{ github.event.client_payload.images_base64 }}" ]; then
             echo "${{ github.event.client_payload.images_base64 }}" | base64 -d > images.zip
             unzip -o images.zip -d app/src/main/res/
           else
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
+
+      - name: Handle images (push)
+        if: github.event_name == 'push'
+        run: |
+          if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
