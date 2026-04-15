@@ -14,10 +14,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code (for push)
-        if: github.event_name == 'push'
-        uses: actions/checkout@v4
-
       - name: Create project structure
         run: |
           mkdir -p app/src/main/java/com/placeholder
@@ -76,7 +72,7 @@ jobs:
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      # -------- مشترکہ مرحلہ: پیکیج نام اور ایپ کا نام (اور PKG_PATH آؤٹ پٹ) --------
+      # -------- مشترکہ مرحلہ: پیکیج نام اور ایپ کا نام --------
       - name: Get package and app name
         id: names
         run: |
@@ -87,13 +83,12 @@ jobs:
             PKG="${{ github.event.client_payload.package_name }}"
             APP_NAME="${{ github.event.client_payload.app_name }}"
           fi
-          # ڈیفالٹ ویلیوز
           [ -z "$PKG" ] && PKG="com.example.app"
           [ -z "$APP_NAME" ] && APP_NAME="MyApp"
           echo "PKG=$PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT   # ✅ یہ لائن پہلے missing تھی
+          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT
           mkdir -p app/src/main/java/$PKG_PATH
           if [ -f app/src/main/java/com/placeholder/MainActivity.java ]; then
             mv app/src/main/java/com/placeholder/MainActivity.java app/src/main/java/$PKG_PATH/
@@ -212,11 +207,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build APK
-        run: ./gradlew assembleDebug
+      - name: Build APK with Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: '8.9'
+          arguments: :app:assembleDebug
 
       - name: Rename APK
         run: mv app/build/outputs/apk/debug/app-debug.apk "${{ steps.names.outputs.APP_NAME }}.apk"
