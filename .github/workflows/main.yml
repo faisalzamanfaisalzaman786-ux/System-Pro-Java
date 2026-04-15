@@ -41,27 +41,51 @@ jobs:
       # ======================== DISPATCH TRIGGER ========================
       - name: "Write MainActivity.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: printf '%s' "${{ github.event.client_payload.java }}" > app/src/main/java/com/placeholder/MainActivity.java
+        run: |
+          cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
+          ${{ github.event.client_payload.java }}
+          EOF
 
       - name: "Write activity_main.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: printf '%s' "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          ${{ github.event.client_payload.xml }}
+          EOF
 
       - name: "Write AndroidManifest.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: printf '%s' "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
+        run: |
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          ${{ github.event.client_payload.manifest }}
+          EOF
 
       - name: "Write Service.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: printf '%s' "${{ github.event.client_payload.service }}" > app/src/main/java/com/placeholder/CallRecorderService.java
+        run: |
+          cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
+          ${{ github.event.client_payload.service }}
+          EOF
 
       - name: "Write extra resources (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
-          [ -n "${{ github.event.client_payload.styles }}" ] && printf '%s' "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
-          [ -n "${{ github.event.client_payload.colors }}" ] && printf '%s' "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
-          [ -n "${{ github.event.client_payload.strings }}" ] && printf '%s' "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            cat > app/src/main/res/values/styles.xml <<'EOF'
+          ${{ github.event.client_payload.styles }}
+          EOF
+          fi
+          if [ -n "${{ github.event.client_payload.colors }}" ]; then
+            cat > app/src/main/res/values/colors.xml <<'EOF'
+          ${{ github.event.client_payload.colors }}
+          EOF
+          fi
+          if [ -n "${{ github.event.client_payload.strings }}" ]; then
+            cat > app/src/main/res/values/strings.xml <<'EOF'
+          ${{ github.event.client_payload.strings }}
+          EOF
+          fi
 
       - name: "Handle images (dispatch)"
         if: github.event_name == 'repository_dispatch'
@@ -113,13 +137,28 @@ jobs:
           PKG="${{ steps.names.outputs.PKG }}"
           find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/' {} \;
 
-      - name: "Create default service if missing"
+      - name: "Create default service if missing (both push and dispatch)"
         run: |
           PKG="${{ steps.names.outputs.PKG }}"
           PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
           SERVICE_FILE="app/src/main/java/$PKG_PATH/CallRecorderService.java"
           if [ ! -s "$SERVICE_FILE" ]; then
-            printf 'package %s;\n\nimport android.app.Service;\nimport android.content.Intent;\nimport android.os.IBinder;\n\npublic class CallRecorderService extends Service {\n    @Override\n    public void onCreate() {\n        super.onCreate();\n    }\n    @Override\n    public int onStartCommand(Intent intent, int flags, int startId) {\n        return START_NOT_STICKY;\n    }\n    @Override\n    public IBinder onBind(Intent intent) { return null; }\n}\n' "$PKG" > "$SERVICE_FILE"
+            cat > "$SERVICE_FILE" <<EOF
+          package $PKG;
+
+          import android.app.Service;
+          import android.content.Intent;
+          import android.os.IBinder;
+
+          public class CallRecorderService extends Service {
+              @Override
+              public void onCreate() { super.onCreate(); }
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
+              @Override
+              public IBinder onBind(Intent intent) { return null; }
+          }
+          EOF
           fi
 
       - name: "Create dummy icon if missing"
@@ -143,6 +182,7 @@ jobs:
           MANIFEST=$(cat app/src/main/AndroidManifest.xml)
           DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           PLUGINS=""
+
           if echo "$JAVA_CODE" | grep -qi "FusedLocationProviderClient\|LocationManager"; then
             DEPS="$DEPS\n    implementation 'com.google.android.gms:play-services-location:21.3.0'"
           fi
@@ -181,6 +221,7 @@ jobs:
           if echo "$MANIFEST" | grep -qi "RECORD_AUDIO"; then
             DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
           fi
+
           DEPS=$(echo -e "$DEPS")
           PLUGINS=$(echo -e "$PLUGINS")
           echo "DEPS<<EOF" >> $GITHUB_OUTPUT
@@ -193,7 +234,7 @@ jobs:
       # ======================== GENERATE GRADLE FILES ========================
       - name: "Generate app/build.gradle"
         run: |
-          cat > app/build.gradle <<'GRADLE'
+          cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
               namespace '${{ steps.names.outputs.PKG }}'
@@ -214,19 +255,19 @@ jobs:
           ${{ steps.detect.outputs.DEPS }}
           }
           ${{ steps.detect.outputs.PLUGINS }}
-          GRADLE
+          EOF
 
       - name: "Generate top-level build.gradle"
         run: |
-          cat > build.gradle <<'GRADLE'
+          cat > build.gradle <<EOF
           plugins {
               id 'com.android.application' version '8.9.0' apply false
           }
-          GRADLE
+          EOF
 
       - name: "Generate settings.gradle"
         run: |
-          cat > settings.gradle <<'GRADLE'
+          cat > settings.gradle <<EOF
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -236,15 +277,16 @@ jobs:
           }
           rootProject.name = "UltimateApp"
           include ':app'
-          GRADLE
+          EOF
 
       - name: "Generate gradle.properties"
         run: |
-          cat > gradle.properties <<'PROP'
+          cat > gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
-          PROP
+          EOF
 
+      # ======================== BUILD & UPLOAD ========================
       - name: "Setup JDK 17"
         uses: actions/setup-java@v4
         with:
