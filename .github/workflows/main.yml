@@ -17,13 +17,22 @@ jobs:
           mkdir -p app/src/main/res/drawable
 
       - name: Write MainActivity.java
-        run: echo '${{ github.event.client_payload.java }}' > app/src/main/java/com/placeholder/MainActivity.java
+        run: |
+          cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
+          ${{ github.event.client_payload.java }}
+          EOF
 
       - name: Write activity_main.xml
-        run: echo '${{ github.event.client_payload.xml }}' > app/src/main/res/layout/activity_main.xml
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          ${{ github.event.client_payload.xml }}
+          EOF
 
       - name: Write AndroidManifest.xml
-        run: echo '${{ github.event.client_payload.manifest }}' > app/src/main/AndroidManifest.xml
+        run: |
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          ${{ github.event.client_payload.manifest }}
+          EOF
 
       - name: Get package and app name from payload
         id: names
@@ -40,14 +49,27 @@ jobs:
 
       - name: Write extra resources (styles, colors, strings)
         run: |
-          [ -n "${{ github.event.client_payload.styles }}" ] && echo '${{ github.event.client_payload.styles }}' > app/src/main/res/values/styles.xml
-          [ -n "${{ github.event.client_payload.colors }}" ] && echo '${{ github.event.client_payload.colors }}' > app/src/main/res/values/colors.xml
-          [ -n "${{ github.event.client_payload.strings }}" ] && echo '${{ github.event.client_payload.strings }}' > app/src/main/res/values/strings.xml
+          mkdir -p app/src/main/res/values
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            cat > app/src/main/res/values/styles.xml <<'EOF'
+            ${{ github.event.client_payload.styles }}
+            EOF
+          fi
+          if [ -n "${{ github.event.client_payload.colors }}" ]; then
+            cat > app/src/main/res/values/colors.xml <<'EOF'
+            ${{ github.event.client_payload.colors }}
+            EOF
+          fi
+          if [ -n "${{ github.event.client_payload.strings }}" ]; then
+            cat > app/src/main/res/values/strings.xml <<'EOF'
+            ${{ github.event.client_payload.strings }}
+            EOF
+          fi
 
       - name: Handle images (base64 zip)
         run: |
           if [ -n "${{ github.event.client_payload.images_base64 }}" ]; then
-            echo '${{ github.event.client_payload.images_base64 }}' | base64 -d > images.zip
+            echo "${{ github.event.client_payload.images_base64 }}" | base64 -d > images.zip
             unzip -o images.zip -d app/src/main/res/
           else
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
@@ -56,7 +78,8 @@ jobs:
       - name: Auto-detect dependencies
         id: detect
         run: |
-          JAVA_FILE="app/src/main/java/${{ steps.names.outputs.PKG_PATH }}/MainActivity.java"
+          PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
+          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
           JAVA_CODE=$(cat $JAVA_FILE)
           MANIFEST=$(cat app/src/main/AndroidManifest.xml)
           DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'"
