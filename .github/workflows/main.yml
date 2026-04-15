@@ -67,24 +67,37 @@ jobs:
           ${{ github.event.client_payload.service }}
           EOF
 
-      - name: "Write extra resources (dispatch)"
+      - name: "Write extra resources (dispatch) with default CalcButton style"
         if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
-          if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            cat > app/src/main/res/values/styles.xml <<'EOF'
-          ${{ github.event.client_payload.styles }}
+          # Always create a default styles.xml that includes CalcButton (for calculator)
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#00FFCC</item>
+              </style>
+              <style name="CalcButton" parent="Widget.AppCompat.Button">
+                  <item name="android:layout_width">0dp</item>
+                  <item name="android:layout_height">wrap_content</item>
+                  <item name="android:layout_weight">1</item>
+                  <item name="android:textSize">24sp</item>
+                  <item name="android:textColor">#FFFFFF</item>
+                  <item name="android:background">#2A2A3E</item>
+                  <item name="android:padding">16dp</item>
+              </style>
+          </resources>
           EOF
+          # Override with user-provided styles if any
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
-            cat > app/src/main/res/values/colors.xml <<'EOF'
-          ${{ github.event.client_payload.colors }}
-          EOF
+            echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           fi
           if [ -n "${{ github.event.client_payload.strings }}" ]; then
-            cat > app/src/main/res/values/strings.xml <<'EOF'
-          ${{ github.event.client_payload.strings }}
-          EOF
+            echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
           fi
 
       - name: "Handle images (dispatch)"
@@ -108,7 +121,7 @@ jobs:
           fi
 
       # ======================== PREPARE MANIFEST & PACKAGE ========================
-      - name: "Get package and app name"
+      - name: "Get package and app name from payload or manifest"
         id: names
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -132,7 +145,7 @@ jobs:
           sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
           sed -i 's/  //g' app/src/main/AndroidManifest.xml
 
-      - name: "Fix package declarations in all Java files"
+      - name: "Update package declarations in all Java files"
         run: |
           PKG="${{ steps.names.outputs.PKG }}"
           find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/' {} \;
@@ -286,7 +299,6 @@ jobs:
           android.useAndroidX=true
           EOF
 
-      # ======================== BUILD & UPLOAD ========================
       - name: "Setup JDK 17"
         uses: actions/setup-java@v4
         with:
