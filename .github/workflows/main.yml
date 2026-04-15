@@ -54,13 +54,22 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      - name: Write extra resources (dispatch)
+      - name: Write extra resources (dispatch) - using JSON encoding
         if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
-          [ -n "${{ github.event.client_payload.styles }}" ] && printf '%s\n' "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
-          [ -n "${{ github.event.client_payload.colors }}" ] && printf '%s\n' "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
-          [ -n "${{ github.event.client_payload.strings }}" ] && printf '%s\n' "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
+          # styles.xml
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            echo '${{ toJSON(github.event.client_payload.styles) }}' | jq -r '.' > app/src/main/res/values/styles.xml
+          fi
+          # colors.xml
+          if [ -n "${{ github.event.client_payload.colors }}" ]; then
+            echo '${{ toJSON(github.event.client_payload.colors) }}' | jq -r '.' > app/src/main/res/values/colors.xml
+          fi
+          # strings.xml
+          if [ -n "${{ github.event.client_payload.strings }}" ]; then
+            echo '${{ toJSON(github.event.client_payload.strings) }}' | jq -r '.' > app/src/main/res/values/strings.xml
+          fi
 
       - name: Handle images (dispatch)
         if: github.event_name == 'repository_dispatch'
