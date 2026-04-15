@@ -51,19 +51,13 @@ jobs:
         run: |
           mkdir -p app/src/main/res/values
           if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            cat > app/src/main/res/values/styles.xml <<'EOF'
-            ${{ github.event.client_payload.styles }}
-            EOF
+            printf '%s\n' "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
-            cat > app/src/main/res/values/colors.xml <<'EOF'
-            ${{ github.event.client_payload.colors }}
-            EOF
+            printf '%s\n' "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           fi
           if [ -n "${{ github.event.client_payload.strings }}" ]; then
-            cat > app/src/main/res/values/strings.xml <<'EOF'
-            ${{ github.event.client_payload.strings }}
-            EOF
+            printf '%s\n' "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
           fi
 
       - name: Handle images (base64 zip)
