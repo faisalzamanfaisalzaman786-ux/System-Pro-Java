@@ -25,7 +25,6 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      # -------- PUSH TRIGGER: فائلیں repo سے لیں --------
       - name: "Copy files from repo (push)"
         if: github.event_name == 'push'
         run: |
@@ -36,7 +35,6 @@ jobs:
           [ -f colors.xml ] && cp colors.xml app/src/main/res/values/ 2>/dev/null || true
           [ -f strings.xml ] && cp strings.xml app/src/main/res/values/ 2>/dev/null || true
 
-      # -------- DISPATCH TRIGGER: فائلیں payload سے لیں --------
       - name: "Write MainActivity.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
@@ -78,17 +76,14 @@ jobs:
           if [ -n "${{ github.event.client_payload.images_base64 }}" ]; then
             echo "${{ github.event.client_payload.images_base64 }}" | base64 -d > images.zip
             unzip -o images.zip -d images_temp/
-            # پہلی تصویر کو آئیکن بنائیں اور باقی تصاویر drawable میں ڈالیں
             first_image=$(ls images_temp/ | head -1)
             if [ -n "$first_image" ]; then
-              # آئیکن کو تمام mipmap densities میں ڈالیں (سادگی کے لیے ایک ہی تصویر)
               cp "images_temp/$first_image" app/src/main/res/mipmap-hdpi/ic_launcher.png
               cp "images_temp/$first_image" app/src/main/res/mipmap-mdpi/ic_launcher.png
               cp "images_temp/$first_image" app/src/main/res/mipmap-xhdpi/ic_launcher.png
               cp "images_temp/$first_image" app/src/main/res/mipmap-xxhdpi/ic_launcher.png
               cp "images_temp/$first_image" app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             fi
-            # باقی تصاویر drawable میں ڈالیں (اختیاری)
             for img in images_temp/*; do
               if [ "$img" != "images_temp/$first_image" ]; then
                 cp "$img" app/src/main/res/drawable/ 2>/dev/null || true
@@ -96,9 +91,16 @@ jobs:
             done
             rm -rf images_temp
           else
-            # ڈیفالٹ ڈمی آئیکن
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
+
+      # -------- FIX: Remove package attribute from manifest (AGP 8.9+ compatibility) --------
+      - name: "Remove package attribute from AndroidManifest.xml"
+        run: |
+          sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
+          sed -i 's/  //g' app/src/main/AndroidManifest.xml   # clean extra spaces
+          echo "Fixed AndroidManifest.xml:"
+          cat app/src/main/AndroidManifest.xml
 
       - name: "Get package and app name"
         id: names
