@@ -26,15 +26,6 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      # ======================== DEBUG: Show received payload ========================
-      - name: "Debug payload (dispatch only)"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          echo "Received event_type: ${{ github.event.action }}"
-          echo "Package name from payload: ${{ github.event.client_payload.package_name }}"
-          echo "App name from payload: ${{ github.event.client_payload.app_name }}"
-          echo "Service content length: $(echo -n "${{ github.event.client_payload.service }}" | wc -c)"
-
       # ======================== PUSH TRIGGER ========================
       - name: "Copy files from repo (push)"
         if: github.event_name == 'push'
@@ -51,44 +42,30 @@ jobs:
       - name: "Write MainActivity.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
-          cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
-          ${{ github.event.client_payload.java }}
-          EOF
+          printf '%s' "${{ github.event.client_payload.java }}" > app/src/main/java/com/placeholder/MainActivity.java
 
       - name: "Write activity_main.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
-          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          ${{ github.event.client_payload.xml }}
-          EOF
+          printf '%s' "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
 
       - name: "Write AndroidManifest.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          ${{ github.event.client_payload.manifest }}
-          EOF
+          printf '%s' "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
 
-      - name: "Write Service.java (dispatch) - raw, will be fixed later"
+      - name: "Write Service.java (dispatch) - raw"
         if: github.event_name == 'repository_dispatch'
         run: |
-          SERVICE_CONTENT="${{ github.event.client_payload.service }}"
-          if [ -z "$SERVICE_CONTENT" ]; then
-            echo "Warning: No service content provided. Will create default service later."
-            touch app/src/main/java/com/placeholder/CallRecorderService.java
-          else
-            cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
-          $SERVICE_CONTENT
-          EOF
-          fi
+          printf '%s' "${{ github.event.client_payload.service }}" > app/src/main/java/com/placeholder/CallRecorderService.java
 
       - name: "Write extra resources (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
-          [ -n "${{ github.event.client_payload.styles }}" ] && echo '${{ toJSON(github.event.client_payload.styles) }}' | jq -r '.' > app/src/main/res/values/styles.xml
-          [ -n "${{ github.event.client_payload.colors }}" ] && echo '${{ toJSON(github.event.client_payload.colors) }}' | jq -r '.' > app/src/main/res/values/colors.xml
-          [ -n "${{ github.event.client_payload.strings }}" ] && echo '${{ toJSON(github.event.client_payload.strings) }}' | jq -r '.' > app/src/main/res/values/strings.xml
+          [ -n "${{ github.event.client_payload.styles }}" ] && printf '%s' "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
+          [ -n "${{ github.event.client_payload.colors }}" ] && printf '%s' "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
+          [ -n "${{ github.event.client_payload.strings }}" ] && printf '%s' "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
 
       - name: "Handle images (dispatch)"
         if: github.event_name == 'repository_dispatch'
@@ -111,7 +88,7 @@ jobs:
           fi
 
       # ======================== PREPARE MANIFEST & PACKAGE ========================
-      - name: "Get package and app name from payload or manifest"
+      - name: "Get package and app name"
         id: names
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -130,23 +107,22 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mv app/src/main/java/com/placeholder/*.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
 
-      - name: "Update package in AndroidManifest.xml (remove package attribute)"
+      - name: "Remove package attribute from AndroidManifest.xml"
         run: |
           sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
           sed -i 's/  //g' app/src/main/AndroidManifest.xml
 
-      - name: "Update package declarations in all Java files"
+      - name: "Fix package declarations in all Java files"
         run: |
           PKG="${{ steps.names.outputs.PKG }}"
           find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/' {} \;
 
-      - name: "Create default service if none exists (for both push and dispatch)"
+      - name: "Create default service if missing"
         run: |
           PKG="${{ steps.names.outputs.PKG }}"
           PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
           SERVICE_FILE="app/src/main/java/$PKG_PATH/CallRecorderService.java"
-          if [ ! -f "$SERVICE_FILE" ]; then
-            echo "No CallRecorderService found. Creating a default minimal service."
+          if [ ! -s "$SERVICE_FILE" ]; then
             cat > "$SERVICE_FILE" <<EOF
 package $PKG;
 
@@ -213,7 +189,7 @@ EOF
             DEPS="$DEPS\n    implementation 'androidx.camera:camera-camera2:1.3.0'"
           fi
 
-          # Internet & Networking (OkHttp, Retrofit)
+          # Internet & Networking
           if echo "$MANIFEST" | grep -qi "INTERNET"; then
             DEPS="$DEPS\n    implementation 'com.squareup.okhttp3:okhttp:4.12.0'"
             if echo "$JAVA_CODE" | grep -qi "Retrofit"; then
@@ -242,17 +218,16 @@ EOF
             DEPS="$DEPS\n    implementation 'androidx.wifi:wifi:1.0.0'"
           fi
 
-          # Media Projection (Screen Sharing / Recording)
+          # Media Projection
           if echo "$JAVA_CODE" | grep -qi "MediaProjectionManager\|MediaProjection"; then
             DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
           fi
 
-          # Audio / Microphone Recording
+          # Audio Recording
           if echo "$MANIFEST" | grep -qi "RECORD_AUDIO"; then
             DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
           fi
 
-          # Convert newlines
           DEPS=$(echo -e "$DEPS")
           PLUGINS=$(echo -e "$PLUGINS")
           echo "DEPS<<EOF" >> $GITHUB_OUTPUT
