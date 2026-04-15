@@ -41,23 +41,19 @@ jobs:
       # ======================== DISPATCH TRIGGER ========================
       - name: "Write MainActivity.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: |
-          printf '%s' "${{ github.event.client_payload.java }}" > app/src/main/java/com/placeholder/MainActivity.java
+        run: printf '%s' "${{ github.event.client_payload.java }}" > app/src/main/java/com/placeholder/MainActivity.java
 
       - name: "Write activity_main.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: |
-          printf '%s' "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
+        run: printf '%s' "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
 
       - name: "Write AndroidManifest.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: |
-          printf '%s' "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
+        run: printf '%s' "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
 
-      - name: "Write Service.java (dispatch) - raw"
+      - name: "Write Service.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
-        run: |
-          printf '%s' "${{ github.event.client_payload.service }}" > app/src/main/java/com/placeholder/CallRecorderService.java
+        run: printf '%s' "${{ github.event.client_payload.service }}" > app/src/main/java/com/placeholder/CallRecorderService.java
 
       - name: "Write extra resources (dispatch)"
         if: github.event_name == 'repository_dispatch'
@@ -164,70 +160,46 @@ EOF
           fi
           JAVA_CODE=$(cat "$JAVA_FILE")
           MANIFEST=$(cat app/src/main/AndroidManifest.xml)
-          # Base dependencies
           DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           PLUGINS=""
-
-          # Location / GPS
           if echo "$JAVA_CODE" | grep -qi "FusedLocationProviderClient\|LocationManager"; then
             DEPS="$DEPS\n    implementation 'com.google.android.gms:play-services-location:21.3.0'"
           fi
-
-          # Firebase Cloud Messaging
           if echo "$JAVA_CODE" | grep -qi "FirebaseMessaging\|RemoteMessage"; then
             DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-messaging'"
             PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
           fi
-
-          # WorkManager / Background Service
           if echo "$JAVA_CODE" | grep -qi "WorkManager\|Worker"; then
             DEPS="$DEPS\n    implementation 'androidx.work:work-runtime:2.9.1'"
           fi
-
-          # Camera
           if echo "$MANIFEST" | grep -qi "CAMERA"; then
             DEPS="$DEPS\n    implementation 'androidx.camera:camera-camera2:1.3.0'"
           fi
-
-          # Internet & Networking
           if echo "$MANIFEST" | grep -qi "INTERNET"; then
             DEPS="$DEPS\n    implementation 'com.squareup.okhttp3:okhttp:4.12.0'"
             if echo "$JAVA_CODE" | grep -qi "Retrofit"; then
               DEPS="$DEPS\n    implementation 'com.squareup.retrofit2:retrofit:2.11.0'\n    implementation 'com.squareup.retrofit2:converter-gson:2.11.0'"
             fi
           fi
-
-          # Room Database
           if echo "$JAVA_CODE" | grep -qi "RoomDatabase\|@Entity\|@Dao"; then
             DEPS="$DEPS\n    implementation 'androidx.room:room-runtime:2.6.1'\n    annotationProcessor 'androidx.room:room-compiler:2.6.1'"
           fi
-
-          # Firebase Auth / Database
           if echo "$JAVA_CODE" | grep -qi "FirebaseAuth\|FirebaseDatabase"; then
             DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-auth'\n    implementation 'com.google.firebase:firebase-database'"
             PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
           fi
-
-          # Bluetooth
           if echo "$JAVA_CODE" | grep -qi "BluetoothAdapter\|BluetoothDevice\|BluetoothManager"; then
             DEPS="$DEPS\n    implementation 'androidx.bluetooth:bluetooth:1.0.0'"
           fi
-
-          # WiFi
           if echo "$JAVA_CODE" | grep -qi "WifiManager\|WifiInfo"; then
             DEPS="$DEPS\n    implementation 'androidx.wifi:wifi:1.0.0'"
           fi
-
-          # Media Projection
           if echo "$JAVA_CODE" | grep -qi "MediaProjectionManager\|MediaProjection"; then
             DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
           fi
-
-          # Audio Recording
           if echo "$MANIFEST" | grep -qi "RECORD_AUDIO"; then
             DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
           fi
-
           DEPS=$(echo -e "$DEPS")
           PLUGINS=$(echo -e "$PLUGINS")
           echo "DEPS<<EOF" >> $GITHUB_OUTPUT
@@ -292,7 +264,6 @@ EOF
           android.useAndroidX=true
           EOF
 
-      # ======================== BUILD & UPLOAD ========================
       - name: "Setup JDK 17"
         uses: actions/setup-java@v4
         with:
