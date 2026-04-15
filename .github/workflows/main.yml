@@ -1,36 +1,38 @@
-name: Auto Build APK from Three Files
+name: Auto Build APK on Push
 
 on:
-  repository_dispatch:
-    types: [build-from-three-files]
+  push:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Create Android project structure
         run: |
           mkdir -p app/src/main/java/com/example/myapp
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/values
 
-      - name: Write Java file
-        run: echo '${{ github.event.client_payload.java_code }}' > app/src/main/java/com/example/myapp/MainActivity.java
+      - name: Copy Java file
+        run: cp MainActivity.java app/src/main/java/com/example/myapp/
 
-      - name: Write XML layout
-        run: echo '${{ github.event.client_payload.xml_layout }}' > app/src/main/res/layout/activity_main.xml
+      - name: Copy XML layout
+        run: cp activity_main.xml app/src/main/res/layout/
 
-      - name: Write AndroidManifest
-        run: echo '${{ github.event.client_payload.manifest }}' > app/src/main/AndroidManifest.xml
+      - name: Copy AndroidManifest
+        run: cp AndroidManifest.xml app/src/main/
 
-      - name: Create dummy icon (1x1 pixel)
+      - name: Create dummy icon (1x1 transparent)
         run: |
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
 
-      - name: Create build.gradle (app level)
+      - name: Create app/build.gradle
         run: |
-          cat > app/build.gradle <<EOF
+          cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application' }
           android {
               namespace 'com.example.myapp'
@@ -54,7 +56,7 @@ jobs:
 
       - name: Create top-level build.gradle
         run: |
-          cat > build.gradle <<EOF
+          cat > build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.9.0' apply false
           }
@@ -62,7 +64,7 @@ jobs:
 
       - name: Create settings.gradle
         run: |
-          cat > settings.gradle <<EOF
+          cat > settings.gradle <<'EOF'
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -76,7 +78,7 @@ jobs:
 
       - name: Create gradle.properties
         run: |
-          cat > gradle.properties <<EOF
+          cat > gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           EOF
@@ -96,7 +98,7 @@ jobs:
       - name: Build APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
