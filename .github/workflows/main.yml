@@ -44,7 +44,7 @@ jobs:
           rm project.zip
           echo "Extraction done"
 
-      - name: Prepare Android Project Structure
+      - name: Prepare Android Project Structure & Fix Manifest
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
@@ -61,6 +61,12 @@ jobs:
           mkdir -p app/src/main
           if [ -d "src/main" ]; then
             cp -rf src/main/* app/src/main/
+          fi
+          
+          # ✅ REMOVE package attribute from AndroidManifest.xml (fix for AGP 8+)
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
+            echo "Removed package attribute from manifest"
           fi
           
           mkdir -p app/src/main/res/values
@@ -104,6 +110,7 @@ jobs:
           EOF
           fi
           
+          # Fix package declaration in all Java files
           find app/src/main/java -name "*.java" -type f | while read file; do
             sed -i "1s/^package .*;/package $PACKAGE_NAME;/" "$file"
             if ! grep -q "import $PACKAGE_NAME.R;" "$file"; then
