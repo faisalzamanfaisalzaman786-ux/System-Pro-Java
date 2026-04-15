@@ -1,5 +1,4 @@
-upload-artifact@v4
-        with:name: Ultimate APK Builder (No Manifest Package)
+name: "Ultimate APK Builder (No Manifest Package)"
 
 on:
   repository_dispatch:
@@ -15,15 +14,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Create project structure
+      - name: "Create project structure"
         run: |
           mkdir -p app/src/main/java/com/placeholder
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-      # -------- PUSH TRIGGER: فائلیں repo سے لیں --------
-      - name: Copy files from repo (push)
+      - name: "Copy files from repo (push)"
         if: github.event_name == 'push'
         run: |
           [ -f MainActivity.java ] && cp MainActivity.java app/src/main/java/com/placeholder/ || echo "MainActivity.java not found"
@@ -33,46 +31,42 @@ jobs:
           [ -f colors.xml ] && cp colors.xml app/src/main/res/values/ 2>/dev/null || true
           [ -f strings.xml ] && cp strings.xml app/src/main/res/values/ 2>/dev/null || true
 
-      # -------- DISPATCH TRIGGER: فائلیں payload سے لیں --------
-      - name: Write MainActivity.java (dispatch)
+      - name: "Write MainActivity.java (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
           ${{ github.event.client_payload.java }}
           EOF
 
-      - name: Write activity_main.xml (dispatch)
+      - name: "Write activity_main.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           ${{ github.event.client_payload.xml }}
           EOF
 
-      - name: Write AndroidManifest.xml (dispatch)
+      - name: "Write AndroidManifest.xml (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      - name: Write extra resources (dispatch) - using JSON encoding
+      - name: "Write extra resources (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           mkdir -p app/src/main/res/values
-          # styles.xml
           if [ -n "${{ github.event.client_payload.styles }}" ]; then
             echo '${{ toJSON(github.event.client_payload.styles) }}' | jq -r '.' > app/src/main/res/values/styles.xml
           fi
-          # colors.xml
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
             echo '${{ toJSON(github.event.client_payload.colors) }}' | jq -r '.' > app/src/main/res/values/colors.xml
           fi
-          # strings.xml
           if [ -n "${{ github.event.client_payload.strings }}" ]; then
             echo '${{ toJSON(github.event.client_payload.strings) }}' | jq -r '.' > app/src/main/res/values/strings.xml
           fi
 
-      - name: Handle images (dispatch)
+      - name: "Handle images (dispatch)"
         if: github.event_name == 'repository_dispatch'
         run: |
           if [ -n "${{ github.event.client_payload.images_base64 }}" ]; then
@@ -82,8 +76,7 @@ jobs:
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      # -------- مشترکہ مرحلہ: پیکیج نام اور ایپ کا نام --------
-      - name: Get package and app name
+      - name: "Get package and app name"
         id: names
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -104,13 +97,13 @@ jobs:
             mv app/src/main/java/com/placeholder/MainActivity.java app/src/main/java/$PKG_PATH/
           fi
 
-      - name: Create dummy icon if missing
+      - name: "Create dummy icon if missing"
         run: |
           if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      - name: Auto-detect dependencies
+      - name: "Auto-detect dependencies"
         id: detect
         run: |
           PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
@@ -123,7 +116,6 @@ jobs:
           fi
           JAVA_CODE=$(cat "$JAVA_FILE")
           MANIFEST=$(cat app/src/main/AndroidManifest.xml)
-          # Base dependencies always include AppCompat and Material
           DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           PLUGINS=""
           if echo "$JAVA_CODE" | grep -qi "FusedLocationProviderClient\|LocationManager"; then
@@ -152,7 +144,6 @@ jobs:
             DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-auth'\n    implementation 'com.google.firebase:firebase-database'"
             PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
           fi
-          # Convert literal \n to actual newlines
           DEPS=$(echo -e "$DEPS")
           PLUGINS=$(echo -e "$PLUGINS")
           echo "DEPS<<EOF" >> $GITHUB_OUTPUT
@@ -162,7 +153,7 @@ jobs:
           echo "$PLUGINS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Generate app/build.gradle
+      - name: "Generate app/build.gradle"
         run: |
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
@@ -187,7 +178,7 @@ jobs:
           ${{ steps.detect.outputs.PLUGINS }}
           EOF
 
-      - name: Generate top-level build.gradle
+      - name: "Generate top-level build.gradle"
         run: |
           cat > build.gradle <<EOF
           plugins {
@@ -195,7 +186,7 @@ jobs:
           }
           EOF
 
-      - name: Generate settings.gradle
+      - name: "Generate settings.gradle"
         run: |
           cat > settings.gradle <<EOF
           pluginManagement {
@@ -209,35 +200,33 @@ jobs:
           include ':app'
           EOF
 
-      - name: Generate gradle.properties
+      - name: "Generate gradle.properties"
         run: |
           cat > gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           EOF
 
-      - name: Setup JDK 17
+      - name: "Setup JDK 17"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: "Setup Android SDK"
         uses: android-actions/setup-android@v3
 
-      - name: Build APK with Gradle
+      - name: "Build APK with Gradle"
         uses: gradle/gradle-build-action@v2
         with:
           gradle-version: '8.11.1'
           arguments: :app:assembleDebug
 
-      - name: Rename APK
+      - name: "Rename APK"
         run: mv app/build/outputs/apk/debug/app-debug.apk "${{ steps.names.outputs.APP_NAME }}.apk"
 
-      - name: Upload APK
+      - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.names.outputs.APP_NAME }}
-          path: ${{ steps.names.outputs.APP_NAME }}.apk
           name: ${{ steps.names.outputs.APP_NAME }}
           path: ${{ steps.names.outputs.APP_NAME }}.apk
