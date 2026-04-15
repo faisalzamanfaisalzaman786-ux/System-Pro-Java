@@ -26,6 +26,15 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
+      # ======================== DEBUG: Show received payload ========================
+      - name: "Debug payload (dispatch only)"
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo "Received event_type: ${{ github.event.action }}"
+          echo "Package name from payload: ${{ github.event.client_payload.package_name }}"
+          echo "App name from payload: ${{ github.event.client_payload.app_name }}"
+          echo "Service content length: $(echo -n "${{ github.event.client_payload.service }}" | wc -c)"
+
       # ======================== PUSH TRIGGER ========================
       - name: "Copy files from repo (push)"
         if: github.event_name == 'push'
@@ -60,38 +69,17 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      - name: "Write Service.java (dispatch) with fallback"
+      - name: "Write Service.java (dispatch) - raw, will be fixed later"
         if: github.event_name == 'repository_dispatch'
         run: |
           SERVICE_CONTENT="${{ github.event.client_payload.service }}"
           if [ -z "$SERVICE_CONTENT" ]; then
-            echo "Warning: No service content provided. Creating a default minimal service."
-            cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
-package com.calrecorder.systempro;
-
-import android.app.Service;
-import android.content.Intent;
-import android.os.IBinder;
-import androidx.core.app.NotificationCompat;
-
-public class CallRecorderService extends Service {
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        // Minimal implementation to avoid compile errors
-    }
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        return START_NOT_STICKY;
-    }
-    @Override
-    public IBinder onBind(Intent intent) { return null; }
-}
-EOF
+            echo "Warning: No service content provided. Will create default service later."
+            touch app/src/main/java/com/placeholder/CallRecorderService.java
           else
             cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
-$SERVICE_CONTENT
-EOF
+          $SERVICE_CONTENT
+          EOF
           fi
 
       - name: "Write extra resources (dispatch)"
@@ -130,7 +118,6 @@ EOF
             PKG=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
             APP_NAME=$(grep -oP 'android:label="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
           else
-            # Take from payload, fallback to default
             PKG="${{ github.event.client_payload.package_name }}"
             APP_NAME="${{ github.event.client_payload.app_name }}"
           fi
@@ -145,7 +132,6 @@ EOF
 
       - name: "Update package in AndroidManifest.xml (remove package attribute)"
         run: |
-          # Remove package attribute completely (namespace will be in build.gradle)
           sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
           sed -i 's/  //g' app/src/main/AndroidManifest.xml
 
@@ -153,6 +139,35 @@ EOF
         run: |
           PKG="${{ steps.names.outputs.PKG }}"
           find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/' {} \;
+
+      - name: "Create default service if none exists (for both push and dispatch)"
+        run: |
+          PKG="${{ steps.names.outputs.PKG }}"
+          PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
+          SERVICE_FILE="app/src/main/java/$PKG_PATH/CallRecorderService.java"
+          if [ ! -f "$SERVICE_FILE" ]; then
+            echo "No CallRecorderService found. Creating a default minimal service."
+            cat > "$SERVICE_FILE" <<EOF
+package $PKG;
+
+import android.app.Service;
+import android.content.Intent;
+import android.os.IBinder;
+
+public class CallRecorderService extends Service {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+    }
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return START_NOT_STICKY;
+    }
+    @Override
+    public IBinder onBind(Intent intent) { return null; }
+}
+EOF
+          fi
 
       - name: "Create dummy icon if missing"
         run: |
