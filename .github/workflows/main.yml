@@ -141,8 +141,15 @@ jobs:
             DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-auth'\n    implementation 'com.google.firebase:firebase-database'"
             PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
           fi
-          echo "DEPS=$DEPS" >> $GITHUB_OUTPUT
-          echo "PLUGINS=$PLUGINS" >> $GITHUB_OUTPUT
+          # Convert literal \n to actual newlines
+          DEPS=$(echo -e "$DEPS")
+          PLUGINS=$(echo -e "$PLUGINS")
+          echo "DEPS<<EOF" >> $GITHUB_OUTPUT
+          echo "$DEPS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "PLUGINS<<EOF" >> $GITHUB_OUTPUT
+          echo "$PLUGINS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Generate app/build.gradle
         run: |
@@ -164,7 +171,7 @@ jobs:
               }
           }
           dependencies {
-              ${{ steps.detect.outputs.DEPS }}
+          ${{ steps.detect.outputs.DEPS }}
           }
           ${{ steps.detect.outputs.PLUGINS }}
           EOF
