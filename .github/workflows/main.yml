@@ -60,12 +60,39 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      - name: "Write Service.java (dispatch)"
+      - name: "Write Service.java (dispatch) with fallback"
         if: github.event_name == 'repository_dispatch'
         run: |
-          cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
-          ${{ github.event.client_payload.service }}
-          EOF
+          SERVICE_CONTENT="${{ github.event.client_payload.service }}"
+          if [ -z "$SERVICE_CONTENT" ]; then
+            echo "Warning: No service content provided. Creating a default minimal service."
+            cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
+package com.calrecorder.systempro;
+
+import android.app.Service;
+import android.content.Intent;
+import android.os.IBinder;
+import androidx.core.app.NotificationCompat;
+
+public class CallRecorderService extends Service {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // Minimal implementation to avoid compile errors
+    }
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return START_NOT_STICKY;
+    }
+    @Override
+    public IBinder onBind(Intent intent) { return null; }
+}
+EOF
+          else
+            cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
+$SERVICE_CONTENT
+EOF
+          fi
 
       - name: "Write extra resources (dispatch)"
         if: github.event_name == 'repository_dispatch'
@@ -96,13 +123,14 @@ jobs:
           fi
 
       # ======================== PREPARE MANIFEST & PACKAGE ========================
-      - name: "Get package and app name"
+      - name: "Get package and app name from payload or manifest"
         id: names
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             PKG=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
             APP_NAME=$(grep -oP 'android:label="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
           else
+            # Take from payload, fallback to default
             PKG="${{ github.event.client_payload.package_name }}"
             APP_NAME="${{ github.event.client_payload.app_name }}"
           fi
@@ -115,14 +143,11 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mv app/src/main/java/com/placeholder/*.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
 
-      - name: "Update package in AndroidManifest.xml"
+      - name: "Update package in AndroidManifest.xml (remove package attribute)"
         run: |
-          PKG="${{ steps.names.outputs.PKG }}"
-          if grep -q 'package="' app/src/main/AndroidManifest.xml; then
-            sed -i 's/package="[^"]*"/package="'"$PKG"'"/' app/src/main/AndroidManifest.xml
-          else
-            sed -i 's/<manifest /<manifest package="'"$PKG"'" /' app/src/main/AndroidManifest.xml
-          fi
+          # Remove package attribute completely (namespace will be in build.gradle)
+          sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
+          sed -i 's/  //g' app/src/main/AndroidManifest.xml
 
       - name: "Update package declarations in all Java files"
         run: |
