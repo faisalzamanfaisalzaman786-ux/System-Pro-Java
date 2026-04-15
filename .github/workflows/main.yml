@@ -119,26 +119,7 @@ jobs:
           PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
           SERVICE_FILE="app/src/main/java/$PKG_PATH/CallRecorderService.java"
           if [ ! -s "$SERVICE_FILE" ]; then
-            cat > "$SERVICE_FILE" <<EOF
-package $PKG;
-
-import android.app.Service;
-import android.content.Intent;
-import android.os.IBinder;
-
-public class CallRecorderService extends Service {
-    @Override
-    public void onCreate() {
-        super.onCreate();
-    }
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        return START_NOT_STICKY;
-    }
-    @Override
-    public IBinder onBind(Intent intent) { return null; }
-}
-EOF
+            printf 'package %s;\n\nimport android.app.Service;\nimport android.content.Intent;\nimport android.os.IBinder;\n\npublic class CallRecorderService extends Service {\n    @Override\n    public void onCreate() {\n        super.onCreate();\n    }\n    @Override\n    public int onStartCommand(Intent intent, int flags, int startId) {\n        return START_NOT_STICKY;\n    }\n    @Override\n    public IBinder onBind(Intent intent) { return null; }\n}\n' "$PKG" > "$SERVICE_FILE"
           fi
 
       - name: "Create dummy icon if missing"
@@ -212,7 +193,7 @@ EOF
       # ======================== GENERATE GRADLE FILES ========================
       - name: "Generate app/build.gradle"
         run: |
-          cat > app/build.gradle <<EOF
+          cat > app/build.gradle <<'GRADLE'
           plugins { id 'com.android.application' }
           android {
               namespace '${{ steps.names.outputs.PKG }}'
@@ -233,19 +214,19 @@ EOF
           ${{ steps.detect.outputs.DEPS }}
           }
           ${{ steps.detect.outputs.PLUGINS }}
-          EOF
+          GRADLE
 
       - name: "Generate top-level build.gradle"
         run: |
-          cat > build.gradle <<EOF
+          cat > build.gradle <<'GRADLE'
           plugins {
               id 'com.android.application' version '8.9.0' apply false
           }
-          EOF
+          GRADLE
 
       - name: "Generate settings.gradle"
         run: |
-          cat > settings.gradle <<EOF
+          cat > settings.gradle <<'GRADLE'
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -255,14 +236,14 @@ EOF
           }
           rootProject.name = "UltimateApp"
           include ':app'
-          EOF
+          GRADLE
 
       - name: "Generate gradle.properties"
         run: |
-          cat > gradle.properties <<EOF
+          cat > gradle.properties <<'PROP'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
-          EOF
+          PROP
 
       - name: "Setup JDK 17"
         uses: actions/setup-java@v4
