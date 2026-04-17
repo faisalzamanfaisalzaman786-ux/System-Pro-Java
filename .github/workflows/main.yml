@@ -13,28 +13,47 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. فولڈرز کی تیاری
+      # 1. بنیادی ڈھانچہ
       - name: "Initialize Project Folders"
         run: |
           mkdir -p app/src/main/java/temp_pkg
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/menu
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن (Safe Injection using Environment Variables)
+      # 2. ڈیٹا انجیکشن (Safe Env Injection)
       - name: "Save Payload Data"
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
+          MENU_XML: ${{ github.event.client_payload.menu }}
         run: |
-          # پے لوڈ کو محفوظ طریقے سے فائلوں میں لکھنا
           echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+          # اگر مینیو کوڈ موجود ہو تو اسے محفوظ کریں
+          if [ -n "$MENU_XML" ]; then
+            echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml
+          fi
 
-      # 3. پیکیج ڈٹیکشن اور فولڈر ترتیب
+      # 3. خودکار XML فکس (Namespace Adder)
+      - name: "Auto-Fix XML Namespaces"
+        run: |
+          # تمام XML فائلز میں چیک کریں اگر 'app:' استعمال ہوا ہے لیکن 'res-auto' غائب ہے
+          find app/src/main/res -name "*.xml" -type f | while read file; do
+            if grep -q "app:" "$file" && ! grep -q "xmlns:app" "$file"; then
+              echo "Fixing namespace in $file"
+              sed -i 's|<menu|<menu xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
+              sed -i 's|<LinearLayout|<LinearLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
+              sed -i 's|<RelativeLayout|<RelativeLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
+              sed -i 's|<androidx.constraintlayout.widget.ConstraintLayout|<androidx.constraintlayout.widget.ConstraintLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
+            fi
+          done
+
+      # 4. پیکیج ڈٹیکشن
       - name: "Detect Package Name"
         id: detect
         run: |
@@ -51,20 +70,16 @@ jobs:
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
 
-      # 4. تھیم اور ریسورسز
+      # 5. تھیم اور ریسورسز
       - name: "Update UI Resources"
         env:
           COLORS_XML: ${{ github.event.client_payload.colors }}
           STYLES_XML: ${{ github.event.client_payload.styles }}
         run: |
-          if [ -n "$COLORS_XML" ]; then
-            echo "$COLORS_XML" > app/src/main/res/values/colors.xml
-          fi
-          if [ -n "$STYLES_XML" ]; then
-            echo "$STYLES_XML" > app/src/main/res/values/styles.xml
-          fi
+          if [ -n "$COLORS_XML" ]; then echo "$COLORS_XML" > app/src/main/res/values/colors.xml; fi
+          if [ -n "$STYLES_XML" ]; then echo "$STYLES_XML" > app/src/main/res/values/styles.xml; fi
 
-      # 5. گریڈل کنفیگریشن
+      # 6. گریڈل کنفیگریشن
       - name: "Generate Build Environment"
         run: |
           cat > settings.gradle <<EOF
@@ -100,13 +115,12 @@ jobs:
           }
           EOF
 
-          # اضافی ڈیپنڈینسیز اگر موجود ہوں
           if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
-            echo '${{ github.event.client_payload.dependencies }}' >> app/dependencies_temp.txt
-            sed -i '/dependencies {/r app/dependencies_temp.txt' app/build.gradle
+            echo '${{ github.event.client_payload.dependencies }}' >> app/deps.txt
+            sed -i '/dependencies {/r app/deps.txt' app/build.gradle
           fi
 
-      # 6. جاوا اور انجن سیٹ اپ
+      # 7. جاوا اور انجن سیٹ اپ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
@@ -116,25 +130,26 @@ jobs:
       - name: "Setup Gradle Wrapper"
         run: gradle wrapper --gradle-version 8.2
 
-      # 7. بلڈ
+      # 8. بلڈ
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 8. اپ لوڈ
+      # 9. اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.detect.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 9. صفائی
+      # 10. صفائی
       - name: "Post-Build Cleanup"
         if: always()
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/menu/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Cleanup Complete."
+          echo "Build Process Completed."
