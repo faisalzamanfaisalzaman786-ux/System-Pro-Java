@@ -3,6 +3,8 @@ name: "Ultimate APK Builder (All-In-One)"
 on:
   repository_dispatch:
     types: [build-app]
+  push:
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -11,8 +13,8 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. پراجیکٹ کا ڈھانچہ تیار کرنا
-      - name: "Initialize Structure"
+      # 1. پراجیکٹ کا بنیادی ڈھانچہ (Project Structure)
+      - name: "Initialize Project Folders"
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
@@ -20,51 +22,68 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈائنامک ریسورسز (Theme, Colors, Strings) سیٹ کرنا
-      - name: "Update UI & Resources"
-        run: |
-          # Colors Update
-          if [ -n "${{ github.event.client_payload.colors }}" ]; then
-            echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
-          fi
-          
-          # Styles & Themes Update
-          if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
-          fi
-
-          # Strings Update
-          if [ -n "${{ github.event.client_payload.strings }}" ]; then
-            echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
-          fi
-
-      # 3. کوڈ اور مینی فیسٹ کی تیاری
-      - name: "Inject Code & Manifest"
+      # 2. کوڈ اور ریسورسز کو محفوظ کرنا (Safe injection using EOF)
+      - name: "Inject Payload Data"
         id: prep
         run: |
+          # پیکیج اور ایپ کا نام سیٹ کریں
           PKG="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
 
-          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
-          echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
-          
-          # تمام جاوا فائلز میں پیکیج کا نام خودکار ٹھیک کریں
+          # محفوظ طریقے سے فائلز لکھنا (تاکہ XML ٹیگز ایرر نہ دیں)
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
+
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          ${{ github.event.client_payload.xml }}
+          EOF
+
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          ${{ github.event.client_payload.manifest }}
+          EOF
+
+          # UI تھیم اور کلرز (اگر پے لوڈ میں موجود ہوں)
+          if [ -n "${{ github.event.client_payload.colors }}" ]; then
+            cat <<'EOF' > app/src/main/res/values/colors.xml
+            ${{ github.event.client_payload.colors }}
+          EOF
+          fi
+
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            cat <<'EOF' > app/src/main/res/values/styles.xml
+            ${{ github.event.client_payload.styles }}
+          EOF
+          fi
+
+          # پیکیج کا نام تمام جاوا فائلز میں خودکار ٹھیک کریں
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $PKG;/" {} \;
           
           echo "PKG=$PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
 
-      # 4. ڈائنامک ڈیپنڈینسیز (Libraries) سیٹ کرنا
-      - name: "Configure Build & Dependencies"
+      # 3. گریڈل اور ڈیپنڈینسیز کی ترتیب (Build Configuration)
+      - name: "Generate Build Files"
         run: |
-          # ڈیپنڈینسیز کو پے لوڈ سے حاصل کریں یا ڈیفالٹ استعمال کریں
           DEPS="${{ github.event.client_payload.dependencies }}"
           if [ -z "$DEPS" ]; then
             DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           fi
+
+          cat > build.gradle <<EOF
+          plugins { id 'com.android.application' version '8.2.0' apply false }
+          EOF
+
+          cat > settings.gradle <<EOF
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() } 
+          }
+          include ':app'
+          EOF
 
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
@@ -85,33 +104,34 @@ jobs:
           }
           EOF
 
-      # 5. بلڈ پروسیس (Gradle)
-      - name: "Setup Java & Build"
+      # 4. اینڈرائیڈ ایس ڈی کے اور جاوا سیٹ اپ
+      - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: "Grant Execute Permission"
-        run: chmod +x gradlew
-
+      # 5. بلڈ پروسیس
       - name: "Build APK"
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      # 6. آرٹفیکٹ اپ لوڈ
-      - name: "Upload Result"
+      # 6. آرٹفیکٹ اپ لوڈ (Download Link)
+      - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prep.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 7. مکمل صفائی (Post-Build Cleanup)
-      - name: "Final Cleaning"
+      # 7. صفائی کا عمل (Cleaning Process)
+      - name: "Post-Build Cleanup"
         if: always()
         run: |
+          echo "Cleaning up all build files and sensitive code..."
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/values/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "All temporary files cleaned."
+          echo "Cleanup finished."
