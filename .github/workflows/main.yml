@@ -13,19 +13,18 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول کی صفائی
-      - name: "Environment Reset"
+      # 1. مکمل صفائی (Force Reset)
+      - name: "Clean Workspace"
         run: |
           rm -rf app/src/main/res/*
           rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/temp_pkg
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/menu
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-mdpi
 
-      # 2. ڈیٹا انجیکشن اور مسنگ ریسورس فکسر
+      # 2. ڈیٹا انجیکشن اور آٹو ریسورس فکسر
       - name: "Inject and Sync Data"
         id: sync
         env:
@@ -33,25 +32,29 @@ jobs:
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
         run: |
-          echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
-          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          # جاوا اور لے آؤٹ لکھنا
+          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
+          printf "%s" "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           
+          # پیکیج ڈٹیکشن
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
-          # Placeholder Resources (AAPT Fix)
+          # مسنگ ریسورسز کا حل (Dummy Resources)
+          echo '<resources><color name="colorPrimary">#6200EE</color><color name="colorPrimaryDark">#3700B3</color><color name="colorAccent">#03DAC5</color><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.DarkActionBar"/></resources>' > app/src/main/res/values/styles.xml
           echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF000000" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>' > app/src/main/res/drawable/ic_launcher_background.xml
-          mkdir -p app/src/main/res/mipmap-mdpi
           cp app/src/main/res/drawable/ic_launcher_background.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
 
+          # مینی فیسٹ سنک (Force Package Alignment)
           if [ -n "$MANIFEST_XML" ]; then
-            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+            printf "%s" "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
             sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
             sed -i 's|@mipmap/ic_launcher|@drawable/ic_launcher_background|g' app/src/main/AndroidManifest.xml
           else
-            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro' android:icon='@drawable/ic_launcher_background'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro' android:theme='@style/Theme.SystemPro' android:icon='@drawable/ic_launcher_background'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
           fi
 
+          # پیکیج فولڈر سیٹ اپ
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
@@ -59,39 +62,29 @@ jobs:
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
 
-      # 3. گریڈل ریپوزٹری فکس (CRITICAL)
-      - name: "Generate Repository-Aware Config"
+      # 3. گریڈل اور پلگ ان کنفیگریشن (The Secret Sauce)
+      - name: "Generate Repository & Build Config"
         run: |
-          # settings.gradle میں ریپوزٹریز کو اوپر رکھنا ضروری ہے
           cat > settings.gradle <<EOF
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() } 
           }
           rootProject.name = "${{ steps.sync.outputs.APP_NAME }}"
           include ':app'
           EOF
 
           cat > build.gradle <<EOF
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
           cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-          }
+          apply plugin: 'com.android.application'
           android {
               namespace '${{ steps.sync.outputs.PKG }}'
               compileSdk 34
@@ -109,7 +102,7 @@ jobs:
           }
           EOF
 
-      # 4. بلڈ انجن
+      # 4. جاوا 17 اور بلڈ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
@@ -117,13 +110,15 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: "Build APK"
+      - name: "Assemble APK"
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon --stacktrace
 
-      # 5. آرٹفیکٹ اپ لوڈ
+      # 5. اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
