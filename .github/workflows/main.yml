@@ -13,9 +13,11 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. بنیادی ڈھانچہ (Folders)
-      - name: "Initialize Folders"
+      # 1. صاف ستھرا آغاز (Clean Start)
+      - name: "Full System Cleanup"
         run: |
+          rm -rf app/src/main/res/*
+          rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/temp_pkg
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
@@ -24,53 +26,59 @@ jobs:
           mkdir -p app/src/main/assets
 
       # 2. ڈیٹا انجیکشن (Safe Env Injection)
-      - name: "Save Payload Data"
+      - name: "Inject Payload"
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
           MENU_XML: ${{ github.event.client_payload.menu }}
+          COLORS_XML: ${{ github.event.client_payload.colors }}
+          STYLES_XML: ${{ github.event.client_payload.styles }}
         run: |
+          # Java اور Layout
           echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
-          echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-          if [ -n "$MENU_XML" ]; then echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml; fi
+          
+          # Manifest (اگر خالی ہو تو بنیادی ڈھانچہ بنائیں)
+          if [ -z "$MANIFEST_XML" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="App" android:theme="@style/Theme.AppCompat.Light.DarkActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          else
+            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+          fi
 
-      # 3. پیکیج ڈٹیکشن اور ہم آہنگی (Sync Logic)
-      - name: "Detect and Sync Package"
+          # ریسورسز
+          if [ -n "$MENU_XML" ]; then echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml; fi
+          if [ -n "$COLORS_XML" ]; then echo "$COLORS_XML" > app/src/main/res/values/colors.xml; else echo '<resources><color name="colorPrimary">#6200EE</color></resources>' > app/src/main/res/values/colors.xml; fi
+          if [ -n "$STYLES_XML" ]; then echo "$STYLES_XML" > app/src/main/res/values/styles.xml; else echo '<resources><style name="Theme.App" parent="Theme.AppCompat.Light.DarkActionBar"/></resources>' > app/src/main/res/values/styles.xml; fi
+
+      # 3. پیکیج سنک اور آٹو فکسر (Intelligent Sync)
+      - name: "Package & Resource Auto-Fix"
         id: sync
         run: |
-          # Java سے پیکیج نکالیں
+          # پیکیج نکالنا
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
-          
-          # Manifest میں پیکیج ٹھیک کریں
-          sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
-          
-          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
-          
           mkdir -p "app/src/main/java/$PKG_PATH"
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
-
-      # 4. XML فکسر (Namespace Support)
-      - name: "Fix XML Namespaces"
-        run: |
+          
+          # XML فائلز کو اسکین اور فکس کرنا
           find app/src/main/res -name "*.xml" -type f | while read file; do
             if grep -q "app:" "$file" && ! grep -q "xmlns:app" "$file"; then
-              sed -i 's|<menu|<menu xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
-              sed -i 's|<LinearLayout|<LinearLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
-              sed -i 's|<RelativeLayout|<RelativeLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
-              sed -i 's|<androidx.constraintlayout.widget.ConstraintLayout|<androidx.constraintlayout.widget.ConstraintLayout xmlns:app="http://schemas.android.com/apk/res-auto"|g' "$file"
+              sed -i 's/\(<[a-zA-Z]\+\)/\1 xmlns:app="http://schemas.android.com/apk/res-auto"/' "$file"
+            fi
+            if ! grep -q "xmlns:android" "$file"; then
+              sed -i 's/\(<[a-zA-Z]\+\)/\1 xmlns:android="http://schemas.android.com/apk/res/android"/' "$file"
             fi
           done
 
-      # 5. گریڈل 8.5 کنفیگریشن
-      - name: "Generate Build Environment"
+          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
+          echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
+
+      # 4. گریڈل 8.5 اور ماڈرن سیٹنگز
+      - name: "Setup Build Environment"
         run: |
           cat > settings.gradle <<EOF
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -98,47 +106,44 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
+          # اضافی ڈیپنڈینسیز کو محفوظ طریقے سے شامل کرنا
           if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
             echo '${{ github.event.client_payload.dependencies }}' > app/extra_deps.txt
             sed -i '/dependencies {/r app/extra_deps.txt' app/build.gradle
           fi
 
-      # 6. جاوا اور گریڈل 8.5 سیٹ اپ
+      # 5. جاوا اور بلڈ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: "Setup Gradle Wrapper (8.5)"
+      - name: "Setup Gradle 8.5"
         run: gradle wrapper --gradle-version 8.5
 
-      # 7. بلڈ پروسیس
-      - name: "Build APK"
+      - name: "Build & Clean APK"
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
 
-      # 8. آرٹفیکٹ اپ لوڈ
+      # 6. آرٹفیکٹ اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 9. صفائی (Post-Build Cleanup)
-      - name: "Cleanup"
+      # 7. صفائی
+      - name: "Final Cleanup"
         if: always()
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/build/
-          rm -rf .gradle/
-          echo "Build successful and cleaned up."
+        run: rm -rf app/build/ .gradle/
