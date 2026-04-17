@@ -1,324 +1,117 @@
-name: "Ultimate APK Builder (All Features)"
+name: "Ultimate APK Builder (All-In-One)"
 
 on:
   repository_dispatch:
     types: [build-app]
-  push:
-    branches: [ main, master ]
-    paths:
-      - 'MainActivity.java'
-      - 'activity_main.xml'
-      - 'AndroidManifest.xml'
-      - '*Service.java'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: "Create project structure"
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+
+      # 1. پراجیکٹ کا ڈھانچہ تیار کرنا
+      - name: "Initialize Structure"
         run: |
-          mkdir -p app/src/main/java/com/placeholder
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/assets
 
-      # ======================== PUSH TRIGGER ========================
-      - name: "Copy files from repo (push)"
-        if: github.event_name == 'push'
+      # 2. ڈائنامک ریسورسز (Theme, Colors, Strings) سیٹ کرنا
+      - name: "Update UI & Resources"
         run: |
-          [ -f MainActivity.java ] && cp MainActivity.java app/src/main/java/com/placeholder/
-          [ -f activity_main.xml ] && cp activity_main.xml app/src/main/res/layout/
-          [ -f AndroidManifest.xml ] && cp AndroidManifest.xml app/src/main/
-          find . -name "*Service.java" -exec cp {} app/src/main/java/com/placeholder/ \;
-          [ -f styles.xml ] && cp styles.xml app/src/main/res/values/ 2>/dev/null || true
-          [ -f colors.xml ] && cp colors.xml app/src/main/res/values/ 2>/dev/null || true
-          [ -f strings.xml ] && cp strings.xml app/src/main/res/values/ 2>/dev/null || true
-
-      # ======================== DISPATCH TRIGGER ========================
-      - name: "Write MainActivity.java (dispatch)"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          cat > app/src/main/java/com/placeholder/MainActivity.java <<'EOF'
-          ${{ github.event.client_payload.java }}
-          EOF
-
-      - name: "Write activity_main.xml (dispatch)"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          ${{ github.event.client_payload.xml }}
-          EOF
-
-      - name: "Write AndroidManifest.xml (dispatch)"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          ${{ github.event.client_payload.manifest }}
-          EOF
-
-      - name: "Write Service.java (dispatch)"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          cat > app/src/main/java/com/placeholder/CallRecorderService.java <<'EOF'
-          ${{ github.event.client_payload.service }}
-          EOF
-
-      - name: "Write extra resources (dispatch) with default CalcButton style"
-        if: github.event_name == 'repository_dispatch'
-        run: |
-          mkdir -p app/src/main/res/values
-          # Always create a default styles.xml that includes CalcButton (for calculator)
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-              </style>
-              <style name="CalcButton" parent="Widget.AppCompat.Button">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">wrap_content</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:textSize">24sp</item>
-                  <item name="android:textColor">#FFFFFF</item>
-                  <item name="android:background">#2A2A3E</item>
-                  <item name="android:padding">16dp</item>
-              </style>
-          </resources>
-          EOF
-          # Override with user-provided styles if any
-          if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
-          fi
+          # Colors Update
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
             echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           fi
+          
+          # Styles & Themes Update
+          if [ -n "${{ github.event.client_payload.styles }}" ]; then
+            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
+          fi
+
+          # Strings Update
           if [ -n "${{ github.event.client_payload.strings }}" ]; then
             echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
           fi
 
-      - name: "Handle images (dispatch)"
-        if: github.event_name == 'repository_dispatch'
+      # 3. کوڈ اور مینی فیسٹ کی تیاری
+      - name: "Inject Code & Manifest"
+        id: prep
         run: |
-          if [ -n "${{ github.event.client_payload.images_base64 }}" ]; then
-            echo "${{ github.event.client_payload.images_base64 }}" | base64 -d > images.zip
-            unzip -o images.zip -d images_temp/
-            first_image=$(ls images_temp/ | head -1)
-            if [ -n "$first_image" ]; then
-              for dir in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-                cp "images_temp/$first_image" app/src/main/res/$dir/ic_launcher.png
-              done
-            fi
-            for img in images_temp/*; do
-              [ "$img" != "images_temp/$first_image" ] && cp "$img" app/src/main/res/drawable/ 2>/dev/null || true
-            done
-            rm -rf images_temp
-          else
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
+          PKG="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
 
-      # ======================== PREPARE MANIFEST & PACKAGE ========================
-      - name: "Get package and app name from payload or manifest"
-        id: names
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            PKG=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
-            APP_NAME=$(grep -oP 'android:label="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
-          else
-            PKG="${{ github.event.client_payload.package_name }}"
-            APP_NAME="${{ github.event.client_payload.app_name }}"
-          fi
-          [ -z "$PKG" ] && PKG="com.example.app"
-          [ -z "$APP_NAME" ] && APP_NAME="MyApp"
+          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
+          echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
+          
+          # تمام جاوا فائلز میں پیکیج کا نام خودکار ٹھیک کریں
+          find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $PKG;/" {} \;
+          
           echo "PKG=$PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
-          PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT
-          mkdir -p app/src/main/java/$PKG_PATH
-          mv app/src/main/java/com/placeholder/*.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
 
-      - name: "Remove package attribute from AndroidManifest.xml"
+      # 4. ڈائنامک ڈیپنڈینسیز (Libraries) سیٹ کرنا
+      - name: "Configure Build & Dependencies"
         run: |
-          sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
-          sed -i 's/  //g' app/src/main/AndroidManifest.xml
-
-      - name: "Update package declarations in all Java files"
-        run: |
-          PKG="${{ steps.names.outputs.PKG }}"
-          find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/' {} \;
-
-      - name: "Create default service if missing (both push and dispatch)"
-        run: |
-          PKG="${{ steps.names.outputs.PKG }}"
-          PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
-          SERVICE_FILE="app/src/main/java/$PKG_PATH/CallRecorderService.java"
-          if [ ! -s "$SERVICE_FILE" ]; then
-            cat > "$SERVICE_FILE" <<EOF
-          package $PKG;
-
-          import android.app.Service;
-          import android.content.Intent;
-          import android.os.IBinder;
-
-          public class CallRecorderService extends Service {
-              @Override
-              public void onCreate() { super.onCreate(); }
-              @Override
-              public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
-              @Override
-              public IBinder onBind(Intent intent) { return null; }
-          }
-          EOF
+          # ڈیپنڈینسیز کو پے لوڈ سے حاصل کریں یا ڈیفالٹ استعمال کریں
+          DEPS="${{ github.event.client_payload.dependencies }}"
+          if [ -z "$DEPS" ]; then
+            DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           fi
 
-      - name: "Create dummy icon if missing"
-        run: |
-          if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
-
-      # ======================== AUTO-DETECT DEPENDENCIES ========================
-      - name: "Auto-detect dependencies"
-        id: detect
-        run: |
-          PKG_PATH="${{ steps.names.outputs.PKG_PATH }}"
-          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "Looking for Java file at: $JAVA_FILE"
-          if [ ! -f "$JAVA_FILE" ]; then
-            echo "ERROR: MainActivity.java not found at $JAVA_FILE"
-            exit 1
-          fi
-          JAVA_CODE=$(cat "$JAVA_FILE")
-          MANIFEST=$(cat app/src/main/AndroidManifest.xml)
-          DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
-          PLUGINS=""
-
-          if echo "$JAVA_CODE" | grep -qi "FusedLocationProviderClient\|LocationManager"; then
-            DEPS="$DEPS\n    implementation 'com.google.android.gms:play-services-location:21.3.0'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "FirebaseMessaging\|RemoteMessage"; then
-            DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-messaging'"
-            PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "WorkManager\|Worker"; then
-            DEPS="$DEPS\n    implementation 'androidx.work:work-runtime:2.9.1'"
-          fi
-          if echo "$MANIFEST" | grep -qi "CAMERA"; then
-            DEPS="$DEPS\n    implementation 'androidx.camera:camera-camera2:1.3.0'"
-          fi
-          if echo "$MANIFEST" | grep -qi "INTERNET"; then
-            DEPS="$DEPS\n    implementation 'com.squareup.okhttp3:okhttp:4.12.0'"
-            if echo "$JAVA_CODE" | grep -qi "Retrofit"; then
-              DEPS="$DEPS\n    implementation 'com.squareup.retrofit2:retrofit:2.11.0'\n    implementation 'com.squareup.retrofit2:converter-gson:2.11.0'"
-            fi
-          fi
-          if echo "$JAVA_CODE" | grep -qi "RoomDatabase\|@Entity\|@Dao"; then
-            DEPS="$DEPS\n    implementation 'androidx.room:room-runtime:2.6.1'\n    annotationProcessor 'androidx.room:room-compiler:2.6.1'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "FirebaseAuth\|FirebaseDatabase"; then
-            DEPS="$DEPS\n    implementation platform('com.google.firebase:firebase-bom:33.1.0')\n    implementation 'com.google.firebase:firebase-auth'\n    implementation 'com.google.firebase:firebase-database'"
-            PLUGINS="$PLUGINS\napply plugin: 'com.google.gms.google-services'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "BluetoothAdapter\|BluetoothDevice\|BluetoothManager"; then
-            DEPS="$DEPS\n    implementation 'androidx.bluetooth:bluetooth:1.0.0'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "WifiManager\|WifiInfo"; then
-            DEPS="$DEPS\n    implementation 'androidx.wifi:wifi:1.0.0'"
-          fi
-          if echo "$JAVA_CODE" | grep -qi "MediaProjectionManager\|MediaProjection"; then
-            DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
-          fi
-          if echo "$MANIFEST" | grep -qi "RECORD_AUDIO"; then
-            DEPS="$DEPS\n    implementation 'androidx.media:media:1.7.0'"
-          fi
-
-          DEPS=$(echo -e "$DEPS")
-          PLUGINS=$(echo -e "$PLUGINS")
-          echo "DEPS<<EOF" >> $GITHUB_OUTPUT
-          echo "$DEPS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "PLUGINS<<EOF" >> $GITHUB_OUTPUT
-          echo "$PLUGINS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      # ======================== GENERATE GRADLE FILES ========================
-      - name: "Generate app/build.gradle"
-        run: |
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
-              namespace '${{ steps.names.outputs.PKG }}'
+              namespace '${{ steps.prep.outputs.PKG }}'
               compileSdk 34
               defaultConfig {
-                  applicationId '${{ steps.names.outputs.PKG }}'
+                  applicationId '${{ steps.prep.outputs.PKG }}'
                   minSdk 24
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
+              buildFeatures { viewBinding true }
           }
           dependencies {
-          ${{ steps.detect.outputs.DEPS }}
-          }
-          ${{ steps.detect.outputs.PLUGINS }}
-          EOF
-
-      - name: "Generate top-level build.gradle"
-        run: |
-          cat > build.gradle <<EOF
-          plugins {
-              id 'com.android.application' version '8.9.0' apply false
+              $DEPS
           }
           EOF
 
-      - name: "Generate settings.gradle"
-        run: |
-          cat > settings.gradle <<EOF
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = "UltimateApp"
-          include ':app'
-          EOF
-
-      - name: "Generate gradle.properties"
-        run: |
-          cat > gradle.properties <<EOF
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          EOF
-
-      - name: "Setup JDK 17"
+      # 5. بلڈ پروسیس (Gradle)
+      - name: "Setup Java & Build"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: "Setup Android SDK"
-        uses: android-actions/setup-android@v3
+      - name: "Grant Execute Permission"
+        run: chmod +x gradlew
 
-      - name: "Build APK with Gradle"
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: '8.11.1'
-          arguments: :app:assembleDebug
+      - name: "Build APK"
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: "Rename APK"
-        run: mv app/build/outputs/apk/debug/app-debug.apk "${{ steps.names.outputs.APP_NAME }}.apk"
-
-      - name: "Upload APK"
+      # 6. آرٹفیکٹ اپ لوڈ
+      - name: "Upload Result"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.names.outputs.APP_NAME }}
-          path: ${{ steps.names.outputs.APP_NAME }}.apk
+          name: ${{ steps.prep.outputs.APP_NAME }}
+          path: app/build/outputs/apk/debug/*.apk
+
+      # 7. مکمل صفائی (Post-Build Cleanup)
+      - name: "Final Cleaning"
+        if: always()
+        run: |
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/values/*
+          rm -rf app/build/
+          rm -rf .gradle/
+          echo "All temporary files cleaned."
