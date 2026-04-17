@@ -13,7 +13,7 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. بنیادی ڈھانچہ تیار کرنا
+      # 1. فولڈرز کی تیاری
       - name: "Initialize Project Folders"
         run: |
           mkdir -p app/src/main/java/temp_pkg
@@ -22,7 +22,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. پے لوڈ ڈیٹا محفوظ کرنا
+      # 2. ڈیٹا انجیکشن
       - name: "Save Payload Data"
         run: |
           cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
@@ -37,7 +37,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      # 3. جاوا فائل سے پیکیج نیم نکالنا اور فولڈر سیٹ کرنا
+      # 3. پیکیج ڈٹیکشن (خودکار پیکیج تلاش کرنا)
       - name: "Detect Package Name"
         id: detect
         run: |
@@ -54,7 +54,7 @@ jobs:
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
 
-      # 4. تھیم اور ریسورسز اپڈیٹ کرنا
+      # 4. تھیم اپ ڈیٹ
       - name: "Update UI Resources"
         run: |
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
@@ -64,32 +64,44 @@ jobs:
             echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-      # 5. گریڈل فائلز اور انجن (Wrapper) تیار کرنا
+      # 5. گریڈل کنفیگریشن (Plugin Repository Fix)
       - name: "Generate Build Environment"
         run: |
-          # Create settings.gradle
+          # Settings.gradle میں Google Repo شامل کرنا ضروری ہے
           cat > settings.gradle <<EOF
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = "${{ steps.detect.outputs.APP_NAME }}"
           include ':app'
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() } 
+          EOF
+
+          cat > build.gradle <<EOF
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
           }
           EOF
 
-          # Create build.gradle
-          cat > build.gradle <<EOF
-          plugins { id 'com.android.application' version '8.2.0' apply false }
-          EOF
-
-          # Create app/build.gradle
           DEPS="${{ github.event.client_payload.dependencies }}"
           if [ -z "$DEPS" ]; then
             DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
           fi
 
           cat > app/build.gradle <<EOF
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace '${{ steps.detect.outputs.DETECTED_PKG }}'
               compileSdk 34
@@ -106,31 +118,30 @@ jobs:
           }
           EOF
 
-      # 6. جاوا سیٹ اپ اور گریڈل انجن انسٹال کرنا
-      - name: "Setup Java & Gradle Wrapper"
+      # 6. جاوا اور انجن سیٹ اپ
+      - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: "Install Gradle"
-        run: |
-          gradle wrapper --gradle-version 8.2
+      - name: "Setup Gradle Wrapper"
+        run: gradle wrapper --gradle-version 8.2
 
-      # 7. بلڈ شروع کرنا
+      # 7. فائنل بلڈ
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 8. آرٹفیکٹ اپ لوڈ کرنا
+      # 8. اپ لوڈ آرٹفیکٹ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.detect.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 9. مکمل صفائی
+      # 9. صفائی
       - name: "Post-Build Cleanup"
         if: always()
         run: |
@@ -138,4 +149,4 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Cleanup done."
+          echo "Done."
