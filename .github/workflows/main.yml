@@ -13,20 +13,20 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول کی مکمل صفائی
+      # 1. ماحول کی مکمل اور گہری صفائی
       - name: "Environment Reset"
         run: |
-          rm -rf app/src/main/res/*
-          rm -rf app/src/main/java/*
-          mkdir -p app/src/main/java/temp_pkg
+          rm -rf app
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
 
-      # 2. ڈیٹا انجیکشن اور آئیکن سیٹ اپ
+      # 2. ڈیٹا انجیکشن اور آئیکن کی پختہ لاجک
       - name: "Inject Data and Setup Icon"
         id: sync
         env:
@@ -34,37 +34,36 @@ jobs:
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
         run: |
-          # کوڈ محفوظ کرنا
-          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
+          # کوڈ فائلز بنانا
+          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_main.java
           printf "%s" "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           
-          # پیکیج نیم ڈٹیکشن
-          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
+          # پیکیج نیم کی شناخت
+          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_main.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
-          # آئیکن کی تیاری (اگر امیجز زپ میں آ رہی ہیں)
-          # ہم ایک ڈیفالٹ آئیکن بھی بنا رہے ہیں تاکہ اگر کسٹم آئیکن نہ ملے تو بلڈ فیل نہ ہو
+          # بیک اپ آئیکن (اگر کسٹم آئیکن نہ ملے)
           echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#0000FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>' > app/src/main/res/drawable/ic_launcher_background.xml
           
-          # اگر صارف نے امیج بھیجی ہے تو اسے آئیکن بنانا
+          # آئیکن سیٹ اپ - اب ہم پہلے چیک کریں گے کہ فائل موجود ہے یا نہیں
           if [ -f "icon.png" ]; then
             cp icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           else
+            # اگر امیج نہیں ہے تو کم از کم XML آئیکن ضرور رکھیں تاکہ بلڈ نہ رکے
             cp app/src/main/res/drawable/ic_launcher_background.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
           fi
 
-          # مینی فیسٹ فکسر (محفوظ طریقے سے - 'sed' کا متبادل)
+          # مینی فیسٹ کی تیاری (بغیر کسی ایرر کے)
           if [ -n "$MANIFEST_XML" ]; then
             printf "%s" "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-            # پیکیج نیم کو محفوظ طریقے سے بدلنا
+            # پیکیج نیم بدلنے کے لیے پائتھن کا استعمال (محفوظ طریقہ)
             python3 -c "import sys; data = open('app/src/main/AndroidManifest.xml').read(); print(data.replace('PACKAGE_NAME_PLACEHOLDER', '$RAW_PKG'))" > temp.xml && mv temp.xml app/src/main/AndroidManifest.xml
           else
             echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro' android:theme='@style/Theme.SystemPro' android:icon='@mipmap/ic_launcher'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
           fi
 
-          # اسٹائلز کی اصلاح (بٹن اسٹائلز وغیرہ)
+          # اسٹائلز اور تھیم
           cat > app/src/main/res/values/styles.xml <<EOF
           <resources>
               <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar">
@@ -72,22 +71,22 @@ jobs:
                   <item name="colorAccent">#03DAC5</item>
               </style>
               <style name="CalcButton" parent="Widget.AppCompat.Button">
-                  <item name="android:layout_margin">4dp</item>
+                  <item name="android:layout_margin">2dp</item>
                   <item name="android:background">#311B92</item>
                   <item name="android:textColor">#FFFFFF</item>
               </style>
           </resources>
           EOF
 
-          # فولڈر اسٹرکچر سنک
+          # جاوا پیکیج اسٹرکچر بنانا
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
-          mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
+          mv app/src/main/java/temp_main.java "app/src/main/java/$PKG_PATH/MainActivity.java"
           
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
 
-      # 3. گریڈل اور بلڈ انجن
+      # 3. بلڈ انجن کی تیاری
       - name: "Setup Build Engine"
         uses: actions/setup-java@v4
         with:
@@ -130,7 +129,7 @@ jobs:
           }
           EOF
 
-      # 4. فائنل بلڈ
+      # 4. فائنل اسمبلی
       - name: "Assemble APK"
         run: |
           gradle wrapper --gradle-version 8.5
