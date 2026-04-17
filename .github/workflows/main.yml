@@ -13,7 +13,7 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. پراجیکٹ کا بنیادی ڈھانچہ (Project Structure)
+      # 1. فولڈر اسٹرکچر تیار کرنا
       - name: "Initialize Project Folders"
         run: |
           mkdir -p app/src/main/java
@@ -22,51 +22,49 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. کوڈ اور ریسورسز کو محفوظ کرنا (Safe injection using EOF)
+      # 2. پے لوڈ ڈیٹا کو فائلز میں محفوظ کرنا
       - name: "Inject Payload Data"
         id: prep
         run: |
-          # پیکیج اور ایپ کا نام سیٹ کریں
           PKG="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
 
-          # محفوظ طریقے سے فائلز لکھنا (تاکہ XML ٹیگز ایرر نہ دیں)
+          # Java File کو محفوظ کرنا
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
 
+          # XML Layout کو محفوظ کرنا
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
+          # Manifest کو محفوظ کرنا
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # UI تھیم اور کلرز (اگر پے لوڈ میں موجود ہوں)
+          # Colors اور Styles (صرف تب لکھے گا جب ڈیٹا موجود ہو)
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
-            cat <<'EOF' > app/src/main/res/values/colors.xml
-            ${{ github.event.client_payload.colors }}
-          EOF
+            echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           fi
 
           if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            cat <<'EOF' > app/src/main/res/values/styles.xml
-            ${{ github.event.client_payload.styles }}
-          EOF
+            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-          # پیکیج کا نام تمام جاوا فائلز میں خودکار ٹھیک کریں
+          # تمام جاوا فائلز میں پیکیج کا نام آٹو اپڈیٹ کرنا
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $PKG;/" {} \;
           
           echo "PKG=$PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
 
-      # 3. گریڈل اور ڈیپنڈینسیز کی ترتیب (Build Configuration)
+      # 3. گریڈل فائلز تیار کرنا (Dependencies کے ساتھ)
       - name: "Generate Build Files"
         run: |
+          # ڈیپنڈینسیز اگر پے لوڈ میں نہ ہوں تو ڈیفالٹ استعمال ہوں گی
           DEPS="${{ github.event.client_payload.dependencies }}"
           if [ -z "$DEPS" ]; then
             DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
@@ -104,7 +102,7 @@ jobs:
           }
           EOF
 
-      # 4. اینڈرائیڈ ایس ڈی کے اور جاوا سیٹ اپ
+      # 4. جاوا سیٹ اپ (JDK 17)
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
@@ -117,21 +115,20 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 6. آرٹفیکٹ اپ لوڈ (Download Link)
+      # 6. آرٹفیکٹ اپ لوڈ (APK Download)
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prep.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 7. صفائی کا عمل (Cleaning Process)
+      # 7. صفائی (Post-Build Cleanup)
       - name: "Post-Build Cleanup"
         if: always()
         run: |
-          echo "Cleaning up all build files and sensitive code..."
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/values/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Cleanup finished."
+          echo "Cleanup finished successfully."
