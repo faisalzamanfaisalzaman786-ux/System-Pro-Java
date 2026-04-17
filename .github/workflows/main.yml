@@ -13,7 +13,7 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول صاف کریں
+      # 1. ماحول کی مکمل صفائی اور تیاری
       - name: "Full System Cleanup"
         run: |
           rm -rf app/src/main/res/*
@@ -22,34 +22,37 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن (Safe Writing without EOF issues)
-      - name: "Inject Payload"
+      # 2. پے لوڈ انجیکشن (Safe & Secure Writing)
+      - name: "Inject Payload Data"
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
           MENU_XML: ${{ github.event.client_payload.menu }}
+          APP_NAME: ${{ github.event.client_payload.app_name || 'SystemPro' }}
         run: |
-          # EOF کے بجائے براہ راست پائپ استعمال کریں تاکہ سینٹیکس ایرر نہ آئے
-          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
-          printf "%s" "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          # فائلوں کو محفوظ طریقے سے لکھنا
+          echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
+          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           
           if [ -n "$MANIFEST_XML" ]; then
-            printf "%s" "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
           else
             echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="App"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
           fi
           
           if [ -n "$MENU_XML" ]; then
-            printf "%s" "$MENU_XML" > app/src/main/res/menu/main_menu.xml
+            echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml
           fi
 
-      # 3. پیکیج سنک (Robust sed handling)
-      - name: "Package & Resource Auto-Fix"
+      # 3. انٹیلیجنٹ پیکیج سنک (Intelligent Sync)
+      - name: "Detect and Sync Package"
         id: sync
         run: |
-          # پیکیج نیم نکالنا
+          # جاوا فائل سے پیکیج نیم نکالنا
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
@@ -58,20 +61,17 @@ jobs:
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
           
-          # XML فکسنگ: سلیش کے بجائے پائپ (|) استعمال کریں تاکہ sed ایرر نہ دے
+          # XML فائلز میں نیم اسپیس چیک اور فکس کرنا
           find app/src/main/res -name "*.xml" -type f | while read file; do
             if grep -q "app:" "$file" && ! grep -q "xmlns:app" "$file"; then
               sed -i 's|\(<[a-zA-Z]\+\)|\1 xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
-            fi
-            if ! grep -q "xmlns:android" "$file"; then
-              sed -i 's|\(<[a-zA-Z]\+\)|\1 xmlns:android="http://schemas.android.com/apk/res/android"|' "$file"
             fi
           done
 
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
 
-      # 4. گریڈل 8.5 ماحول
+      # 4. گریڈل 8.5 اور ماڈرن اینڈرائیڈ کنفیگریشن
       - name: "Setup Build Environment"
         run: |
           cat > settings.gradle <<EOF
@@ -100,31 +100,40 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildFeatures { viewBinding true }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      # 5. جاوا اور بلڈ
+      # 5. جاوا 17 اور گریڈل انجن سیٹ اپ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: "Setup Gradle 8.5"
         run: gradle wrapper --gradle-version 8.5
 
-      - name: "Build & Clean APK"
+      # 6. بلڈ پروسیس (With Clean & Stacktrace)
+      - name: "Build APK"
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
 
-      # 6. اپ لوڈ
+      # 7. آرٹفیکٹ اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
+
+      # 8. حتمی صفائی
+      - name: "Post-Build Cleanup"
+        if: always()
+        run: rm -rf app/build/ .gradle/
