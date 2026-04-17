@@ -22,7 +22,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن (Safe Writing)
+      # 2. ڈیٹا انجیکشن
       - name: "Save Payload Data"
         run: |
           cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
@@ -64,7 +64,7 @@ jobs:
             echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-      # 5. گریڈل کنفیگریشن (Fixing the \n dependency error)
+      # 5. گریڈل کنفیگریشن (Fixed Dependency Logic)
       - name: "Generate Build Environment"
         run: |
           cat > settings.gradle <<EOF
@@ -81,14 +81,7 @@ jobs:
           plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
 
-          # ڈیپنڈینسیز کو ایک عارضی فائل میں محفوظ کریں تاکہ گریڈل ایرر نہ دے
-          if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
-            echo "${{ github.event.client_payload.dependencies }}" > app/deps.gradle
-          else
-            echo "implementation 'androidx.appcompat:appcompat:1.6.1'" > app/deps.gradle
-            echo "implementation 'com.google.android.material:material:1.11.0'" >> app/deps.gradle
-          fi
-
+          # پے لوڈ سے ڈیپنڈینسیز نکال کر براہ راست فائل میں لکھنا
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
@@ -103,9 +96,16 @@ jobs:
               }
           }
           dependencies {
-              apply from: 'deps.gradle'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
+
+          # اگر پے لوڈ میں ڈیپنڈینسیز ہیں، تو انہیں فائل کے آخر میں شامل کریں
+          if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
+            # 'dependencies {' والے بلاک کے اندر ڈیٹا ڈالنے کے لیے 'sed' کا استعمال
+            sed -i '/dependencies {/a ${{ github.event.client_payload.dependencies }}' app/build.gradle
+          fi
 
       # 6. جاوا سیٹ اپ اور انجن
       - name: "Setup Java"
@@ -138,4 +138,4 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Success."
+          echo "Process finished."
