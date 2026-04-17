@@ -13,8 +13,8 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول کو مکمل ری-سیٹ کریں
-      - name: "Clean Workspace"
+      # 1. مکمل صفائی اور فولڈر کی تیاری
+      - name: "Environment Reset"
         run: |
           rm -rf app/src/main/res/*
           rm -rf app/src/main/java/*
@@ -22,71 +22,59 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/drawable
 
-      # 2. ڈیٹا انجیکشن اور پیکیج سنکرونائزیشن
-      - name: "Synchronize Project Data"
+      # 2. ڈیٹا انجیکشن اور مسنگ ریسورس فکسر
+      - name: "Inject and Auto-Generate Resources"
         id: sync
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
-          MENU_XML: ${{ github.event.client_payload.menu }}
         run: |
-          # فائلوں کو لکھنا
+          # کوڈ سیو کرنا
           echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           
-          # پیکیج نیم نکالنا (Intelligent Detection)
+          # پیکیج ڈٹیکشن
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
-          # پیکیج کے مطابق فولڈر بنانا
+          # مسنگ آئیکن کا حل (آئیکن کی جگہ ایک خالی Drawable بنانا تاکہ AAPT فیل نہ ہو)
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF000000" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>' > app/src/main/res/drawable/ic_launcher_background.xml
+          # مینی فیسٹ میں اگر آئیکن مسنگ ہے تو اسے ڈراایبل سے بدل دیں یا فولڈر بنا دیں
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          cp app/src/main/res/drawable/ic_launcher_background.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
+
+          # مینی فیسٹ کی اصلاح
+          if [ -n "$MANIFEST_XML" ]; then
+            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+            # مینی فیسٹ سے آئیکن کے ریفرنس کو زبردستی ٹھیک کرنا اگر وہ ایرر دے رہا ہو
+            sed -i 's|@mipmap/ic_launcher|@drawable/ic_launcher_background|g' app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro' android:icon='@drawable/ic_launcher_background'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          # پیکیج سنک
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
-          rm -rf app/src/main/java/temp_pkg
-
-          # مینی فیسٹ کو پیکیج کے ساتھ سنک کرنا
-          if [ -n "$MANIFEST_XML" ]; then
-            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-            sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
-          else
-            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
-          fi
-
-          if [ -n "$MENU_XML" ]; then echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml; fi
-
+          
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
 
-      # 3. XML آٹو فکسر (Namespace Repair)
-      - name: "Repair XML Files"
-        run: |
-          find app/src/main/res -name "*.xml" -type f | while read file; do
-            if grep -q "app:" "$file" && ! grep -q "xmlns:app" "$file"; then
-              sed -i 's|\(<[a-zA-Z]\+\)|\1 xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
-            fi
-          done
-
-      # 4. جاوا 17 اور بلڈ انجن کی تیاری
-      - name: "Setup Java 17"
+      # 3. گریڈل 8.5 اور جاوا 17
+      - name: "Build Engine Setup"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      # 5. گریڈل فائلز کی خودکار تیاری (8.5 Compatible)
       - name: "Generate Build Config"
         run: |
           cat > settings.gradle <<EOF
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() } 
-          }
-          rootProject.name = "${{ steps.sync.outputs.APP_NAME }}"
           include ':app'
           EOF
 
@@ -103,10 +91,7 @@ jobs:
                   applicationId '${{ steps.sync.outputs.PKG }}'
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
               }
-              buildFeatures { viewBinding true }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -114,17 +99,15 @@ jobs:
           }
           EOF
 
-      # 6. کلین بلڈ (With Memory Protection)
-      - name: "Build APK"
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -Dorg.gradle.parallel=false"
+      # 4. بلڈ پروسیس
+      - name: "Assemble APK"
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon
 
-      # 7. فائنل اپ لوڈ
-      - name: "Upload Result"
+      # 5. اپ لوڈ
+      - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
