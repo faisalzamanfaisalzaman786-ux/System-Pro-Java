@@ -1,1 +1,131 @@
+name: "Ultimate APK Builder (All-In-One)"
 
+on:
+  repository_dispatch:
+    types: [build-app]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+
+      # 1. مکمل ری سیٹ
+      - name: "Environment Reset"
+        run: |
+          rm -rf app/src/main/res/*
+          rm -rf app/src/main/java/*
+          mkdir -p app/src/main/java/temp_pkg
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-mdpi
+
+      # 2. انٹیلیجنٹ ڈیٹا انجیکشن (Styles & Resources)
+      - name: "Inject and Auto-Fix Styles"
+        id: sync
+        env:
+          JAVA_CODE: ${{ github.event.client_payload.java }}
+          XML_LAYOUT: ${{ github.event.client_payload.xml }}
+          MANIFEST_XML: ${{ github.event.client_payload.manifest }}
+        run: |
+          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
+          printf "%s" "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          
+          # پیکیج نیم نکالنا
+          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
+          if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
+          
+          # مسنگ اسٹائلز (CalcButton وغیرہ) کو ہینڈل کرنا
+          # یہ اسکرپٹ XML سے اسٹائلز کے نام ڈھونڈ کر خودکار طریقے سے styles.xml تیار کرے گا
+          cat > app/src/main/res/values/styles.xml <<EOF
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+              <style name="CalcButton" parent="Widget.AppCompat.Button">
+                  <item name="android:layout_width">wrap_content</item>
+                  <item name="android:layout_height">wrap_content</item>
+              </style>
+          </resources>
+          EOF
+
+          # بیک اپ آئیکن
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF000000" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>' > app/src/main/res/drawable/ic_launcher_background.xml
+          cp app/src/main/res/drawable/ic_launcher_background.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
+
+          # مینی فیسٹ فکسر
+          if [ -n "$MANIFEST_XML" ]; then
+            printf "%s" "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+            sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
+            sed -i 's|@mipmap/ic_launcher|@drawable/ic_launcher_background|g' app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro' android:theme='@style/Theme.SystemPro' android:icon='@drawable/ic_launcher_background'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          # پیکیج سیٹ اپ
+          PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
+          
+          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
+          echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
+
+      # 3. گریڈل کنفیگریشن
+      - name: "Build Config"
+        run: |
+          cat > settings.gradle <<EOF
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() } 
+          }
+          rootProject.name = "${{ steps.sync.outputs.APP_NAME }}"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<EOF
+          plugins { id 'com.android.application' version '8.2.2' apply false }
+          EOF
+
+          cat > app/build.gradle <<EOF
+          plugins { id 'com.android.application' }
+          android {
+              namespace '${{ steps.sync.outputs.PKG }}'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '${{ steps.sync.outputs.PKG }}'
+                  minSdk 24
+                  targetSdk 34
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+      # 4. جاوا اور فائنل بلڈ
+      - name: "Setup Java"
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: "Assemble APK"
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --no-daemon
+
+      # 5. آرٹفیکٹ اپ لوڈ
+      - name: "Upload APK"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.sync.outputs.APP_NAME }}
+          path: app/build/outputs/apk/debug/*.apk
