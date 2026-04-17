@@ -22,7 +22,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن
+      # 2. ڈیٹا انجیکشن (Safe Writing)
       - name: "Save Payload Data"
         run: |
           cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
@@ -37,7 +37,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      # 3. پیکیج ڈٹیکشن (خودکار پیکیج تلاش کرنا)
+      # 3. پیکیج ڈٹیکشن
       - name: "Detect Package Name"
         id: detect
         run: |
@@ -54,7 +54,7 @@ jobs:
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
 
-      # 4. تھیم اپ ڈیٹ
+      # 4. تھیم اور ریسورسز
       - name: "Update UI Resources"
         run: |
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
@@ -64,44 +64,33 @@ jobs:
             echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-      # 5. گریڈل کنفیگریشن (Plugin Repository Fix)
+      # 5. گریڈل کنفیگریشن (Fixing the \n dependency error)
       - name: "Generate Build Environment"
         run: |
-          # Settings.gradle میں Google Repo شامل کرنا ضروری ہے
           cat > settings.gradle <<EOF
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() } 
           }
           rootProject.name = "${{ steps.detect.outputs.APP_NAME }}"
           include ':app'
           EOF
 
           cat > build.gradle <<EOF
-          plugins {
-              id 'com.android.application' version '8.2.0' apply false
-          }
+          plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
 
-          DEPS="${{ github.event.client_payload.dependencies }}"
-          if [ -z "$DEPS" ]; then
-            DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
+          # ڈیپنڈینسیز کو ایک عارضی فائل میں محفوظ کریں تاکہ گریڈل ایرر نہ دے
+          if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
+            echo "${{ github.event.client_payload.dependencies }}" > app/deps.gradle
+          else
+            echo "implementation 'androidx.appcompat:appcompat:1.6.1'" > app/deps.gradle
+            echo "implementation 'com.google.android.material:material:1.11.0'" >> app/deps.gradle
           fi
 
           cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '${{ steps.detect.outputs.DETECTED_PKG }}'
               compileSdk 34
@@ -114,11 +103,11 @@ jobs:
               }
           }
           dependencies {
-              $DEPS
+              apply from: 'deps.gradle'
           }
           EOF
 
-      # 6. جاوا اور انجن سیٹ اپ
+      # 6. جاوا سیٹ اپ اور انجن
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
@@ -128,13 +117,13 @@ jobs:
       - name: "Setup Gradle Wrapper"
         run: gradle wrapper --gradle-version 8.2
 
-      # 7. فائنل بلڈ
+      # 7. بلڈ
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 8. اپ لوڈ آرٹفیکٹ
+      # 8. اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
@@ -149,4 +138,4 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Done."
+          echo "Success."
