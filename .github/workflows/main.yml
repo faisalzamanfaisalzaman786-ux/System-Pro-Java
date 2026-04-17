@@ -13,7 +13,7 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. بنیادی ڈھانچہ
+      # 1. بنیادی ڈھانچہ (Folders)
       - name: "Initialize Folders"
         run: |
           mkdir -p app/src/main/java/temp_pkg
@@ -23,7 +23,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن
+      # 2. ڈیٹا انجیکشن (Safe Env Injection)
       - name: "Save Payload Data"
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
@@ -36,18 +36,18 @@ jobs:
           echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
           if [ -n "$MENU_XML" ]; then echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml; fi
 
-      # 3. پیکیج ڈٹیکشن اور مکمل ہم آہنگی (Full Sync)
+      # 3. پیکیج ڈٹیکشن اور ہم آہنگی (Sync Logic)
       - name: "Detect and Sync Package"
         id: sync
         run: |
-          # جاوا فائل سے پیکیج نکالیں
+          # Java سے پیکیج نکالیں
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           
-          # مینی فیسٹ میں پیکیج نیم کو زبردستی اپ ڈیٹ کرنا
+          # Manifest میں پیکیج ٹھیک کریں
           sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
           
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
@@ -57,7 +57,7 @@ jobs:
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
 
-      # 4. XML مینیو اور لے آؤٹ فکسر
+      # 4. XML فکسر (Namespace Support)
       - name: "Fix XML Namespaces"
         run: |
           find app/src/main/res -name "*.xml" -type f | while read file; do
@@ -69,7 +69,7 @@ jobs:
             fi
           done
 
-      # 5. گریڈل اور ڈیپنڈینسیز سیٹ اپ
+      # 5. گریڈل 8.5 کنفیگریشن
       - name: "Generate Build Environment"
         run: |
           cat > settings.gradle <<EOF
@@ -83,7 +83,7 @@ jobs:
           EOF
 
           cat > build.gradle <<EOF
-          plugins { id 'com.android.application' version '8.2.0' apply false }
+          plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
 
           cat > app/build.gradle <<EOF
@@ -110,29 +110,30 @@ jobs:
             sed -i '/dependencies {/r app/extra_deps.txt' app/build.gradle
           fi
 
-      # 6. جاوا اور بلڈ انجن
+      # 6. جاوا اور گریڈل 8.5 سیٹ اپ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: "Setup Gradle Wrapper"
+      - name: "Setup Gradle Wrapper (8.5)"
         run: gradle wrapper --gradle-version 8.5
 
+      # 7. بلڈ پروسیس
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 7. آرٹفیکٹ اپ لوڈ
+      # 8. آرٹفیکٹ اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 8. صفائی
+      # 9. صفائی (Post-Build Cleanup)
       - name: "Cleanup"
         if: always()
         run: |
@@ -140,3 +141,4 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
           rm -rf .gradle/
+          echo "Build successful and cleaned up."
