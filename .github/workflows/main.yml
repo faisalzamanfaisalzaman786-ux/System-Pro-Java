@@ -13,16 +13,16 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. بنیادی ڈھانچہ
+      # 1. بنیادی ڈھانچہ تیار کرنا
       - name: "Initialize Project Folders"
         run: |
           mkdir -p app/src/main/java/temp_pkg
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values/
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. پے لوڈ ڈیٹا کو عارضی طور پر محفوظ کرنا
+      # 2. پے لوڈ ڈیٹا محفوظ کرنا
       - name: "Save Payload Data"
         run: |
           cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
@@ -37,29 +37,24 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-      # 3. جاوا فائل سے پیکیج نیم نکالنا (The Logic)
-      - name: "Detect Package Name from Java"
+      # 3. جاوا فائل سے پیکیج نیم نکالنا اور فولڈر سیٹ کرنا
+      - name: "Detect Package Name"
         id: detect
         run: |
-          # Java فائل کی پہلی چند لائنوں سے پیکیج کا نام تلاش کرنا
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
-          
-          # اگر نام نہ ملے تو ڈیفالٹ سیٹ کرنا
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           
           echo "DETECTED_PKG=$RAW_PKG" >> $GITHUB_OUTPUT
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT
           echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
           
-          # فائلز کو صحیح ڈائریکٹری اسٹرکچر میں منتقل کرنا
           mkdir -p "app/src/main/java/$PKG_PATH"
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
 
-      # 4. تھیم اور ریسورسز کو اپڈیٹ کرنا
+      # 4. تھیم اور ریسورسز اپڈیٹ کرنا
       - name: "Update UI Resources"
         run: |
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
@@ -69,25 +64,29 @@ jobs:
             echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-      # 5. گریڈل فائلز تیار کرنا
-      - name: "Generate Build Files"
+      # 5. گریڈل فائلز اور انجن (Wrapper) تیار کرنا
+      - name: "Generate Build Environment"
         run: |
-          DEPS="${{ github.event.client_payload.dependencies }}"
-          if [ -z "$DEPS" ]; then
-            DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
-          fi
-
-          cat > build.gradle <<EOF
-          plugins { id 'com.android.application' version '8.2.0' apply false }
-          EOF
-
+          # Create settings.gradle
           cat > settings.gradle <<EOF
+          rootProject.name = "${{ steps.detect.outputs.APP_NAME }}"
           include ':app'
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() } 
           }
           EOF
+
+          # Create build.gradle
+          cat > build.gradle <<EOF
+          plugins { id 'com.android.application' version '8.2.0' apply false }
+          EOF
+
+          # Create app/build.gradle
+          DEPS="${{ github.event.client_payload.dependencies }}"
+          if [ -z "$DEPS" ]; then
+            DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
+          fi
 
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
@@ -101,39 +100,42 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildFeatures { viewBinding true }
           }
           dependencies {
               $DEPS
           }
           EOF
 
-      # 6. جاوا سیٹ اپ اور بلڈ
-      - name: "Setup Java"
+      # 6. جاوا سیٹ اپ اور گریڈل انجن انسٹال کرنا
+      - name: "Setup Java & Gradle Wrapper"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: "Install Gradle"
+        run: |
+          gradle wrapper --gradle-version 8.2
+
+      # 7. بلڈ شروع کرنا
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 7. آرٹفیکٹ اپ لوڈ
+      # 8. آرٹفیکٹ اپ لوڈ کرنا
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.detect.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 8. مکمل صفائی
+      # 9. مکمل صفائی
       - name: "Post-Build Cleanup"
         if: always()
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/values/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Everything cleaned up!"
+          echo "Cleanup done."
