@@ -13,58 +13,65 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. فولڈر اسٹرکچر تیار کرنا
+      # 1. بنیادی ڈھانچہ
       - name: "Initialize Project Folders"
         run: |
-          mkdir -p app/src/main/java
+          mkdir -p app/src/main/java/temp_pkg
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/values/
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. پے لوڈ ڈیٹا کو فائلز میں محفوظ کرنا
-      - name: "Inject Payload Data"
-        id: prep
+      # 2. پے لوڈ ڈیٹا کو عارضی طور پر محفوظ کرنا
+      - name: "Save Payload Data"
         run: |
-          PKG="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
-          PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-
-          # Java File کو محفوظ کرنا
-          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
 
-          # XML Layout کو محفوظ کرنا
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # Manifest کو محفوظ کرنا
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # Colors اور Styles (صرف تب لکھے گا جب ڈیٹا موجود ہو)
+      # 3. جاوا فائل سے پیکیج نیم نکالنا (The Logic)
+      - name: "Detect Package Name from Java"
+        id: detect
+        run: |
+          # Java فائل کی پہلی چند لائنوں سے پیکیج کا نام تلاش کرنا
+          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
+          
+          # اگر نام نہ ملے تو ڈیفالٹ سیٹ کرنا
+          if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
+          
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
+          PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
+          
+          echo "DETECTED_PKG=$RAW_PKG" >> $GITHUB_OUTPUT
+          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
+          
+          # فائلز کو صحیح ڈائریکٹری اسٹرکچر میں منتقل کرنا
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
+          rm -rf app/src/main/java/temp_pkg
+
+      # 4. تھیم اور ریسورسز کو اپڈیٹ کرنا
+      - name: "Update UI Resources"
+        run: |
           if [ -n "${{ github.event.client_payload.colors }}" ]; then
             echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           fi
-
           if [ -n "${{ github.event.client_payload.styles }}" ]; then
             echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
           fi
 
-          # تمام جاوا فائلز میں پیکیج کا نام آٹو اپڈیٹ کرنا
-          find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $PKG;/" {} \;
-          
-          echo "PKG=$PKG" >> $GITHUB_OUTPUT
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
-
-      # 3. گریڈل فائلز تیار کرنا (Dependencies کے ساتھ)
+      # 5. گریڈل فائلز تیار کرنا
       - name: "Generate Build Files"
         run: |
-          # ڈیپنڈینسیز اگر پے لوڈ میں نہ ہوں تو ڈیفالٹ استعمال ہوں گی
           DEPS="${{ github.event.client_payload.dependencies }}"
           if [ -z "$DEPS" ]; then
             DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.11.0'"
@@ -75,21 +82,20 @@ jobs:
           EOF
 
           cat > settings.gradle <<EOF
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          include ':app'
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() } 
           }
-          include ':app'
           EOF
 
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
-              namespace '${{ steps.prep.outputs.PKG }}'
+              namespace '${{ steps.detect.outputs.DETECTED_PKG }}'
               compileSdk 34
               defaultConfig {
-                  applicationId '${{ steps.prep.outputs.PKG }}'
+                  applicationId '${{ steps.detect.outputs.DETECTED_PKG }}'
                   minSdk 24
                   targetSdk 34
                   versionCode 1
@@ -102,27 +108,26 @@ jobs:
           }
           EOF
 
-      # 4. جاوا سیٹ اپ (JDK 17)
+      # 6. جاوا سیٹ اپ اور بلڈ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 5. بلڈ پروسیس
       - name: "Build APK"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 6. آرٹفیکٹ اپ لوڈ (APK Download)
+      # 7. آرٹفیکٹ اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.prep.outputs.APP_NAME }}
+          name: ${{ steps.detect.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
 
-      # 7. صفائی (Post-Build Cleanup)
+      # 8. مکمل صفائی
       - name: "Post-Build Cleanup"
         if: always()
         run: |
@@ -131,4 +136,4 @@ jobs:
           rm -rf app/src/main/res/values/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Cleanup finished successfully."
+          echo "Everything cleaned up!"
