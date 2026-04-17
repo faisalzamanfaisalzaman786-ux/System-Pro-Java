@@ -22,22 +22,19 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/assets
 
-      # 2. ڈیٹا انجیکشن
+      # 2. ڈیٹا انجیکشن (Safe Injection using Environment Variables)
       - name: "Save Payload Data"
+        env:
+          JAVA_CODE: ${{ github.event.client_payload.java }}
+          XML_LAYOUT: ${{ github.event.client_payload.xml }}
+          MANIFEST_XML: ${{ github.event.client_payload.manifest }}
         run: |
-          cat <<'EOF' > app/src/main/java/temp_pkg/MainActivity.java
-          ${{ github.event.client_payload.java }}
-          EOF
+          # پے لوڈ کو محفوظ طریقے سے فائلوں میں لکھنا
+          echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
+          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
 
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
-          EOF
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
-          ${{ github.event.client_payload.manifest }}
-          EOF
-
-      # 3. پیکیج ڈٹیکشن
+      # 3. پیکیج ڈٹیکشن اور فولڈر ترتیب
       - name: "Detect Package Name"
         id: detect
         run: |
@@ -56,15 +53,18 @@ jobs:
 
       # 4. تھیم اور ریسورسز
       - name: "Update UI Resources"
+        env:
+          COLORS_XML: ${{ github.event.client_payload.colors }}
+          STYLES_XML: ${{ github.event.client_payload.styles }}
         run: |
-          if [ -n "${{ github.event.client_payload.colors }}" ]; then
-            echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
+          if [ -n "$COLORS_XML" ]; then
+            echo "$COLORS_XML" > app/src/main/res/values/colors.xml
           fi
-          if [ -n "${{ github.event.client_payload.styles }}" ]; then
-            echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
+          if [ -n "$STYLES_XML" ]; then
+            echo "$STYLES_XML" > app/src/main/res/values/styles.xml
           fi
 
-      # 5. گریڈل کنفیگریشن (Fixed Dependency Logic)
+      # 5. گریڈل کنفیگریشن
       - name: "Generate Build Environment"
         run: |
           cat > settings.gradle <<EOF
@@ -81,7 +81,6 @@ jobs:
           plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
 
-          # پے لوڈ سے ڈیپنڈینسیز نکال کر براہ راست فائل میں لکھنا
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
@@ -101,13 +100,13 @@ jobs:
           }
           EOF
 
-          # اگر پے لوڈ میں ڈیپنڈینسیز ہیں، تو انہیں فائل کے آخر میں شامل کریں
+          # اضافی ڈیپنڈینسیز اگر موجود ہوں
           if [ -n "${{ github.event.client_payload.dependencies }}" ]; then
-            # 'dependencies {' والے بلاک کے اندر ڈیٹا ڈالنے کے لیے 'sed' کا استعمال
-            sed -i '/dependencies {/a ${{ github.event.client_payload.dependencies }}' app/build.gradle
+            echo '${{ github.event.client_payload.dependencies }}' >> app/dependencies_temp.txt
+            sed -i '/dependencies {/r app/dependencies_temp.txt' app/build.gradle
           fi
 
-      # 6. جاوا سیٹ اپ اور انجن
+      # 6. جاوا اور انجن سیٹ اپ
       - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
@@ -138,4 +137,4 @@ jobs:
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
           rm -rf .gradle/
-          echo "Process finished."
+          echo "Cleanup Complete."
