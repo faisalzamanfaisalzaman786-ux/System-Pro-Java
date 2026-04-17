@@ -13,8 +13,8 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول کی صفائی
-      - name: "Full System Cleanup"
+      # 1. ماحول کو مکمل ری-سیٹ کریں
+      - name: "Clean Workspace"
         run: |
           rm -rf app/src/main/res/*
           rm -rf app/src/main/java/*
@@ -22,59 +22,63 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/menu
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-      # 2. پے لوڈ انجیکشن (Direct Pipe Injection)
-      - name: "Inject Payload Data"
+      # 2. ڈیٹا انجیکشن اور پیکیج سنکرونائزیشن
+      - name: "Synchronize Project Data"
+        id: sync
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_LAYOUT: ${{ github.event.client_payload.xml }}
           MANIFEST_XML: ${{ github.event.client_payload.manifest }}
           MENU_XML: ${{ github.event.client_payload.menu }}
         run: |
+          # فائلوں کو لکھنا
           echo "$JAVA_CODE" > app/src/main/java/temp_pkg/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           
-          if [ -n "$MANIFEST_XML" ]; then
-            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.app"><application android:label="SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-          fi
-          
-          if [ -n "$MENU_XML" ]; then
-            echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml
-          fi
-
-      # 3. پیکیج سنک اور آٹو نیم اسپیس
-      - name: "Detect and Sync Package"
-        id: sync
-        run: |
+          # پیکیج نیم نکالنا (Intelligent Detection)
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_pkg/MainActivity.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
           
+          # پیکیج کے مطابق فولڈر بنانا
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mv app/src/main/java/temp_pkg/MainActivity.java "app/src/main/java/$PKG_PATH/"
           rm -rf app/src/main/java/temp_pkg
-          
-          # XML فکسر
+
+          # مینی فیسٹ کو پیکیج کے ساتھ سنک کرنا
+          if [ -n "$MANIFEST_XML" ]; then
+            echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+            sed -i "s/package=\"[^\"]*\"/package=\"$RAW_PKG\"/g" app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$RAW_PKG'><application android:label='SystemPro'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          if [ -n "$MENU_XML" ]; then echo "$MENU_XML" > app/src/main/res/menu/main_menu.xml; fi
+
+          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
+          echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
+
+      # 3. XML آٹو فکسر (Namespace Repair)
+      - name: "Repair XML Files"
+        run: |
           find app/src/main/res -name "*.xml" -type f | while read file; do
             if grep -q "app:" "$file" && ! grep -q "xmlns:app" "$file"; then
               sed -i 's|\(<[a-zA-Z]\+\)|\1 xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
             fi
           done
 
-          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
-          echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
-
-      # 4. گریڈل 8.5 اور جاوا 17 سیٹ اپ
-      - name: "Setup Java & Build Engine"
+      # 4. جاوا 17 اور بلڈ انجن کی تیاری
+      - name: "Setup Java 17"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      - name: "Generate Build Files"
+      # 5. گریڈل فائلز کی خودکار تیاری (8.5 Compatible)
+      - name: "Generate Build Config"
         run: |
           cat > settings.gradle <<EOF
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -86,7 +90,6 @@ jobs:
           include ':app'
           EOF
 
-          # گریڈل پلگ ان 8.2.2 (Gradle 8.5 کے لیے بہترین ہے)
           cat > build.gradle <<EOF
           plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
@@ -111,23 +114,18 @@ jobs:
           }
           EOF
 
-      # 5. میموری آپٹیمائزیشن اور بلڈ
+      # 6. کلین بلڈ (With Memory Protection)
       - name: "Build APK"
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -Dorg.gradle.parallel=false"
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon --stacktrace
 
-      # 6. آرٹفیکٹ اپ لوڈ
-      - name: "Upload APK"
+      # 7. فائنل اپ لوڈ
+      - name: "Upload Result"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
           path: app/build/outputs/apk/debug/*.apk
-
-      # 7. صفائی
-      - name: "Post-Build Cleanup"
-        if: always()
-        run: rm -rf app/build/ .gradle/
