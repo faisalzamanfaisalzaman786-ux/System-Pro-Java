@@ -26,75 +26,29 @@ jobs:
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.2.2" }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
-
-          cat <<EOF > settings.gradle
-          include ':app'
-          EOF
-
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ github.event.client_payload.package_name }}"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes { release { minifyEnabled false } }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
+          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+          printf "include ':app'" > settings.gradle
+          printf "plugins { id 'com.android.application' }\nandroid {\n    namespace 'com.system.pro'\n    compileSdk 34\n    defaultConfig {\n        applicationId '${{ github.event.client_payload.package_name }}'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n    buildTypes { release { minifyEnabled false } }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.9.0'\n}" > app/build.gradle
 
       - name: Code Injection
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
-          
           find temp_src/ -name "*.java" -exec sed -i 's/^package .*;$/package com.system.pro;/' {} +
           find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
           find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
-          
           if find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \; ; then
             sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
           else
-            cat <<EOF > app/src/main/AndroidManifest.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-                <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar">
-                    <activity android:name="com.system.pro.MainActivity" android:exported="true">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
+            printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.NoActionBar'>\n        <activity android:name='com.system.pro.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
           fi
-          
           rm -rf temp_src source.zip
 
       - name: Build Execution
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
