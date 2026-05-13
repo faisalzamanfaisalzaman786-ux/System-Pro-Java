@@ -12,29 +12,29 @@ jobs:
       - name: 🧹 Deep Clean Environment
         uses: actions/checkout@v4
         with:
-          clean: true # یہ گٹ ہب کا آفیشل طریقہ ہے کلین واش کرنے کا
+          clean: true # ہر بار پچھلے تمام نشانات مٹانے کے لیے
 
-      - name: ☕ Setup Java 17 (Official Standard)
+      - name: ☕ Setup Java 17 (Industry Standard)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # یہ بلڈ کو تیز کرے گا لیکن ڈیٹا مکس نہیں ہونے دے گا
+          cache: 'gradle'
 
-      - name: 🏗️ Atomic Structure Builder (The "Wash" Step)
+      - name: 🏗️ Atomic Structure Builder (The Wash)
         run: |
-          # مکمل صفائی
+          # مکمل صفائی تاکہ کوئی پرانی فائل مداخلت نہ کرے
           rm -rf * 
           
-          # اینڈرائیڈ کا سٹینڈرڈ سٹرکچر دوبارہ کھڑا کرنا
-          mkdir -p app/src/main/java/com/system/pro
+          # آفیشل اینڈرائیڈ سٹرکچر کی تعمیر
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
 
-      - name: 🔩 Force Stable Gradle 8.5 & Wrapper
+      - name: 🔩 Force Lock Gradle 8.5
         run: |
           cat <<EOF > gradle/wrapper/gradle-wrapper.properties
           distributionBase=GRADLE_USER_HOME
@@ -44,15 +44,14 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-      - name: 📥 Project Data Injection
+      - name: 📥 Source Injection & Decoding
         run: |
-          # آپ کی UI سے آنے والا ڈیٹا ڈی کوڈ کریں
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d app/src/main/
 
-      - name: 📜 Master Build.gradle Configuration (SDK 21-34)
+      - name: 📜 Master Build.gradle (SDK 21-34)
         run: |
-          # روٹ لیول بلڈ فائل
+          # روٹ لیول کنفیگریشن
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral(); }
@@ -63,7 +62,7 @@ jobs:
           }
           EOF
 
-          # ایپ لیول بلڈ فائل - یہاں SDK لاک کر دی گئی ہے
+          # ایپ لیول کنفیگریشن - مکمل کنٹرول
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -77,17 +76,10 @@ jobs:
                   versionCode 1
                   versionName "1.0"
                   
-                  # NDK اور ABI فلٹرز تاکہ سائز کم رہے اور کریش نہ ہو
+                  # NDK اور ABI فلٹرز تاکہ کریش نہ ہو
                   ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64' }
               }
 
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-              
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -100,25 +92,23 @@ jobs:
           }
           EOF
 
-      - name: 🛡️ Auto-Correction Engine
+      - name: 🛡️ Resource Auto-Correct
         run: |
-          # اگر آئیکن غائب ہے تو خود بخود بنانا (تاکہ AAPT2 فیل نہ ہو)
+          # اگر آئیکن غائب ہے تو بلڈ فیل ہونے سے بچائیں
           if [ ! -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAALElEQVRo3u3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAPBy4AAf99mZAAAAAASUVORK5CYII=" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
           
-          # پیکیج نیم کی خودکار درستگی
+          # پیکیج نیم کا ٹکراؤ ختم کرنا
           find app/src/main/ -name "AndroidManifest.xml" -exec sed -i 's/package="[^"]*"//g' {} +
 
       - name: 🚀 Turbo Build Execution
         run: |
-          # گریڈل کو ایگزیکیوٹیبل بنانا
           touch gradlew
           chmod +x gradlew
-          # کلین بلڈ رن کرنا
           ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: 📦 Deliver Artifact
+      - name: 📦 Delivery
         uses: softprops/action-gh-release@v1
         with:
           tag_name: SystemPro_V${{ github.run_number }}
