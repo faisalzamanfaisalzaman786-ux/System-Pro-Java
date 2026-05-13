@@ -2,8 +2,8 @@ name: System Pro Build Engine
 
 on:
   repository_dispatch:
-    # یہاں ہم نے تمام ممکنہ ایونٹس لکھ دیے ہیں تاکہ ٹریگر لازمی ہو
-    types: [build-from-zip, build-from-b64, build-from-json]
+    # یہاں تمام ایونٹس موجود ہیں تاکہ UI سے ٹریگر کبھی نہ رکے
+    types: [build-from-zip, build-from-b64]
 
 jobs:
   build:
@@ -32,15 +32,19 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
+      - name: Clean and Prepare Directories
+        run: |
+          # پرانی فائلوں کو صاف کرنا اور نیا اسٹرکچر بنانا
+          rm -rf app/src/main/res/drawable/*
+          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/java/com/system/pro
+
       - name: Decode and Unzip
         run: |
-          # پے لوڈ سے زپ ڈیٹا حاصل کرنا
+          # پے لوڈ سے ڈیٹا لے کر ان زپ کرنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
-          # اینڈرائیڈ فولڈر سٹرکچر بنانا
-          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values app/src/main/java
           unzip -o project.zip -d app/src/main/
 
-      - name: Inject Build Config & Material Fix
+      - name: Inject Configuration
         run: |
           # پراجیکٹ لیول build.gradle
           cat <<EOF > build.gradle
@@ -57,7 +61,7 @@ jobs:
           }
           EOF
 
-          # ایپ لیول build.gradle میں پیکیج نیم اور میٹریل لائبریری شامل کرنا
+          # ایپ لیول build.gradle (مکمل اوور رائٹ تاکہ میٹریل ایرر نہ آئے)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -79,14 +83,14 @@ jobs:
           }
           EOF
 
-          # اگر کوئی ڈرائبل فائل غائب ہو تو اسے بنانا تاکہ ایرر نہ آئے
+          # مسنگ ریسورسز کا فکس
           for res in edittext_background spinner_background; do
             if [ ! -f "app/src/main/res/drawable/$res.xml" ]; then
               echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#00000000"/></shape>' > "app/src/main/res/drawable/$res.xml"
             fi
           done
 
-          # مینی فیسٹ سے پرانا پیکیج نیم ختم کرنا (جدید گریڈل کی ضرورت)
+          # مینی فیسٹ سے پیکیج نیم ہٹانا
           if [ -f "app/src/main/AndroidManifest.xml" ]; then
             sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
           fi
@@ -94,7 +98,7 @@ jobs:
       - name: Execute Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Push APK to Release
         uses: softprops/action-gh-release@v1
