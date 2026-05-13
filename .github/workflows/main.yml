@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Node.js 24 استعمال کرنے کے لیے
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   APP_NAME: ${{ github.event.client_payload.app_name }}
   PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
   ZIP_B64: ${{ github.event.client_payload.zip_data }}
@@ -35,7 +35,7 @@ jobs:
         with:
           packages: "platforms;android-${{ env.ANDROID_COMPILE_SDK }} build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
           accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: true   # optional, logs ke liye
+          log-accepted-android-sdk-licenses: true
 
       - name: Decode and extract source zip
         run: |
@@ -62,6 +62,7 @@ jobs:
           APP_PATH=$(echo "$PKG" | tr '.' '/')
           mkdir -p app/src/main/java/$APP_PATH
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-{hdpi,mdpi,xhdpi,xxhdpi,xxxhdpi}
 
           # MainActivity.java
@@ -71,17 +72,54 @@ jobs:
           # Layout
           cp input_source/activity_main.xml app/src/main/res/layout/activity_main.xml
 
-          # AndroidManifest.xml
+          # Custom colors.xml to avoid missing attributes
+          cat > app/src/main/res/values/colors.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="purple_200">#FFBB86FC</color>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="purple_700">#FF3700B3</color>
+              <color name="teal_200">#FF03DAC5</color>
+              <color name="teal_700">#FF018786</color>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
+          </resources>
+          EOF
+
+          # themes.xml with simple AppCompat theme (no MaterialComponents)
+          cat > app/src/main/res/values/themes.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.MyApp" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/purple_500</item>
+                  <item name="colorPrimaryDark">@color/purple_700</item>
+                  <item name="colorAccent">@color/teal_200</item>
+              </style>
+          </resources>
+          EOF
+
+          # AndroidManifest.xml (remove package attribute, use updated theme)
           if [ -f input_source/AndroidManifest.xml ]; then
             cp input_source/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            sed -i "s/package=\"[^\"]*\"/package=\"$PKG\"/" app/src/main/AndroidManifest.xml
+            # Remove package line from manifest tag (keep only xmlns)
+            sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
+            # Replace theme with our custom theme
+            sed -i 's|android:theme="[^"]*"|android:theme="@style/Theme.MyApp"|' app/src/main/AndroidManifest.xml
+            # If no theme line exists, add it
+            if ! grep -q "android:theme" app/src/main/AndroidManifest.xml; then
+              sed -i 's|<application |<application android:theme="@style/Theme.MyApp" |' app/src/main/AndroidManifest.xml
+            fi
+            # Ensure label uses APP_NAME if provided
             if [ -n "$APP_NAME" ]; then
               sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
             fi
           else
             cat > app/src/main/AndroidManifest.xml << EOF
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG">
-              <application android:allowBackup="true" android:label="${APP_NAME:-ZipForgeApp}" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="${APP_NAME:-ZipForgeApp}"
+                  android:theme="@style/Theme.MyApp">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -100,10 +138,9 @@ jobs:
             done
           fi
 
-      - name: Generate Gradle build files (no comments in build.gradle)
+      - name: Generate Gradle build files (without material dependency)
         run: |
           set -e
-          # Root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -117,7 +154,6 @@ jobs:
 
           echo 'include ":app"' > settings.gradle
 
-          # app/build.gradle
           cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
