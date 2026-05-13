@@ -31,34 +31,35 @@ jobs:
           packages: "platforms;android-34 build-tools;34.0.0"
           accept-android-sdk-licenses: true
 
-      - name: Extract source
+      - name: Extract source and clean build directories
         run: |
+          set -e
+          # Clean previous builds
+          rm -rf .gradle app/build build
+          
           mkdir -p input
           echo "$ZIP_B64" | base64 -d > src.zip
           unzip -q src.zip -d input
           ls -la input/
 
-      - name: Build clean Android project (ignore user's layout & manifest)
+      - name: Build clean Android project (AppCompat only)
         run: |
           set -e
           PKG="${PACKAGE_NAME:-com.example.app}"
-          # Validate package name
           if [[ ! "$PKG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
             echo "Invalid package name, using default"
             PKG="com.zipforge.app"
           fi
 
-          # Create directories
           APP_PATH=$(echo $PKG | tr . /)
           mkdir -p app/src/main/java/$APP_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          # Use user's MainActivity.java if exists, otherwise generate minimal
+          # Use user's MainActivity.java
           if [ -f input/MainActivity.java ]; then
             cp input/MainActivity.java app/src/main/java/$APP_PATH/MainActivity.java
-            # Fix package line
             sed -i "s/^package .*;/package $PKG;/" app/src/main/java/$APP_PATH/MainActivity.java
           else
             cat > app/src/main/java/$APP_PATH/MainActivity.java << JAVA
@@ -74,7 +75,7 @@ jobs:
           JAVA
           fi
 
-          # Use simple layout (no Material Components)
+          # Simplified layout
           cat > app/src/main/res/layout/activity_main.xml << LAYOUT
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -101,7 +102,7 @@ jobs:
           </resources>
           COLORS
 
-          # Simple AppCompat theme (no Material)
+          # Clean AppCompat theme (no Material)
           cat > app/src/main/res/values/themes.xml << THEME
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -113,7 +114,7 @@ jobs:
           </resources>
           THEME
 
-          # Clean AndroidManifest (no package attribute, no Material theme)
+          # Clean manifest
           cat > app/src/main/AndroidManifest.xml << MANIFEST
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -132,12 +133,12 @@ jobs:
           </manifest>
           MANIFEST
 
-          # Use user's icon if provided
+          # User icon
           if [ -f input/ic_launcher.png ]; then
             cp input/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      - name: Generate Gradle files (no material dependency)
+      - name: Generate Gradle files (no material)
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
