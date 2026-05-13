@@ -18,14 +18,16 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Initialize Project Structure
+      - name: Reset and Initialize Environment
         run: |
+          # پرانے کیشے اور ادھورے بلڈز کی مکمل صفائی
+          rm -rf .gradle app/build build
+          
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
 
-          # تمام اینڈرائیڈ ڈیپینڈنسیز کے لیے مرکزی پاتھ سیٹ کرنا
+          # گوگل اور میون کے آفیشل پاتھ کا مرکزی سیٹ اپ
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -60,48 +62,35 @@ jobs:
           }
           EOF
 
-      - name: Decode and Inject Source
+      - name: Smart Inject and Path Sync
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # فائلوں کو صحیح جگہوں پر منتقل کرنا اور ایررز سے بچنا
+          # فائلیں جہاں بھی ہوں، انہیں ڈھونڈ کر صحیح اینڈرائیڈ پاتھ پر لانا
           find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
           find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
           find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \;
           
-          # اگر مینی فیسٹ غائب ہو تو ڈیفالٹ بنانا
-          if [ ! -f app/src/main/AndroidManifest.xml ]; then
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          fi
+          # اگر ریسورسز غائب ہوں تو بلڈ فیل ہونے سے بچانے کے لیے بنیادی فائلز
+          [ ! -f app/src/main/res/values/themes.xml ] && echo '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/themes.xml
           
           rm -rf temp_src source.zip
 
-      - name: Build Debug APK
+      - name: Build Execution with Auto-Wrapper
         run: |
-          # گریڈل ورژن کو خودکار مینج کرنا
+          # گریڈل کو آپ کی ضرورت کے مطابق 8.5 پر لاک کرنا (اسٹبلٹی کے لیے)
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          # کلین بلڈ تاکہ پرانا ڈیٹا مداخلت نہ کرے
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: "v${{ github.run_number }}"
-          name: "System Pro Success #${{ github.run_number }}"
+          name: "System Pro Build #${{ github.run_number }}"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
