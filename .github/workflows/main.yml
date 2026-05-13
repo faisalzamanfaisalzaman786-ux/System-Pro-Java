@@ -2,7 +2,7 @@ name: "Ultimate APK Builder (Locked Edition)"
 
 on:
   repository_dispatch:
-    types: [build-from-b64]
+    types: [build-app] # فرنٹ اینڈ سے میچنگ ایونٹ
 
 jobs:
   build:
@@ -23,20 +23,25 @@ jobs:
         env:
           ZIP_DATA: ${{ github.event.client_payload.zip_data }}
         run: |
+          # Base64 Decode
           echo "$ZIP_DATA" | base64 -d > payload.zip
           unzip payload.zip -d extracted_data/
+          
+          # Files Copy
           cp extracted_data/MainActivity.java app/src/main/java/temp_main.java
           cp extracted_data/activity_main.xml app/src/main/res/layout/activity_main.xml
           cp extracted_data/AndroidManifest.xml app/src/main/AndroidManifest.xml
           
+          # Icon handling
           if [ -f extracted_data/ic_launcher.png ]; then
             cp extracted_data/ic_launcher.png app/src/main/res/drawable-xxhdpi/ic_launcher.png
           fi
 
+          # Package and Path logic
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_main.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="${{ github.event.client_payload.package_name }}"; fi
           
-          # Manifest Fix
+          # Manifest Cleanup
           python3 -c "import re; data = open('app/src/main/AndroidManifest.xml').read(); cleaned = re.sub(r'package=\"[^\"]*\"', '', data); open('app/src/main/AndroidManifest.xml', 'w').write(cleaned)"
 
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
@@ -48,7 +53,6 @@ jobs:
 
       - name: "Generate Locked Build Config"
         run: |
-          # Settings File Locked
           cat > settings.gradle <<EOF
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { 
@@ -59,12 +63,10 @@ jobs:
           include ':app'
           EOF
 
-          # Root Build File Locked (AGP 8.2.2)
           cat > build.gradle <<EOF
           plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
 
-          # App Build File Locked (SDK 34, AppCompat 1.6.1)
           cat > app/build.gradle <<EOF
           plugins { id 'com.android.application' }
           android {
