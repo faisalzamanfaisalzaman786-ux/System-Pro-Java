@@ -1,4 +1,4 @@
-name: Dynamic APK Builder from ZipForge Pro faisal 
+name: Dynamic APK Builder from ZipForge Pro
 
 on:
   repository_dispatch:
