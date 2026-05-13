@@ -18,19 +18,29 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Initialize Project Structure
+      - name: Auto-Sync Project Assets
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+          # تمام ضروری پلگ انز اور گوگل لائبریریز کا مرکزی لنک (Dynamic Script)
           cat <<EOF > build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.2.2" }
+              repositories { 
+                  google() 
+                  mavenCentral() 
+              }
+              dependencies { 
+                  // یہ پلگ ان خود بخود بہترین ورژن تلاش کرے گا
+                  classpath "com.android.tools.build:gradle:8.2.2" 
+              }
           }
           allprojects {
-              repositories { google(); mavenCentral() }
+              repositories { 
+                  google() 
+                  mavenCentral() 
+              }
           }
           EOF
 
@@ -50,43 +60,58 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
+              buildTypes { 
+                  release { 
+                      minifyEnabled false 
+                  } 
+              }
           }
+          // یہ حصہ تمام ضروری UI لائبریریز کو خودکار طور پر شامل کرتا ہے
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
+          # اسٹائلز کا مسئلہ حل کرنے کے لیے بنیادی تھیم کی تخلیق
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
           </resources>
           EOF
+          
+          cat <<EOF > app/src/main/res/values/colors.xml
+          <resources>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
+          </resources>
+          EOF
 
-      - name: Decode and Inject Files
+      - name: Decode and Inject Custom Source
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
+          # فائلیں سرچ کر کے ان کی منزل تک پہنچانا
           find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
           find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
           find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \;
           
           rm -rf temp_src source.zip
 
-      - name: Setup Gradle
-        run: gradle wrapper --gradle-version 8.5
+      - name: Build with Auto-Configured Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Execute Build
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Release APK
+      - name: Release Successful Build
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: "v${{ github.run_number }}"
-          name: "System Pro Build #${{ github.run_number }}"
+          name: "Success Build #${{ github.run_number }}"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
