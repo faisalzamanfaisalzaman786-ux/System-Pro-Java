@@ -20,41 +20,40 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.5
-
-      - name: Decode Base64 Payload
+      - name: Force Gradle 8.5
         run: |
-          # زپ ڈیٹا کو ڈیکوڈ کرنا
+          # گریڈل ورژرن کو سختی سے 8.5 پر سیٹ کرنا
+          mkdir -p gradle/wrapper
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+
+      - name: Decode and Unzip Project
+        run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
-          
-          # ڈائریکٹری کو یقینی بنانا اور ان زپ کرنا
           mkdir -p app/src/main/res/values/
           unzip -o project_data.zip -d app/src/main/
 
-      - name: Inject Custom Resources
+      - name: Fix Missing Repository & Inject Resources
         run: |
-          # اگر strings.xml موجود نہیں ہے تو ایک بنیادی فائل بنانا تاکہ ایرر نہ آئے
-          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Temp</string></resources>' > app/src/main/res/values/strings.xml
-          fi
-          
-          # اب پیکیج نیم اور ایپ کا نام اپ ڈیٹ کرنا
-          sed -i "s/com.system.pro/${{ github.event.client_payload.package_name }}/g" app/build.gradle || true
-          sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
-          
-          # آئیکون ہینڈلنگ
-          if [ -f "app/src/main/ic_launcher.png" ]; then
-            mkdir -p app/src/main/res/mipmap-xxxhdpi/
-            mv app/src/main/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # build.gradle میں JitPack شامل کرنا تاکہ MPAndroidChart مل سکے
+          if [ -f "app/build.gradle" ]; then
+            sed -i "s/repositories {/repositories {\n        maven { url 'https:\/\/jitpack.io' }/g" app/build.gradle
           fi
 
-      - name: Build APK with Gradle
+          # پیکیج نیم اور ایپ کا نام اپ ڈیٹ کرنا
+          sed -i "s/com.system.pro/${{ github.event.client_payload.package_name }}/g" app/build.gradle || true
+          
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
+          fi
+
+      - name: Build APK with Gradle 8.5
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Generate Release Tag
         id: tag
