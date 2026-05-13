@@ -1,10 +1,8 @@
-name: "Ultimate APK Builder (All-In-One)"
+name: "ZipForge APK Builder"
 
 on:
   repository_dispatch:
-    types: [build-app]
-  push:
-    branches: [ main, master ]
+    types: [build-from-zip] # یہ وہی ٹائپ ہے جو آپ کے کوڈ میں 'event_type' ہے
 
 jobs:
   build:
@@ -13,62 +11,52 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      # 1. ماحول کی صفائی
-      - name: "Environment Reset"
+      # 1. ماحول کو صاف کرنا اور ڈائریکٹریز بنانا
+      - name: "Prepare Directories"
         run: |
-          rm -rf app
+          rm -rf app_files bundle.zip
+          mkdir -p app_files
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-mdpi
 
-      # 2. ڈیٹا انجیکشن اور مینی فیسٹ کی اصلاح (Namespace Fix)
-      - name: "Inject and Sanitize Manifest"
-        id: sync
-        env:
-          JAVA_CODE: ${{ github.event.client_payload.java }}
-          XML_LAYOUT: ${{ github.event.client_payload.xml }}
-          MANIFEST_XML: ${{ github.event.client_payload.manifest }}
+      # 2. زپ فائل ڈاؤن لوڈ اور ایکسٹریکٹ کرنا
+      - name: "Download & Extract Source"
         run: |
-          printf "%s" "$JAVA_CODE" > app/src/main/java/temp_main.java
-          printf "%s" "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          curl -L -o bundle.zip "${{ github.event.client_payload.zip_asset_url }}"
+          unzip bundle.zip -d app_files/
+
+      # 3. فائلوں کو درست جگہ پر منتقل کرنا (Namespace Fix)
+      - name: "Organize Project"
+        id: sync
+        run: |
+          # میٹا ڈیٹا سے پیکیج نیم نکالنا
+          PKG=$(jq -r '.package_name' app_files/build_metadata.json)
+          APP_NAME=$(jq -r '.app_name' app_files/build_metadata.json)
           
-          # پیکیج نیم نکالنا
-          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_main.java | sed 's/package //' | sed 's/;//' | xargs)
-          if [ -z "$RAW_PKG" ]; then RAW_PKG="com.systempro.app"; fi
+          if [ -z "$PKG" ]; then PKG="com.systempro.app"; fi
           
-          # مینی فیسٹ سے 'package' ایٹریبیوٹ کو زبردستی ختم کرنا (جدید گریڈل کی شرط)
-          if [ -n "$MANIFEST_XML" ]; then
-            printf "%s" "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-            # پائتھن اسکرپٹ کے ذریعے پیکیج ہٹانا تاکہ ایرر نہ آئے
-            python3 -c "import re; data = open('app/src/main/AndroidManifest.xml').read(); cleaned = re.sub(r'package=\"[^\"]*\"', '', data); open('app/src/main/AndroidManifest.xml', 'w').write(cleaned)"
-          else
-            echo "<?xml version='1.0' encoding='utf-8'?><manifest xmlns:android='http://schemas.android.com/apk/res/android'><application android:label='SystemPro' android:theme='@style/Theme.SystemPro' android:icon='@mipmap/ic_launcher'><activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          # جاوا فائل کو پیکج فولڈر میں ڈالنا
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          cp app_files/MainActivity.java "app/src/main/java/$PKG_PATH/MainActivity.java"
+          
+          # ریسورسز اور مینی فیسٹ
+          cp app_files/res/layout/activity_main.xml app/src/main/res/layout/
+          cp app_files/AndroidManifest.xml app/src/main/AndroidManifest.xml
+          
+          # اگر آئیکن موجود ہے تو اسے کاپی کریں
+          if [ -f "app_files/res/drawable/ic_launcher.png" ]; then
+            cp app_files/res/drawable/ic_launcher.png app/src/main/res/drawable/
           fi
 
-          # ڈیفالٹ ریسورسز
-          echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/><style name="CalcButton" parent="Widget.AppCompat.Button"/></resources>' > app/src/main/res/values/styles.xml
-          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#0000FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>' > app/src/main/res/drawable/ic_launcher_background.xml
-          cp app/src/main/res/drawable/ic_launcher_background.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
+          echo "PKG=$PKG" >> $GITHUB_OUTPUT
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
 
-          # فولڈر اسٹرکچر سنک
-          PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mv app/src/main/java/temp_main.java "app/src/main/java/$PKG_PATH/MainActivity.java"
-          
-          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
-          echo "APP_NAME=${{ github.event.client_payload.app_name || 'SystemPro' }}" >> $GITHUB_OUTPUT
-
-      # 3. گریڈل 8.5 سیٹ اپ
-      - name: "Generate Build Config"
+      # 4. گریڈل 8.5 کنفیگریشن
+      - name: "Build Gradle Config"
         run: |
           cat > settings.gradle <<EOF
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() } 
-          }
           rootProject.name = "${{ steps.sync.outputs.APP_NAME }}"
           include ':app'
           EOF
@@ -86,6 +74,8 @@ jobs:
                   applicationId '${{ steps.sync.outputs.PKG }}'
                   minSdk 24
                   targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
               }
           }
           dependencies {
@@ -94,21 +84,20 @@ jobs:
           }
           EOF
 
-      # 4. اسمبلی اور بلڈ
-      - name: "Setup Java & Build"
+      # 5. جاوا سیٹ اپ اور بلڈ
+      - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: "Assemble APK"
+      - name: "Build APK"
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      # 5. اپ لوڈ
+      # 6. آرٹیکٹ اپ لوڈ
       - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
