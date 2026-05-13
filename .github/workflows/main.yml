@@ -7,6 +7,8 @@ on:
 jobs:
   clean-wash-and-build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -18,7 +20,7 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Reset and Initialize Environment
+      - name: Reset Environment
         run: |
           rm -rf .gradle app/build build
           mkdir -p app/src/main/java/com/system/pro
@@ -59,18 +61,15 @@ jobs:
           }
           EOF
 
-      - name: Smart Inject and Auto-Align Code
+      - name: Code Injection
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # پیکیج نیم کو خودکار طریقے سے آپ کے پروجیکٹ کے مطابق ایڈجسٹ کرنا
           find temp_src/ -name "*.java" -exec sed -i 's/^package .*;$/package com.system.pro;/' {} +
-          
           find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
           find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
           
-          # مینی فیسٹ کی مکمل تصدیق اور اصلاح
           if find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \; ; then
             sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
           else
@@ -91,13 +90,13 @@ jobs:
           
           rm -rf temp_src source.zip
 
-      - name: Build Execution with Path Resolution
+      - name: Build Execution
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
 
-      - name: Release Successful APK
+      - name: Release APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
