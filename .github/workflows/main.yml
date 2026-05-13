@@ -31,18 +31,16 @@ jobs:
           packages: "platforms;android-34 build-tools;34.0.0"
           accept-android-sdk-licenses: true
 
-      - name: Extract source and clean build directories
+      - name: Extract source and wipe old builds
         run: |
           set -e
-          # Clean previous builds
           rm -rf .gradle app/build build
-          
           mkdir -p input
           echo "$ZIP_B64" | base64 -d > src.zip
           unzip -q src.zip -d input
           ls -la input/
 
-      - name: Build clean Android project (AppCompat only)
+      - name: Create clean project (ignore user resources completely)
         run: |
           set -e
           PKG="${PACKAGE_NAME:-com.example.app}"
@@ -51,13 +49,16 @@ jobs:
             PKG="com.zipforge.app"
           fi
 
+          # Wipe existing main to remove any user-provided resources
+          rm -rf app/src/main
+          mkdir -p app/src/main
           APP_PATH=$(echo $PKG | tr . /)
           mkdir -p app/src/main/java/$APP_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          # Use user's MainActivity.java
+          # Use user's MainActivity.java if exists
           if [ -f input/MainActivity.java ]; then
             cp input/MainActivity.java app/src/main/java/$APP_PATH/MainActivity.java
             sed -i "s/^package .*;/package $PKG;/" app/src/main/java/$APP_PATH/MainActivity.java
@@ -75,7 +76,7 @@ jobs:
           JAVA
           fi
 
-          # Simplified layout
+          # Simple layout (no Material Components)
           cat > app/src/main/res/layout/activity_main.xml << LAYOUT
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -114,7 +115,7 @@ jobs:
           </resources>
           THEME
 
-          # Clean manifest
+          # Clean manifest (no package attribute, no Material theme)
           cat > app/src/main/AndroidManifest.xml << MANIFEST
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -133,12 +134,12 @@ jobs:
           </manifest>
           MANIFEST
 
-          # User icon
+          # User icon if provided
           if [ -f input/ic_launcher.png ]; then
             cp input/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      - name: Generate Gradle files (no material)
+      - name: Generate Gradle files (only AppCompat)
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
