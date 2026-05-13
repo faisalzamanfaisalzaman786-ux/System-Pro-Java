@@ -8,6 +8,7 @@ permissions:
   contents: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   APP_NAME: ${{ github.event.client_payload.app_name }}
   PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
   ZIP_B64: ${{ github.event.client_payload.zip_data }}
@@ -35,14 +36,32 @@ jobs:
           mkdir -p input
           echo "$ZIP_B64" | base64 -d > src.zip
           unzip -q src.zip -d input
+          ls -la input/
 
-      - name: Build Project
+      - name: Build clean Android project (ignore user's layout & manifest)
         run: |
+          set -e
           PKG="${PACKAGE_NAME:-com.example.app}"
-          mkdir -p app/src/main/java/$(echo $PKG | tr . /)
-          mkdir -p app/src/main/res/layout app/src/main/res/values
+          # Validate package name
+          if [[ ! "$PKG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+            echo "Invalid package name, using default"
+            PKG="com.zipforge.app"
+          fi
 
-          cat > app/src/main/java/$(echo $PKG | tr . /)/MainActivity.java << JAVA
+          # Create directories
+          APP_PATH=$(echo $PKG | tr . /)
+          mkdir -p app/src/main/java/$APP_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+
+          # Use user's MainActivity.java if exists, otherwise generate minimal
+          if [ -f input/MainActivity.java ]; then
+            cp input/MainActivity.java app/src/main/java/$APP_PATH/MainActivity.java
+            # Fix package line
+            sed -i "s/^package .*;/package $PKG;/" app/src/main/java/$APP_PATH/MainActivity.java
+          else
+            cat > app/src/main/java/$APP_PATH/MainActivity.java << JAVA
           package $PKG;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -53,79 +72,132 @@ jobs:
               }
           }
           JAVA
+          fi
 
-          cat > app/src/main/res/layout/activity_main.xml << XML
-          <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="wrap_content"
-              android:layout_height="wrap_content"
-              android:text="Hello from ZipForge"
-              android:textSize="24sp"
-              android:layout_gravity="center"/>
-          XML
+          # Use simple layout (no Material Components)
+          cat > app/src/main/res/layout/activity_main.xml << LAYOUT
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:orientation="vertical">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Hello from ZipForge"
+                  android:textSize="24sp"
+                  android:textColor="#FF6200EE" />
+          </LinearLayout>
+          LAYOUT
 
-          cat > app/src/main/res/values/colors.xml << COL
-          <resources><color name="purple">#FF6200EE</color></resources>
-          COL
-
-          cat > app/src/main/res/values/themes.xml << THEME
+          # Minimal colors
+          cat > app/src/main/res/values/colors.xml << COLORS
+          <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="Theme.Zip" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/purple</item>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="purple_700">#FF3700B3</color>
+              <color name="teal_200">#FF03DAC5</color>
+          </resources>
+          COLORS
+
+          # Simple AppCompat theme (no Material)
+          cat > app/src/main/res/values/themes.xml << THEME
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.ZipForge" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/purple_500</item>
+                  <item name="colorPrimaryDark">@color/purple_700</item>
+                  <item name="colorAccent">@color/teal_200</item>
               </style>
           </resources>
           THEME
 
+          # Clean AndroidManifest (no package attribute, no Material theme)
           cat > app/src/main/AndroidManifest.xml << MANIFEST
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="${APP_NAME:-ZipForge}" android:theme="@style/Theme.Zip">
-                  <activity android:name=".MainActivity" android:exported="true">
+              <application
+                  android:allowBackup="true"
+                  android:label="${APP_NAME:-ZipForgeApp}"
+                  android:theme="@style/Theme.ZipForge">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>
           MANIFEST
 
-          cat > build.gradle << GRADLE
+          # Use user's icon if provided
+          if [ -f input/ic_launcher.png ]; then
+            cp input/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
+
+      - name: Generate Gradle files (no material dependency)
+        run: |
+          cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.4' }
           }
-          allprojects { repositories { google(); mavenCentral() } }
-          GRADLE
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
+          EOF
 
           echo 'include ":app"' > settings.gradle
 
-          cat > app/build.gradle << APPGRADLE
+          cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
-              namespace '$PKG'
+              namespace '$PACKAGE_NAME'
               compileSdk 34
               defaultConfig {
-                  applicationId '$PKG'
+                  applicationId "$PACKAGE_NAME"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
-                  versionName '1.0'
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
           }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
-          APPGRADLE
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
 
-          # درست gradle.properties - یہاں android.useAndroidX=true لازمی ہے
-          cat > gradle.properties << PROP
+          echo "# no rules" > app/proguard-rules.pro
+
+          cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
-          PROP
+          EOF
 
+      - name: Setup Gradle Wrapper
+        run: |
           wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
           export PATH=$PWD/gradle-8.5/bin:$PATH
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+
+      - name: Build APK
+        run: |
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -137,6 +209,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
+          name: "${{ env.APP_NAME || 'ZipForgeApp' }} v1.0"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
