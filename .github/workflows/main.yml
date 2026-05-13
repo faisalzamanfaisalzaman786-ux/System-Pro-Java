@@ -1,5 +1,5 @@
 # .github/workflows/build-apk.yml
-name: Dynamic APK Builder from ZipForge
+name: Dynamic APK Builder from ZipForge Pro
 
 on:
   repository_dispatch:
@@ -10,12 +10,12 @@ permissions:
   actions: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Node.js 24 استعمال کرنے کے لیے
   APP_NAME: ${{ github.event.client_payload.app_name }}
   PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
   ZIP_B64: ${{ github.event.client_payload.zip_data }}
   ANDROID_COMPILE_SDK: 34
   ANDROID_BUILD_TOOLS: 34.0.0
-  GRADLE_VERSION: 8.5
 
 jobs:
   build:
@@ -33,10 +33,9 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-          log-accepted-licenses: true
+          packages: "platforms;android-${{ env.ANDROID_COMPILE_SDK }} build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true   # optional, logs ke liye
 
       - name: Decode and extract source zip
         run: |
@@ -64,25 +63,25 @@ jobs:
           mkdir -p app/src/main/java/$APP_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-{hdpi,mdpi,xhdpi,xxhdpi,xxxhdpi}
-          mkdir -p app/src/main/res/drawable
 
+          # MainActivity.java
           cp input_source/MainActivity.java app/src/main/java/$APP_PATH/MainActivity.java
           sed -i "s/^package .*;/package $PKG;/" app/src/main/java/$APP_PATH/MainActivity.java
 
+          # Layout
           cp input_source/activity_main.xml app/src/main/res/layout/activity_main.xml
 
+          # AndroidManifest.xml
           if [ -f input_source/AndroidManifest.xml ]; then
             cp input_source/AndroidManifest.xml app/src/main/AndroidManifest.xml
             sed -i "s/package=\"[^\"]*\"/package=\"$PKG\"/" app/src/main/AndroidManifest.xml
+            if [ -n "$APP_NAME" ]; then
+              sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
+            fi
           else
             cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$PKG">
-              <application
-                  android:allowBackup="true"
-                  android:label="${APP_NAME:-ZipForgeApp}"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG">
+              <application android:allowBackup="true" android:label="${APP_NAME:-ZipForgeApp}" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -94,42 +93,33 @@ jobs:
           EOF
           fi
 
+          # Icon if present
           if [ -f input_source/ic_launcher.png ]; then
             for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
               cp input_source/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher.png
             done
           fi
 
-      - name: Generate Gradle build files
+      - name: Generate Gradle build files (no comments in build.gradle)
         run: |
           set -e
+          # Root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.4'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.4' }
           }
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
           echo 'include ":app"' > settings.gradle
 
+          # app/build.gradle
           cat > app/build.gradle << EOF
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '$PACKAGE_NAME'
               compileSdk $ANDROID_COMPILE_SDK
@@ -153,7 +143,6 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
 
@@ -164,25 +153,24 @@ jobs:
           android.useAndroidX=true
           EOF
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle wrapper (version 8.5)
         run: |
           set -e
-          wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
-          unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
-          export PATH=$PWD/gradle-${{ env.GRADLE_VERSION }}/bin:$PATH
-          gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q gradle-8.5-bin.zip
+          export PATH=$PWD/gradle-8.5/bin:$PATH
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: Build APK
+      - name: Build debug APK
         run: |
           set -e
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload APK artifact
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Create GitHub Release and Upload APK
