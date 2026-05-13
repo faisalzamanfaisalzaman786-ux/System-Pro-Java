@@ -27,24 +27,34 @@ jobs:
 
       - name: Decode Base64 Payload
         run: |
-          echo "Decoding ZIP data from client payload..."
+          # زپ ڈیٹا کو ڈیکوڈ کرنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
+          
+          # ڈائریکٹری کو یقینی بنانا اور ان زپ کرنا
+          mkdir -p app/src/main/res/values/
           unzip -o project_data.zip -d app/src/main/
 
       - name: Inject Custom Resources
         run: |
-          # پیکیج نیم اور ایپ کا نام اپ ڈیٹ کرنا
-          sed -i "s/com.system.pro/${{ github.event.client_payload.package_name }}/g" app/build.gradle
-          sed -i "s/System Pro/${{ github.event.client_payload.app_name }}/g" app/src/main/res/values/strings.xml
+          # اگر strings.xml موجود نہیں ہے تو ایک بنیادی فائل بنانا تاکہ ایرر نہ آئے
+          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Temp</string></resources>' > app/src/main/res/values/strings.xml
+          fi
           
-          # اگر آئیکون موجود ہے تو اسے ریپلیس کریں
+          # اب پیکیج نیم اور ایپ کا نام اپ ڈیٹ کرنا
+          sed -i "s/com.system.pro/${{ github.event.client_payload.package_name }}/g" app/build.gradle || true
+          sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
+          
+          # آئیکون ہینڈلنگ
           if [ -f "app/src/main/ic_launcher.png" ]; then
             mkdir -p app/src/main/res/mipmap-xxxhdpi/
             mv app/src/main/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
       - name: Build APK with Gradle
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Generate Release Tag
         id: tag
