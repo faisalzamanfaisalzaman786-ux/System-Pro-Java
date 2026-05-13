@@ -26,29 +26,39 @@ jobs:
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          
           printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
           printf "include ':app'" > settings.gradle
+          
           printf "plugins { id 'com.android.application' }\nandroid {\n    namespace 'com.system.pro'\n    compileSdk 34\n    defaultConfig {\n        applicationId '${{ github.event.client_payload.package_name }}'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n    buildTypes { release { minifyEnabled false } }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.9.0'\n}" > app/build.gradle
 
-      - name: Code Injection
+      - name: Hardened Code Injection
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
+          
+          # پیکیج نیم کی سخت اصلاح
           find temp_src/ -name "*.java" -exec sed -i 's/^package .*;$/package com.system.pro;/' {} +
+          
+          # فائلز کی منتقلی
           find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
           find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
-          if find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \; ; then
-            sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
-          else
-            printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.NoActionBar'>\n        <activity android:name='com.system.pro.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
-          fi
+          
+          # ڈیفالٹ ریسورسز کی تخلیق تاکہ پاتھ ایرر نہ آئے
+          printf "<resources>\n    <string name='app_name'>System Pro</string>\n</resources>" > app/src/main/res/values/strings.xml
+          printf "<resources>\n    <color name='purple_500'>#FF6200EE</color>\n</color>" > app/src/main/res/values/colors.xml
+          
+          # مینی فیسٹ کی ری بلڈنگ
+          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.NoActionBar'>\n        <activity android:name='com.system.pro.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
+          
           rm -rf temp_src source.zip
 
       - name: Build Execution
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          # بغیر ڈیمن اور بغیر کیشے کے بلڈ تاکہ ایرر نہ آئے
+          ./gradlew clean assembleDebug --no-daemon --no-build-cache
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
