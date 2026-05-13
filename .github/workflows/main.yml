@@ -22,15 +22,15 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Initialize Industry Structure
+      - name: Initialize Project Structure
         run: |
-          # مکمل صفائی اور معیاری فولڈرز کی تخلیق
+          # مکمل کلین اپ
           rm -rf .gradle app/build build
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # اسٹیبل گریڈل کنفیگریشن (8.5 Version کے مطابق)
+          # پروفیشنل گریڈل کنفیگریشن
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -62,22 +62,22 @@ jobs:
           }
           EOF
 
-      - name: Deep Package Correction & Injection
+      - name: Precise Injection & Package Correction
         run: |
-          # زپ ڈیٹا کو عارضی فولڈر میں نکالنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # کروشل سٹیپ: فائلز کو منتقل کرنے سے پہلے تمام جگہوں پر پیکیج نیم کی درستگی
-          # تمام جاوا فائلز سے پرانی پیکیج لائنز ختم کر کے نئی پروفیشنل لائن لگانا
+          # پیکیج نیم کی پہلے سے درستی (Pre-Correction)
           find temp_src/ -name "*.java" -type f -exec sed -i '/^package /d' {} +
           find temp_src/ -name "*.java" -type f -exec sed -i '1i package com.system.pro;' {} +
           
-          # اب صاف شدہ فائلز کو ان کے پروفیشنل مقام پر منتقل کرنا
+          # فائلز کی ان کے مخصوص فولڈرز میں منتقلی
+          # صرف جاوا فائلز جاوا فولڈر میں جائیں گی
           find temp_src/ -name "*.java" -exec cp {} app/src/main/java/com/system/pro/ \;
-          find temp_src/ -name "*.xml" -exec cp {} app/src/main/res/layout/ \; 2>/dev/null || true
+          # صرف XML لے آؤٹ فائلز layout فولڈر میں جائیں گی (سوائے Manifest کے)
+          find temp_src/ -name "*.xml" ! -name "AndroidManifest.xml" -exec cp {} app/src/main/res/layout/ \; || true
           
-          # آفیشل مینی فیسٹ کی تخلیق
+          # مینی فیسٹ کو اس کے درست مقام (src/main/) پر لکھنا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -96,7 +96,6 @@ jobs:
 
       - name: Build Official Debug APK
         run: |
-          # گریڈل 8.5 کو فورس کرنا جیسا کہ آپ کی ریکوائرمنٹ ہے
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
@@ -110,5 +109,5 @@ jobs:
       - name: Build Success Summary
         if: success()
         run: |
-          echo "## ✅ System Pro: Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "Official APK generated with Gradle 8.5 and deep package correction." >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "Fixed Resource naming issue. APK generated with Gradle 8.5." >> $GITHUB_STEP_SUMMARY
