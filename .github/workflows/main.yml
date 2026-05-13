@@ -2,7 +2,7 @@ name: "Ultimate APK Builder (Locked Edition)"
 
 on:
   repository_dispatch:
-    types: [build-app] # فرنٹ اینڈ سے میچنگ ایونٹ
+    types: [build-app] # فرنٹ اینڈ کے ایونٹ سے میچ کرنا ضروری ہے
 
 jobs:
   build:
@@ -23,25 +23,15 @@ jobs:
         env:
           ZIP_DATA: ${{ github.event.client_payload.zip_data }}
         run: |
-          # Base64 Decode
           echo "$ZIP_DATA" | base64 -d > payload.zip
           unzip payload.zip -d extracted_data/
-          
-          # Files Copy
           cp extracted_data/MainActivity.java app/src/main/java/temp_main.java
           cp extracted_data/activity_main.xml app/src/main/res/layout/activity_main.xml
           cp extracted_data/AndroidManifest.xml app/src/main/AndroidManifest.xml
-          
-          # Icon handling
-          if [ -f extracted_data/ic_launcher.png ]; then
-            cp extracted_data/ic_launcher.png app/src/main/res/drawable-xxhdpi/ic_launcher.png
-          fi
 
-          # Package and Path logic
           RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_main.java | sed 's/package //' | sed 's/;//' | xargs)
           if [ -z "$RAW_PKG" ]; then RAW_PKG="${{ github.event.client_payload.package_name }}"; fi
           
-          # Manifest Cleanup
           python3 -c "import re; data = open('app/src/main/AndroidManifest.xml').read(); cleaned = re.sub(r'package=\"[^\"]*\"', '', data); open('app/src/main/AndroidManifest.xml', 'w').write(cleaned)"
 
           PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
@@ -51,7 +41,7 @@ jobs:
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_OUTPUT
 
-      - name: "Generate Locked Build Config"
+      - name: "Generate Build Config"
         run: |
           cat > settings.gradle <<EOF
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -76,8 +66,6 @@ jobs:
                   applicationId '${{ steps.sync.outputs.PKG }}'
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
               }
           }
           dependencies {
