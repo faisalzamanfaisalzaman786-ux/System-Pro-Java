@@ -7,69 +7,58 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # نوڈ 24 کا استعمال تاکہ سسٹم اپ ٹو ڈیٹ رہے
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java Environment (JDK 17)
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # خودکار کیشنگ جو بلڈ کو تیز بناتی ہے
+          cache: 'gradle'
 
-      - name: Standardize Android Structure
+      - name: Prepare Project Structure
         run: |
-          # پروفیشنل فولڈر اسٹرکچر کی تخلیق
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
           
-          # کینونیکل گریڈل فائلز (Professional Template)
-          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+          printf "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
           printf "include ':app'" > settings.gradle
-          
-          printf "plugins { id 'com.android.application' }\nandroid {\n    namespace 'com.system.pro'\n    compileSdk 34\n    defaultConfig {\n        applicationId '${{ github.event.client_payload.package_name }}'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n    buildTypes { release { minifyEnabled false } }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.9.0'\n}" > app/build.gradle
+          printf "plugins { id 'com.android.application' }\nandroid { namespace 'com.system.pro'; compileSdk 34; defaultConfig { applicationId '${{ github.event.client_payload.package_name }}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }\ndependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }" > app/build.gradle
 
-      - name: Professional Source Injection
+      - name: Sanitized Injection Process
         run: |
-          # زپ فائل کو ڈی کوڈ اور ان زپ کرنا
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # اسمارٹ فائل سرچ اور پلیسمنٹ
-          # یہ کمانڈز فائل کو ڈھونڈ کر صحیح پروفیشنل پاتھ پر رکھیں گی
-          find temp_src/ -name "*.java" -exec sed -i 's/^package .*;$/package com.system.pro;/' {} +
-          find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
-          find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
+          # نمبر 1: تمام جاوا فائلز کا پیکج نیم ایک ہی جگہ پر سیٹ کریں
+          find temp_src/ -name "*.java" -exec sed -i '1s/^/package com.system.pro;\n/' {} +
+          find temp_src/ -name "*.java" -exec sed -i '/^package /!b;n; s/^package .*;$//' {} +
           
-          # پروفیشنل مینی فیسٹ جو ہر ایپلیکیشن کے لیے فٹ ہے
-          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.NoActionBar'>\n        <activity android:name='com.system.pro.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHer' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
+          # نمبر 2: اب فکس شدہ فائلز کو ان کے صحیح مقام پر کاپی کریں
+          cp temp_src/*.java app/src/main/java/com/system/pro/ || true
+          cp temp_src/*.xml app/src/main/res/layout/ || true
+          
+          # نمبر 3: مینی فیسٹ کو خودکار جنریٹ کریں
+          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.Light.NoActionBar'>\n        <activity android:name='.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
           
           rm -rf temp_src source.zip
 
-      - name: Grant Execute Permissions
-        run: chmod +x gradlew || gradle wrapper --gradle-version 8.5
+      - name: Build and Release
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Execute Professional Build
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Create GitHub Release
+      - name: Release APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: "v${{ github.run_number }}"
-          name: "System Pro Success #${{ github.run_number }}"
+          name: "System Pro Build #${{ github.run_number }}"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
