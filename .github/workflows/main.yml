@@ -1,10 +1,11 @@
-name: System Pro Universal Strong Builder
+name: Dynamic APK Builder from ZipForge Pro
 
 on:
-  push:
-    branches: [ main ]
   repository_dispatch:
-    types: [build-zip-project]
+    types: [build-from-b64]
+
+permissions:
+  contents: write
 
 permissions:
   contents: write
