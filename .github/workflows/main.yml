@@ -18,47 +18,72 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Decode and Prepare Source
+      - name: Initialize Android Project Structure
         run: |
-          echo "Decoding Base64 data..."
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
-          
-          echo "Creating directory structure..."
+          # بنیادی فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p gradle/wrapper
 
-          echo "Extracting files..."
-          unzip -o source.zip -d temp_source/
+          # گریڈل کی ضروری فائلیں خودکار طور پر تیار کرنا
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:8.2.2" }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          cat <<EOF > settings.gradle
+          include ':app'
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "${{ github.event.client_payload.package_name }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes { release { minifyEnabled false } }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
+      - name: Decode and Inject Source
+        run: |
+          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
+          unzip -o source.zip -d temp_src/
           
-          # موصول شدہ فائلوں کو ان کی درست جگہ پر منتقل کرنا
-          mv temp_source/MainActivity.java app/src/main/java/com/system/pro/ 2>/dev/null || true
-          mv temp_source/activity_main.xml app/src/main/res/layout/ 2>/dev/null || true
-          mv temp_source/AndroidManifest.xml app/src/main/ 2>/dev/null || true
-          mv temp_source/ic_launcher.png app/src/main/res/mipmap-hdpi/ 2>/dev/null || true
+          # فائلیں ان کی صحیح جگہ منتقل کرنا
+          cp temp_src/MainActivity.java app/src/main/java/com/system/pro/ 2>/dev/null || true
+          cp temp_src/activity_main.xml app/src/main/res/layout/ 2>/dev/null || true
+          cp temp_src/AndroidManifest.xml app/src/main/ 2>/dev/null || true
           
-          rm source.zip
-          rm -rf temp_source
+          rm -rf temp_src source.zip
 
-      - name: Grant Execute Permission for Gradle
-        run: chmod +x gradlew
+      - name: Setup Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.5
 
-      - name: Build with Gradle 8.5
-        run: ./gradlew assembleDebug --stacktrace
-        # ہم نے آپ کی ہدایت کے مطابق اسے مستحکم ورژن پر رکھا ہے
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Create GitHub Release
+      - name: Create Release and Upload
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: "v${{ github.run_number }}"
-          name: "Build #${{ github.run_number }} - ${{ github.event.client_payload.app_name }}"
+          name: "System Pro Build #${{ github.run_number }}"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
