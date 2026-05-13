@@ -2,7 +2,6 @@ name: System Pro Build Engine
 
 on:
   repository_dispatch:
-    # UI se aane wale dono tarah ke events ko handle karne ke liye
     types: [build-from-b64, build-from-zip]
 
 jobs:
@@ -34,16 +33,13 @@ jobs:
 
       - name: Decode and Unzip Project
         run: |
-          # Client payload se zip data nikal kar decode karna
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
-          
-          # Zaruri directories banana aur unzip karna
           mkdir -p app/src/main/res/values/
           unzip -o project_data.zip -d app/src/main/
 
       - name: Clean and Inject Build Files
         run: |
-          # Project level build.gradle setup with JitPack support
+          # پراجیکٹ لیول فائل (JitPack سپورٹ کے ساتھ)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral(); }
@@ -58,7 +54,7 @@ jobs:
           }
           EOF
 
-          # App level build.gradle update (Namespace, ID, SDKs)
+          # ایپ لیول build.gradle (Namespace اور ID فکس)
           if [ -f "app/build.gradle" ]; then
             sed -i "s/namespace .*/namespace '${{ github.event.client_payload.package_name }}'/g" app/build.gradle || true
             sed -i "s/applicationId .*/applicationId '${{ github.event.client_payload.package_name }}'/g" app/build.gradle || true
@@ -66,12 +62,18 @@ jobs:
             sed -i "s/targetSdk .*/targetSdk 34/g" app/build.gradle
           fi
 
-          # Strings.xml mein App Name update karna
+          # اہم فکس: مینی فیسٹ سے پیکیج ایٹریبیوٹ ختم کرنا
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            # یہ کمانڈ 'package="any.name"' کو مکمل طور پر نکال دے گی
+            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          fi
+
+          # ایپ نیم اپ ڈیٹ
           if [ -f "app/src/main/res/values/strings.xml" ]; then
             sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
           fi
 
-          # Launcher Icon placement
+          # آئیکون مینجمنٹ
           if [ -f "app/src/main/ic_launcher.png" ]; then
             mkdir -p app/src/main/res/mipmap-xxxhdpi/
             mv app/src/main/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
