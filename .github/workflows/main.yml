@@ -2,23 +2,23 @@ name: "Ultimate APK Builder (Locked Edition)"
 
 on:
   repository_dispatch:
-    types: [build-app] # فرنٹ اینڈ کے ایونٹ سے میچ کرنا ضروری ہے
+    types: [build-app]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout Code"
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: "Environment Reset"
+      - name: Environment Reset
         run: |
           rm -rf app
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable-xxhdpi
 
-      - name: "Decode and Extract Payload"
+      - name: Decode and Extract Payload
         id: sync
         env:
           ZIP_DATA: ${{ github.event.client_payload.zip_data }}
@@ -41,7 +41,7 @@ jobs:
           echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_OUTPUT
 
-      - name: "Generate Build Config"
+      - name: Generate Build Config
         run: |
           cat > settings.gradle <<EOF
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -54,6 +54,10 @@ jobs:
           EOF
 
           cat > build.gradle <<EOF
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
           plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
 
@@ -66,28 +70,44 @@ jobs:
                   applicationId '${{ steps.sync.outputs.PKG }}'
                   minSdk 24
                   targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              lintOptions {
+                  checkReleaseBuilds false
+                  abortOnError false
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: "Setup Java 17"
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      - name: "Force Lock Gradle 8.5 & Build"
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: Build APK
         run: |
-          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: "Upload APK"
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sync.outputs.APP_NAME }}
