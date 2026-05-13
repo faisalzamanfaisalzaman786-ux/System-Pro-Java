@@ -22,47 +22,58 @@ jobs:
 
       - name: Force Gradle 8.5
         run: |
-          # گریڈل ورژرن کو سختی سے 8.5 پر سیٹ کرنا
           mkdir -p gradle/wrapper
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
 
-      - name: Decode and Unzip Project
+      - name: Decode and Unzip
         run: |
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
+          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
           mkdir -p app/src/main/res/values/
-          unzip -o project_data.zip -d app/src/main/
+          unzip -o project.zip -d app/src/main/
 
-      - name: Fix Missing Repository & Inject Resources
+      - name: Clean and Inject Repositories
         run: |
-          # build.gradle میں JitPack شامل کرنا تاکہ MPAndroidChart مل سکے
+          # پراجیکٹ لیول build.gradle میں JitPack شامل کرنا (بہت ضروری)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral(); }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { 
+                  google()
+                  mavenCentral()
+                  maven { url 'https://jitpack.io' }
+              }
+          }
+          EOF
+
+          # ایپ لیول build.gradle کی ترتیبات
           if [ -f "app/build.gradle" ]; then
-            sed -i "s/repositories {/repositories {\n        maven { url 'https:\/\/jitpack.io' }/g" app/build.gradle
+            # پیکیج نیم سیٹ کرنا
+            sed -i "s/namespace .*/namespace '${{ github.event.client_payload.package_name }}'/g" app/build.gradle
+            sed -i "s/applicationId .*/applicationId '${{ github.event.client_payload.package_name }}'/g" app/build.gradle
+            
+            # SDK ورژن فکس کرنا
+            sed -i "s/compileSdk .*/compileSdk 34/g" app/build.gradle
+            sed -i "s/targetSdk .*/targetSdk 34/g" app/build.gradle
           fi
 
-          # پیکیج نیم اور ایپ کا نام اپ ڈیٹ کرنا
-          sed -i "s/com.system.pro/${{ github.event.client_payload.package_name }}/g" app/build.gradle || true
-          
-          if [ -f "app/src/main/res/values/strings.xml" ]; then
-            sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
-          fi
-
-      - name: Build APK with Gradle 8.5
+      - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Generate Release Tag
-        id: tag
-        run: echo "tag_name=build_$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
-
-      - name: Upload APK to Releases
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
+          tag_name: build_${{ github.run_number }}
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
