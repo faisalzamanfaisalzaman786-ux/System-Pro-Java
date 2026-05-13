@@ -2,14 +2,16 @@ name: Dynamic APK Builder from ZipForge Pro
 
 on:
   repository_dispatch:
-    types: [build-from-b64]
-
-permissions:
-  contents: write
+    types: [build-from-b64]   # اگر چاہیں تو build-zip-project بھی کر سکتے ہیں
+  # push:                      # اختیاری: براہ راست push پر بھی چلانے کے لیے
+  #   branches: [ main ]
 
 permissions:
   contents: write
   actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Node.js 20 کی وارننگ ختم کرنے کے لیے
 
 jobs:
   build:
@@ -40,10 +42,11 @@ jobs:
           fi
           mkdir -p android_project
           cd android_project
-          echo "$ZIP_BASE64" | base64 -d > project.zip
+          # Remove any whitespace/newlines from base64 (just in case)
+          echo "$ZIP_BASE64" | tr -d '\n\r' | base64 -d > project.zip
           unzip -o project.zip
           rm project.zip
-          echo "Extraction done"
+          echo "✅ Extraction done"
 
       - name: Prepare Android Project Structure
         working-directory: ./android_project
@@ -66,7 +69,7 @@ jobs:
 
           mkdir -p app/src/main/res/values
           if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-            cat > app/src/main/res/values/strings.xml << EOF
+            cat > app/src/main/res/values/strings.xml << 'EOF'
           <resources>
               <string name="app_name">System Pro App</string>
           </resources>
@@ -92,7 +95,7 @@ jobs:
 
           mkdir -p app/src/main/res/layout
           if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
-            cat > app/src/main/res/layout/activity_main.xml << EOF
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -120,7 +123,6 @@ jobs:
       - name: Create Gradle Build Files
         working-directory: ./android_project
         run: |
-          # Top-level build.gradle with plugins block
           cat > build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.9.0' apply false
@@ -132,7 +134,6 @@ jobs:
             PACKAGE_NAME="com.system.pro.universal"
           fi
 
-          # app/build.gradle with Material Components
           cat > app/build.gradle << EOF
           plugins {
               id 'com.android.application'
@@ -158,7 +159,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle (using modern plugin management)
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -178,7 +178,6 @@ jobs:
           include ':app'
           EOF
 
-          # gradle.properties
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
