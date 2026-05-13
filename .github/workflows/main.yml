@@ -1,90 +1,88 @@
-name: System Pro Official Build
+# .github/workflows/build-apk.yml
+name: Dynamic APK Builder from ZipForge
 
 on:
   repository_dispatch:
     types: [build-from-b64]
 
+permissions:
+  contents: write
+  actions: read
+
+env:
+  APP_NAME: ${{ github.event.client_payload.app_name }}
+  PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+  ZIP_B64: ${{ github.event.client_payload.zip_data }}
+  ANDROID_COMPILE_SDK: 34
+  ANDROID_BUILD_TOOLS: 34.0.0
+  GRADLE_VERSION: 8.5
+
 jobs:
-  assemble-official-apk:
-    name: "System Pro: Official APK Generation"
+  build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
-          # کیشے کو عارضی طور پر ہٹایا گیا ہے تاکہ پاتھ ایرر نہ آئے
-          cache: 'gradle'
+          java-version: '17'
 
-      - name: Hard Reset & Structure Setup
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+          log-accepted-licenses: true
+
+      - name: Decode and extract source zip
         run: |
-          # پرانے تمام نشانات مٹانا
-          rm -rf .gradle app/build build
-          mkdir -p app/src/main/java/com/system/pro
+          set -e
+          mkdir -p input_source
+          echo "$ZIP_B64" | base64 -d > project_src.zip
+          unzip -q project_src.zip -d input_source
+          ls -la input_source/
+          if [ ! -f input_source/MainActivity.java ]; then
+            echo "❌ MainActivity.java not found!" && exit 1
+          fi
+          if [ ! -f input_source/activity_main.xml ]; then
+            echo "❌ activity_main.xml not found!" && exit 1
+          fi
+
+      - name: Create Android project structure with dynamic package
+        run: |
+          set -e
+          PKG="$PACKAGE_NAME"
+          if [[ ! "$PKG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+            echo "❌ Invalid package name: $PKG" && exit 1
+          fi
+
+          APP_PATH=$(echo "$PKG" | tr '.' '/')
+          mkdir -p app/src/main/java/$APP_PATH
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          
-          # پروفیشنل اور سادہ گریڈل فائلز
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
+          mkdir -p app/src/main/res/mipmap-{hdpi,mdpi,xhdpi,xxhdpi,xxxhdpi}
+          mkdir -p app/src/main/res/drawable
 
-          echo "include ':app'" > settings.gradle
+          cp input_source/MainActivity.java app/src/main/java/$APP_PATH/MainActivity.java
+          sed -i "s/^package .*;/package $PKG;/" app/src/main/java/$APP_PATH/MainActivity.java
 
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '${{ github.event.client_payload.package_name }}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              # ریسورس مرجر ایررز سے بچنے کے لیے سیٹنگ
-              aaptOptions {
-                  namespaced = false
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
+          cp input_source/activity_main.xml app/src/main/res/layout/activity_main.xml
 
-      - name: Package-First Injection
-        run: |
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
-          unzip -o source.zip -d temp_src/
-          
-          # سٹیپ 1: پیکیج نیم کی مکمل درستی
-          find temp_src/ -name "*.java" -type f -exec sed -i '/^package /d' {} +
-          find temp_src/ -name "*.java" -type f -exec sed -i '1i package com.system.pro;' {} +
-          
-          # سٹیپ 2: فائلوں کی منتقلی (بغیر کسی تضاد کے)
-          find temp_src/ -name "*.java" -exec cp {} app/src/main/java/com/system/pro/ \;
-          find temp_src/ -name "*.xml" ! -name "AndroidManifest.xml" -exec cp {} app/src/main/res/layout/ \; || true
-          
-          # سٹیپ 3: مینی فیسٹ کی جنریشن
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          if [ -f input_source/AndroidManifest.xml ]; then
+            cp input_source/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            sed -i "s/package=\"[^\"]*\"/package=\"$PKG\"/" app/src/main/AndroidManifest.xml
+          else
+            cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG">
+              <application
+                  android:allowBackup="true"
+                  android:label="${APP_NAME:-ZipForgeApp}"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -94,25 +92,111 @@ jobs:
               </application>
           </manifest>
           EOF
-          
-          rm -rf temp_src source.zip
+          fi
 
-      - name: Execute Fresh Build
+          if [ -f input_source/ic_launcher.png ]; then
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              cp input_source/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher.png
+            done
+          fi
+
+      - name: Generate Gradle build files
         run: |
-          # گریڈل 8.5 کا استعمال اور تمام کیشے کو نظر انداز کرنا
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          # --no-build-cache اور --no-daemon اس پاتھ ایرر کو ختم کرنے کے لیے ضروری ہیں
-          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --stacktrace
+          set -e
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.4'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
 
-      - name: Upload Artifact
+          echo 'include ":app"' > settings.gradle
+
+          cat > app/build.gradle << EOF
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk $ANDROID_COMPILE_SDK
+              defaultConfig {
+                  applicationId "$PACKAGE_NAME"
+                  minSdk 21
+                  targetSdk $ANDROID_COMPILE_SDK
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
+          echo "# no rules" > app/proguard-rules.pro
+
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          EOF
+
+      - name: Setup Gradle Wrapper
+        run: |
+          set -e
+          wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
+          unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
+          export PATH=$PWD/gradle-${{ env.GRADLE_VERSION }}/bin:$PATH
+          gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+          chmod +x gradlew
+
+      - name: Build APK
+        run: |
+          set -e
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Official-Build' }}
+          name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Success Summary
-        if: success()
-        run: |
-          echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "Path Mapping issue resolved using --no-build-cache." >> $GITHUB_STEP_SUMMARY
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "${{ env.APP_NAME || 'ZipForgeApp' }} v1.0-${{ github.run_number }}"
+          body: |
+            🚀 APK built dynamically from ZipForge Pro
+            - Package: ${{ env.PACKAGE_NAME }}
+            - Triggered by: ZipForge dispatch
+          files: app/build/outputs/apk/debug/*.apk
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
