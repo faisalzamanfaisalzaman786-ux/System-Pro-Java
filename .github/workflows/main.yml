@@ -20,40 +20,81 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Project Structure
+      - name: Standardize Environment
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          
-          printf "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
-          printf "include ':app'" > settings.gradle
-          printf "plugins { id 'com.android.application' }\nandroid { namespace 'com.system.pro'; compileSdk 34; defaultConfig { applicationId '${{ github.event.client_payload.package_name }}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }\ndependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }" > app/build.gradle
+          mkdir -p app/src/main/res/values
 
-      - name: Sanitized Injection Process
+          # گریڈل فائلز کو الگ الگ لائنز میں لکھنا تاکہ سنٹیکس ایرر نہ آئے
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          echo "include ':app'" > settings.gradle
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '${{ github.event.client_payload.package_name }}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
+      - name: Pre-Process and Inject
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # نمبر 1: تمام جاوا فائلز کا پیکج نیم ایک ہی جگہ پر سیٹ کریں
-          find temp_src/ -name "*.java" -exec sed -i '1s/^/package com.system.pro;\n/' {} +
-          find temp_src/ -name "*.java" -exec sed -i '/^package /!b;n; s/^package .*;$//' {} +
+          # نمبر 1: تمام جاوا فائلز سے پرانا پیکج ڈیلیٹ کریں اور نیا شامل کریں
+          find temp_src/ -name "*.java" -exec sed -i '/^package /d' {} +
+          find temp_src/ -name "*.java" -exec sed -i '1i package com.system.pro;' {} +
           
-          # نمبر 2: اب فکس شدہ فائلز کو ان کے صحیح مقام پر کاپی کریں
+          # نمبر 2: فائلز کو پروفیشنل اسٹرکچر میں منتقل کریں
           cp temp_src/*.java app/src/main/java/com/system/pro/ || true
           cp temp_src/*.xml app/src/main/res/layout/ || true
           
-          # نمبر 3: مینی فیسٹ کو خودکار جنریٹ کریں
-          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n    <application android:allowBackup='true' android:label='System Pro' android:theme='@style/Theme.AppCompat.Light.NoActionBar'>\n        <activity android:name='.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' />\n                <category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > app/src/main/AndroidManifest.xml
+          # نمبر 3: مینی فیسٹ کی درستگی
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
           
           rm -rf temp_src source.zip
 
-      - name: Build and Release
+      - name: Professional Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Release APK
+      - name: Dispatch APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
