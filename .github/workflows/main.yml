@@ -15,195 +15,101 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: 17
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
 
-      - name: Decode and Extract Project ZIP
-        env:
-          ZIP_BASE64: ${{ github.event.client_payload.zip_data }}
-          PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+      - name: Decode and Extract ZIP
         run: |
-          if [ -z "$ZIP_BASE64" ]; then
-            echo "❌ No zip_data received"
-            exit 1
+          if [ -z "${{ github.event.client_payload.zip_data }}" ]; then
+            echo "No zip_data" && exit 1
           fi
           mkdir -p android_project
           cd android_project
-          echo "$ZIP_BASE64" | base64 -d > project.zip
+          echo "${{ github.event.client_payload.zip_data }}" | tr -d '\n\r' | base64 -d > project.zip
           unzip -o project.zip
           rm project.zip
-          echo "Extraction done"
 
-      - name: Prepare Android Project Structure
+      - name: Build Project (AppCompat only, no Material)
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
           if [ -z "$PACKAGE_NAME" ]; then
-            if [ -f "src/main/AndroidManifest.xml" ]; then
-              PACKAGE_NAME=$(grep -oP 'package="\K[^"]+' src/main/AndroidManifest.xml | head -1)
-            fi
-            if [ -z "$PACKAGE_NAME" ]; then
-              PACKAGE_NAME="com.system.pro.universal"
-            fi
-          fi
-          echo "Package: $PACKAGE_NAME"
-
-          mkdir -p app/src/main
-          if [ -d "src/main" ]; then
-            cp -rf src/main/* app/src/main/
+            PACKAGE_NAME="com.example.app"
           fi
 
+          # Remove any existing resources that might cause conflicts
+          rm -rf app/src/main/res/values/themes.xml app/src/main/res/values/colors.xml
+
+          # Ensure minimal theme and colors
           mkdir -p app/src/main/res/values
-          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-            cat > app/src/main/res/values/strings.xml << EOF
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <resources>
-              <string name="app_name">System Pro App</string>
+              <color name="purple_500">#FF6200EE</color>
           </resources>
           EOF
-          fi
-
-          PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-
-          if [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
-            cat > "app/src/main/java/$PKG_PATH/MainActivity.java" << EOF
-          package $PACKAGE_NAME;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+          <resources>
+              <style name="Theme.ZipForge" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/purple_500</item>
+              </style>
+          </resources>
           EOF
-          fi
 
-          mkdir -p app/src/main/res/layout
-          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
-            cat > app/src/main/res/layout/activity_main.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#02040C">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="System Pro Studio"
-                  android:textColor="#00FFCC"
-                  android:textSize="24sp"
-                  android:layout_centerInParent="true"/>
-          </RelativeLayout>
-          EOF
-          fi
-
-          # Fix package names in all Java files
-          find app/src/main/java -name "*.java" -type f | while read file; do
-            sed -i "1s/^package .*;/package $PACKAGE_NAME;/" "$file"
-            if ! grep -q "import $PACKAGE_NAME.R;" "$file"; then
-              sed -i "/package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" "$file"
-            fi
-          done
-
-      - name: Create Gradle Build Files
-        working-directory: ./android_project
-        run: |
+          # Generate fresh Gradle files (no Material)
           cat > build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application' version '8.9.0' apply false
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.4' }
           }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
-
-          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
-          if [ -z "$PACKAGE_NAME" ]; then
-            PACKAGE_NAME="com.system.pro.universal"
-          fi
-
+          echo 'include ":app"' > settings.gradle
           cat > app/build.gradle << EOF
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '$PACKAGE_NAME'
               compileSdk 34
               defaultConfig {
                   applicationId '$PACKAGE_NAME'
-                  minSdk 24
+                  minSdk 21
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  versionName '1.0'
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           EOF
+          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
+          echo 'android.useAndroidX=true' >> gradle.properties
 
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "SystemProBuilder"
-          include ':app'
-          EOF
-
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-      - name: Setup Gradle Wrapper (version 8.11.1)
-        working-directory: ./android_project
-        run: |
-          gradle wrapper --gradle-version 8.11.1 --distribution-type bin
+          # Setup wrapper
+          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q gradle-8.5-bin.zip
+          export PATH=$PWD/gradle-8.5/bin:$PATH
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Build APK
-        working-directory: ./android_project
-        run: |
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
-
-      - name: Upload Debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-${{ github.run_id }}
+          name: app-debug
           path: android_project/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
 
-      - name: Create GitHub Release
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
-          name: "System Pro Build ${{ github.run_id }}"
           files: android_project/app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
