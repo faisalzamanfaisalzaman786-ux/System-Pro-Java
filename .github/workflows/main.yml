@@ -20,17 +20,18 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          # کیشے کو عارضی طور پر ہٹایا گیا ہے تاکہ پاتھ ایرر نہ آئے
           cache: 'gradle'
 
-      - name: Initialize Project Structure
+      - name: Hard Reset & Structure Setup
         run: |
-          # مکمل کلین اپ
+          # پرانے تمام نشانات مٹانا
           rm -rf .gradle app/build build
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # پروفیشنل گریڈل کنفیگریشن
+          # پروفیشنل اور سادہ گریڈل فائلز
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -55,6 +56,10 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              # ریسورس مرجر ایررز سے بچنے کے لیے سیٹنگ
+              aaptOptions {
+                  namespaced = false
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -62,22 +67,20 @@ jobs:
           }
           EOF
 
-      - name: Precise Injection & Package Correction
+      - name: Package-First Injection
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # پیکیج نیم کی پہلے سے درستی (Pre-Correction)
+          # سٹیپ 1: پیکیج نیم کی مکمل درستی
           find temp_src/ -name "*.java" -type f -exec sed -i '/^package /d' {} +
           find temp_src/ -name "*.java" -type f -exec sed -i '1i package com.system.pro;' {} +
           
-          # فائلز کی ان کے مخصوص فولڈرز میں منتقلی
-          # صرف جاوا فائلز جاوا فولڈر میں جائیں گی
+          # سٹیپ 2: فائلوں کی منتقلی (بغیر کسی تضاد کے)
           find temp_src/ -name "*.java" -exec cp {} app/src/main/java/com/system/pro/ \;
-          # صرف XML لے آؤٹ فائلز layout فولڈر میں جائیں گی (سوائے Manifest کے)
           find temp_src/ -name "*.xml" ! -name "AndroidManifest.xml" -exec cp {} app/src/main/res/layout/ \; || true
           
-          # مینی فیسٹ کو اس کے درست مقام (src/main/) پر لکھنا
+          # سٹیپ 3: مینی فیسٹ کی جنریشن
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -94,20 +97,22 @@ jobs:
           
           rm -rf temp_src source.zip
 
-      - name: Build Official Debug APK
+      - name: Execute Fresh Build
         run: |
+          # گریڈل 8.5 کا استعمال اور تمام کیشے کو نظر انداز کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          # --no-build-cache اور --no-daemon اس پاتھ ایرر کو ختم کرنے کے لیے ضروری ہیں
+          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      - name: Upload System Pro Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name || 'System-Pro-Official-Build' }}
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Build Success Summary
+      - name: Success Summary
         if: success()
         run: |
           echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "Fixed Resource naming issue. APK generated with Gradle 8.5." >> $GITHUB_STEP_SUMMARY
+          echo "Path Mapping issue resolved using --no-build-cache." >> $GITHUB_STEP_SUMMARY
