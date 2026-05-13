@@ -1,4 +1,4 @@
-name: ZipForge Pro Build Engine
+name: "Ultimate APK Builder (Locked Edition)"
 
 on:
   repository_dispatch:
@@ -7,95 +7,98 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout Repository
+      - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Gradle 8.5
+      - name: "Environment Reset"
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-          sudo unzip -d /opt/gradle gradle-8.5-bin.zip
-          export PATH=$PATH:/opt/gradle/gradle-8.5/bin
-
-      - name: Decode and Prepare Project
-        run: |
-          # Create project directories
-          mkdir -p app/src/main/java/com/system/pro
+          rm -rf app
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/drawable-xxhdpi
 
-          # Decode the base64 ZIP data from UI
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
+      - name: "Decode and Extract Payload"
+        id: sync
+        env:
+          ZIP_DATA: ${{ github.event.client_payload.zip_data }}
+        run: |
+          echo "$ZIP_DATA" | base64 -d > payload.zip
+          unzip payload.zip -d extracted_data/
+          cp extracted_data/MainActivity.java app/src/main/java/temp_main.java
+          cp extracted_data/activity_main.xml app/src/main/res/layout/activity_main.xml
+          cp extracted_data/AndroidManifest.xml app/src/main/AndroidManifest.xml
           
-          # Unzip files to appropriate locations
-          unzip -o project_data.zip -d temp_extract/
-          
-          # Move files to their Android structure
-          cp temp_extract/MainActivity.java app/src/main/java/com/system/pro/
-          cp temp_extract/activity_main.xml app/src/main/res/layout/
-          cp temp_extract/AndroidManifest.xml app/src/main/
-          
-          # Check if icon exists and move it
-          if [ -f "temp_extract/ic_launcher.png" ]; then
-            cp temp_extract/ic_launcher.png app/src/main/res/mipmap-hdpi/
+          if [ -f extracted_data/ic_launcher.png ]; then
+            cp extracted_data/ic_launcher.png app/src/main/res/drawable-xxhdpi/ic_launcher.png
           fi
 
-      - name: Generate Build Files
+          RAW_PKG=$(grep -m 1 "^package " app/src/main/java/temp_main.java | sed 's/package //' | sed 's/;//' | xargs)
+          if [ -z "$RAW_PKG" ]; then RAW_PKG="${{ github.event.client_payload.package_name }}"; fi
+          
+          # Manifest Fix
+          python3 -c "import re; data = open('app/src/main/AndroidManifest.xml').read(); cleaned = re.sub(r'package=\"[^\"]*\"', '', data); open('app/src/main/AndroidManifest.xml', 'w').write(cleaned)"
+
+          PKG_PATH=$(echo "$RAW_PKG" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mv app/src/main/java/temp_main.java "app/src/main/java/$PKG_PATH/MainActivity.java"
+
+          echo "PKG=$RAW_PKG" >> $GITHUB_OUTPUT
+          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_OUTPUT
+
+      - name: "Generate Locked Build Config"
         run: |
-          # Create build.gradle (Module: app)
-          cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
+          # Settings File Locked
+          cat > settings.gradle <<EOF
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() } 
           }
+          rootProject.name = "${{ steps.sync.outputs.APP_NAME }}"
+          include ':app'
+          EOF
+
+          # Root Build File Locked (AGP 8.2.2)
+          cat > build.gradle <<EOF
+          plugins { id 'com.android.application' version '8.2.2' apply false }
+          EOF
+
+          # App Build File Locked (SDK 34, AppCompat 1.6.1)
+          cat > app/build.gradle <<EOF
+          plugins { id 'com.android.application' }
           android {
-              namespace "com.system.pro"
+              namespace '${{ steps.sync.outputs.PKG }}'
               compileSdk 34
               defaultConfig {
-                  applicationId "${{ github.event.client_payload.package_name }}"
-                  minSdk 21
+                  applicationId '${{ steps.sync.outputs.PKG }}'
+                  minSdk 24
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
-      - name: Build APK with Gradle 8.5
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+      - name: "Setup Java 17"
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
 
-      - name: Upload APK Artifact
+      - name: "Force Lock Gradle 8.5 & Build"
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: "Upload APK"
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-v1400
-          path: app/build/outputs/apk/release/*.apk
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: build-${{ github.run_number }}
-          files: app/build/outputs/apk/release/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ steps.sync.outputs.APP_NAME }}
+          path: app/build/outputs/apk/debug/*.apk
