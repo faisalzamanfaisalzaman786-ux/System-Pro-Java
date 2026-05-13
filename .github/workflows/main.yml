@@ -2,7 +2,8 @@ name: System Pro Build Engine
 
 on:
   repository_dispatch:
-    types: [build-from-b64]
+    # UI se aane wale dono tarah ke events ko handle karne ke liye
+    types: [build-from-b64, build-from-zip]
 
 jobs:
   build:
@@ -31,15 +32,18 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-      - name: Decode and Unzip
+      - name: Decode and Unzip Project
         run: |
-          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project.zip
+          # Client payload se zip data nikal kar decode karna
+          echo "${{ github.event.client_payload.zip_data }}" | base64 -d > project_data.zip
+          
+          # Zaruri directories banana aur unzip karna
           mkdir -p app/src/main/res/values/
-          unzip -o project.zip -d app/src/main/
+          unzip -o project_data.zip -d app/src/main/
 
-      - name: Clean and Inject Repositories
+      - name: Clean and Inject Build Files
         run: |
-          # پراجیکٹ لیول build.gradle میں JitPack شامل کرنا (بہت ضروری)
+          # Project level build.gradle setup with JitPack support
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral(); }
@@ -54,23 +58,31 @@ jobs:
           }
           EOF
 
-          # ایپ لیول build.gradle کی ترتیبات
+          # App level build.gradle update (Namespace, ID, SDKs)
           if [ -f "app/build.gradle" ]; then
-            # پیکیج نیم سیٹ کرنا
-            sed -i "s/namespace .*/namespace '${{ github.event.client_payload.package_name }}'/g" app/build.gradle
-            sed -i "s/applicationId .*/applicationId '${{ github.event.client_payload.package_name }}'/g" app/build.gradle
-            
-            # SDK ورژن فکس کرنا
+            sed -i "s/namespace .*/namespace '${{ github.event.client_payload.package_name }}'/g" app/build.gradle || true
+            sed -i "s/applicationId .*/applicationId '${{ github.event.client_payload.package_name }}'/g" app/build.gradle || true
             sed -i "s/compileSdk .*/compileSdk 34/g" app/build.gradle
             sed -i "s/targetSdk .*/targetSdk 34/g" app/build.gradle
           fi
 
-      - name: Build APK
+          # Strings.xml mein App Name update karna
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            sed -i "s/>.*<\/string>/>${{ github.event.client_payload.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
+          fi
+
+          # Launcher Icon placement
+          if [ -f "app/src/main/ic_launcher.png" ]; then
+            mkdir -p app/src/main/res/mipmap-xxxhdpi/
+            mv app/src/main/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          fi
+
+      - name: Execute Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Create Release
+      - name: Push APK to Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: build_${{ github.run_number }}
