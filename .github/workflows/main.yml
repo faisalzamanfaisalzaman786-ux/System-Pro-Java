@@ -18,14 +18,12 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Initialize Android Project Structure
+      - name: Initialize Project Structure
         run: |
-          # بنیادی فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/res/values
 
-          # گریڈل کی ضروری فائلیں خودکار طور پر تیار کرنا
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -60,25 +58,30 @@ jobs:
           }
           EOF
 
-      - name: Decode and Inject Source
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+          </resources>
+          EOF
+
+      - name: Decode and Inject Files
         run: |
           echo "${{ github.event.client_payload.zip_data }}" | base64 -d > source.zip
           unzip -o source.zip -d temp_src/
           
-          # فائلیں ان کی صحیح جگہ منتقل کرنا
-          cp temp_src/MainActivity.java app/src/main/java/com/system/pro/ 2>/dev/null || true
-          cp temp_src/activity_main.xml app/src/main/res/layout/ 2>/dev/null || true
-          cp temp_src/AndroidManifest.xml app/src/main/ 2>/dev/null || true
+          find temp_src/ -name "MainActivity.java" -exec cp {} app/src/main/java/com/system/pro/ \;
+          find temp_src/ -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
+          find temp_src/ -name "AndroidManifest.xml" -exec cp {} app/src/main/ \;
           
           rm -rf temp_src source.zip
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Build Debug APK
+      - name: Execute Build
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Create Release and Upload
+      - name: Release APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
