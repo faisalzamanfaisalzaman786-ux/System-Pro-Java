@@ -114,7 +114,11 @@ jobs:
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           APPGRADLE
 
-          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
+          # درست gradle.properties - یہاں android.useAndroidX=true لازمی ہے
+          cat > gradle.properties << PROP
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          PROP
 
           wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
