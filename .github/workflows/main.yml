@@ -1,6 +1,6 @@
 name: Dynamic APK Builder from ZipForge Pro
 
-on:
+on: [push]
   repository_dispatch:
     types: [build-from-b64]
 
