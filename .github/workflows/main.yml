@@ -32,23 +32,51 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
 
-      - name: Inject Master Icon & Resources
+      - name: Inject Master Resources & Fix Missing Assets
         run: |
-          # ڈیفالٹ آئیکن جنریٹر (اگر پے لوڈ میں آئیکن نہ ہو)
+          # Default Icon
           curl -Lo app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/google/material-design-icons/master/png/action/settings/android/res/mipmap-hdpi/ic_launcher_settings_white_24dp.png
+          
+          # Fix: Create Missing Backgrounds to avoid processDebugResources failure
+          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > app/src/main/res/drawable/edittext_background.xml
+          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
+
+          # Fix: Centralized Themes and Styles
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#FF00E5FF</item>
+                  <item name="colorSecondary">#FF00FF00</item>
+                  <item name="android:statusBarColor">#000000</item>
+              </style>
+              <style name="ShapeAppearance" parent="">
+                  <item name="cornerFamily">rounded</item>
+                  <item name="cornerSize">8dp</item>
+              </style>
+              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.Holo.ProgressBar" />
+              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.Holo.ProgressBar.Horizontal" />
+          </resources>' > app/src/main/res/values/themes.xml
+
+      - name: Decode and Extract Source
+        run: |
+          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
+          if [ ! -z "$ZIP_DATA" ]; then
+            echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
+            unzip -o project.zip -d temp_src || true
+            cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
+            cp -rf temp_src/app/src/main/res/layout/* app/src/main/res/layout/ || true
+          fi
 
       - name: Centralized Dependency Engine
         run: |
-          # build.gradle (Project Level)
+          # Project Level Build File
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
-          
-          # settings.gradle
           echo 'include ":app"' > settings.gradle
 
-          # app/build.gradle (Titan Configuration)
-          # یہاں ہم ڈپلیکیٹ کلاسز کو مستقل بلاک کر رہے ہیں
+          # App Level Build File with Duplicate Class Fix
           echo "plugins { id 'com.android.application' }" > app/build.gradle
           echo "android { 
             namespace 'com.systempro.master'
@@ -60,14 +88,14 @@ jobs:
               versionCode 1
               versionName '1.0'
             }
-            buildTypes { release { minifyEnabled false } }
+            buildFeatures { viewBinding true }
             configurations.all { 
               exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
               exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
             }
           }" >> app/build.gradle
 
-          # ہارڈ ویئر اور UI کی تمام ماسٹر ڈیپنڈنسیز
+          # Hardware & UI Master Dependencies
           echo "dependencies { 
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.9.0'
@@ -75,29 +103,13 @@ jobs:
             implementation 'androidx.camera:camera-lifecycle:1.3.0'
             implementation 'androidx.camera:camera-view:1.3.0'
             implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            implementation 'com.google.guava:guava:31.1-android'
           }" >> app/build.gradle
+          
+          echo 'android.useAndroidX=true' > gradle.properties
+          echo 'android.enableJetifier=true' >> gradle.properties
 
-      - name: Master Manifest & Permissions
-        run: |
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              <application 
-                  android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
-
-      - name: Build & Hardware Optimize
+      - name: Build System Pro APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -105,8 +117,17 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Deliver System Pro APK
+      - name: Upload System Pro Output
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Titan-V1400
+          name: System-Pro-Titan-Build
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "System Pro Titan V1400"
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
