@@ -187,40 +187,14 @@ LAYOUT
           LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
           JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
 
-          # Only patch if the Java file references the missing ID and the layout doesn't have it
           if grep -q 'R\.id\.btn_toggle_torch' "$JAVA_FILE" 2>/dev/null; then
             if [ -f "$LAYOUT_FILE" ] && ! grep -q 'btn_toggle_torch' "$LAYOUT_FILE"; then
-              echo "⚠️ Missing btn_toggle_torch detected – fixing layout..."
-              # Check if root is a ViewGroup (LinearLayout, RelativeLayout, etc.)
+              echo "⚠️ Adding missing button btn_toggle_torch"
               ROOT_TAG=$(grep -oP '^\s*<\K\w+' "$LAYOUT_FILE" | head -1)
-              if [[ "$ROOT_TAG" != "LinearLayout" && "$ROOT_TAG" != "RelativeLayout" && "$ROOT_TAG" != "FrameLayout" && "$ROOT_TAG" != "ConstraintLayout" ]]; then
-                # Not a ViewGroup → wrap whole content in a LinearLayout
-                echo "   Root is '$ROOT_TAG' – wrapping inside LinearLayout"
-                mv "$LAYOUT_FILE" "${LAYOUT_FILE}.orig"
-                cat > "$LAYOUT_FILE" << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
-
-    <include layout="@layout/activity_main_original" />
-
-</LinearLayout>
-EOF
-                mv "${LAYOUT_FILE}.orig" "app/src/main/res/layout/activity_main_original.xml"
-                LAYOUT_FILE="app/src/main/res/layout/activity_main_original.xml"
-              fi
-
-              # Insert the Button just before the closing root tag
-              ROOT_CLOSE="</$ROOT_TAG>"
-              sed -i "s|$ROOT_CLOSE|    <Button\n        android:id=\"@+id/btn_toggle_torch\"\n        android:layout_width=\"wrap_content\"\n        android:layout_height=\"wrap_content\"\n        android:text=\"Torch\"\n        android:layout_marginTop=\"16dp\" />\n\n$ROOT_CLOSE|" "$LAYOUT_FILE"
-              echo "✅ Added button btn_toggle_torch to layout"
-            else
-              echo "✅ Layout already contains btn_toggle_torch – no fix needed"
+              # Simple approach: append button at end of file before root close
+              sed -i "/<\/$ROOT_TAG>/i \ \ \ \ <Button\n        android:id=\"@+id/btn_toggle_torch\"\n        android:layout_width=\"wrap_content\"\n        android:layout_height=\"wrap_content\"\n        android:text=\"Torch\"\n        android:layout_marginTop=\"16dp\" />\n" "$LAYOUT_FILE"
+              echo "✅ Fixed layout"
             fi
-          else
-            echo "ℹ️ Java file does not reference btn_toggle_torch – skipping fix"
           fi
 
       - name: Generate Gradle Files
