@@ -1,18 +1,11 @@
 name: Dynamic APK Builder
 
 on:
-  push:
   repository_dispatch:
     types: [build-from-b64]
 
 permissions:
   contents: write
-
-env:
-  COMPILE_SDK: 34
-  BUILD_TOOLS: 34.0.0
-  MIN_SDK: 21
-  TARGET_SDK: 34
 
 jobs:
   build:
@@ -40,7 +33,7 @@ jobs:
           unzip -q project.zip
           rm project.zip
 
-      - name: Fix package name and app name
+      - name: Prepare project and fix missing button
         working-directory: ./android_project
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
@@ -48,27 +41,23 @@ jobs:
           APP="${{ github.event.client_payload.app_name }}"
           [ -z "$APP" ] && APP="ZipForge"
 
-          # Create app structure
           mkdir -p app/src/main
           [ -d "src/main" ] && cp -rf src/main/* app/src/main/
 
-          # Move Java to correct package folder
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           find app/src/main/java -name "*.java" -exec mv {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
           [ -f "MainActivity.java" ] && mv MainActivity.java "app/src/main/java/$PKG_PATH/"
 
-          # Update Java files
+          # Fix package declaration and add R import
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/package .*;/package $PKG;/" {} \;
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "/package $PKG;/a import $PKG.R;" {} \;
 
-          # Update AndroidManifest
+          # Fix AndroidManifest
           if [ -f "app/src/main/AndroidManifest.xml" ]; then
             sed -i "s/package=\"[^\"]*\"/package=\"$PKG\"/" app/src/main/AndroidManifest.xml
             sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP\"/" app/src/main/AndroidManifest.xml
-            sed -i 's/android:name="[^"]*MainActivity"/android:name=".MainActivity"/' app/src/main/AndroidManifest.xml
           else
-            mkdir -p app/src/main
             cat > app/src/main/AndroidManifest.xml << EOF
 <manifest package="$PKG">
     <application android:label="$APP">
@@ -83,27 +72,33 @@ jobs:
 EOF
           fi
 
-          # Minimal resources
+          # Ensure layout has the missing button
+          LAYOUT="app/src/main/res/layout/activity_main.xml"
+          if [ -f "$LAYOUT" ] && grep -q 'R\.id\.btn_toggle_torch' "app/src/main/java/$PKG_PATH/MainActivity.java" 2>/dev/null; then
+            if ! grep -q 'btn_toggle_torch' "$LAYOUT"; then
+              echo "Adding missing button btn_toggle_torch to layout"
+              # Find root tag and add button before closing
+              ROOT=$(grep -oP '^\s*<\K\w+' "$LAYOUT" | head -1)
+              sed -i "/<\/$ROOT>/i \ \ \ \ <Button\n        android:id=\"@+id/btn_toggle_torch\"\n        android:layout_width=\"wrap_content\"\n        android:layout_height=\"wrap_content\"\n        android:text=\"Torch\" />\n" "$LAYOUT"
+            fi
+          fi
+
+          # Fallback resources if missing
           mkdir -p app/src/main/res/values app/src/main/res/layout
-          echo '<resources><color name="purple">#6200EE</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<resources><style name="AppTheme" parent="Theme.AppCompat.Light"/></resources>' > app/src/main/res/values/themes.xml
-          echo '<TextView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Hello" />' > app/src/main/res/layout/activity_main.xml
+          [ ! -f "app/src/main/res/values/colors.xml" ] && echo '<resources><color name="purple">#6200EE</color></resources>' > app/src/main/res/values/colors.xml
+          [ ! -f "app/src/main/res/values/themes.xml" ] && echo '<resources><style name="AppTheme" parent="Theme.AppCompat.Light"/></resources>' > app/src/main/res/values/themes.xml
+          [ ! -f "$LAYOUT" ] && echo '<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Hello" xmlns:android="http://schemas.android.com/apk/res/android"/>' > "$LAYOUT"
 
       - name: Generate Gradle files
         working-directory: ./android_project
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
           [ -z "$PKG" ] && PKG="com.zipforge.app"
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.4' }
-          }
-          allprojects { repositories { google() } }
-          EOF
+          echo 'buildscript { repositories { google() } dependencies { classpath "com.android.tools.build:gradle:8.1.4" } }' > build.gradle
+          echo 'allprojects { repositories { google() } }' >> build.gradle
           echo 'include ":app"' > settings.gradle
           cat > app/build.gradle << EOF
-          plugins { id 'com.android.application' }
+          plugins { id("com.android.application") }
           android {
               namespace '$PKG'
               compileSdk 34
