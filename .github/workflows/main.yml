@@ -32,24 +32,21 @@ jobs:
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ -z "$ZIP_DATA" ]; then
-            echo "❌ No zip_data received"
+            echo "❌ No zip_data"
             exit 1
           fi
           mkdir -p android_project
           cd android_project
-          # Remove whitespace and newlines from base64
           echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
           unzip -o project.zip
           rm project.zip
-          echo "✅ Extraction complete"
           ls -la
 
-      - name: Prepare Android Project with User Files
+      - name: Prepare Android Project (Fix Package & R)
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
           if [ -z "$PACKAGE_NAME" ]; then
-            # Try to read from manifest if present
             if [ -f "src/main/AndroidManifest.xml" ]; then
               PACKAGE_NAME=$(grep -oP 'package="\K[^"]+' src/main/AndroidManifest.xml | head -1)
             fi
@@ -57,36 +54,32 @@ jobs:
               PACKAGE_NAME="com.zipforge.app"
             fi
           fi
-          echo "Using package: $PACKAGE_NAME"
+          echo "Package: $PACKAGE_NAME"
 
           # Create app structure
           mkdir -p app/src/main
-          # Copy all user files (if any) from src/main to app/src/main
           if [ -d "src/main" ]; then
             cp -rf src/main/* app/src/main/
           fi
 
-          # Ensure necessary directories exist
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-hdpi
-
-          # Fix package name in all Java files
+          # Fix package name in ALL Java files
           find app/src/main/java -name "*.java" -type f | while read file; do
             sed -i "1s/^package .*;/package $PACKAGE_NAME;/" "$file"
+            # Add R import if missing
             if ! grep -q "import $PACKAGE_NAME.R;" "$file"; then
               sed -i "/package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" "$file"
             fi
           done
 
-          # Fix AndroidManifest.xml package attribute
+          # Fix AndroidManifest.xml
           if [ -f "app/src/main/AndroidManifest.xml" ]; then
             sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
+            # Ensure activity is exported
+            sed -i 's/<activity /<activity android:exported="true" /' app/src/main/AndroidManifest.xml
           else
-            # Create minimal manifest if missing
             cat > app/src/main/AndroidManifest.xml << MANIFEST
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PACKAGE_NAME">
-              <application android:label="ZipForgeApp" android:theme="@style/Theme.ZipForge">
+              <application android:label="ZipForge" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
@@ -98,7 +91,10 @@ jobs:
           MANIFEST
           fi
 
-          # Provide fallback theme and colors (in case user didn't provide)
+          # Provide fallback layout and colors if missing
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          
           if [ ! -f "app/src/main/res/values/colors.xml" ]; then
             cat > app/src/main/res/values/colors.xml << COLORS
           <resources>
@@ -112,7 +108,7 @@ jobs:
           if [ ! -f "app/src/main/res/values/themes.xml" ]; then
             cat > app/src/main/res/values/themes.xml << THEME
           <resources>
-              <style name="Theme.ZipForge" parent="Theme.AppCompat.Light.DarkActionBar">
+              <style name="Theme.Zip" parent="Theme.AppCompat.Light.DarkActionBar">
                   <item name="colorPrimary">@color/purple_500</item>
                   <item name="colorPrimaryDark">@color/purple_700</item>
                   <item name="colorAccent">@color/teal_200</item>
@@ -121,14 +117,42 @@ jobs:
           THEME
           fi
 
-          # If user provided icon, copy to proper density
-          if [ -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
-            echo "✅ User icon found"
-          elif [ -f "src/main/ic_launcher.png" ]; then
-            cp src/main/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
+            cat > app/src/main/res/layout/activity_main.xml << LAYOUT
+          <?xml version="1.0" encoding="utf-8"?>
+          <TextView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:text="Hello from ZipForge"
+              android:textSize="24sp"
+              android:layout_gravity="center"/>
+          LAYOUT
           fi
 
-      - name: Generate Gradle Build Files (AppCompat only)
+          # Handle icon: copy to all mipmap densities
+          if [ -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
+            ICON_FILE="app/src/main/res/mipmap-hdpi/ic_launcher.png"
+          elif [ -f "src/main/ic_launcher.png" ]; then
+            ICON_FILE="src/main/ic_launcher.png"
+          elif [ -f "ic_launcher.png" ]; then
+            ICON_FILE="ic_launcher.png"
+          else
+            ICON_FILE=""
+          fi
+          
+          if [ -n "$ICON_FILE" ] && [ -f "$ICON_FILE" ]; then
+            echo "✅ Installing icon to all densities"
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p app/src/main/res/mipmap-$density
+              cp "$ICON_FILE" app/src/main/res/mipmap-$density/ic_launcher.png
+            done
+            # Also copy round icon fallback
+            cp "$ICON_FILE" app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png 2>/dev/null || true
+          else
+            echo "⚠️ No icon provided, using default Android icon"
+          fi
+
+      - name: Generate Gradle Files (No Material)
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
@@ -136,7 +160,6 @@ jobs:
             PACKAGE_NAME="com.zipforge.app"
           fi
 
-          # Root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -147,10 +170,8 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           echo 'include ":app"' > settings.gradle
 
-          # app/build.gradle (no Material)
           cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
@@ -173,14 +194,9 @@ jobs:
           }
           EOF
 
-          # gradle.properties
-          cat > gradle.properties << 'PROP'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          PROP
-
-          # Dummy proguard
-          echo "# no rules" > app/proguard-rules.pro
+          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
+          echo 'android.useAndroidX=true' >> gradle.properties
+          echo '# no rules' > app/proguard-rules.pro
 
       - name: Setup Gradle Wrapper
         working-directory: ./android_project
