@@ -1,4 +1,4 @@
-name: Dynamic APK Builder from ZipForge Pro
+name: System Pro Titan Master Build
 on:
   repository_dispatch:
     types: [build-from-b64]
@@ -8,11 +8,9 @@ permissions:
   actions: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   COMPILE_SDK: 34
-  BUILD_TOOLS: 34.0.0
-  MIN_SDK: 21
   TARGET_SDK: 34
+  MIN_SDK: 21
   GRADLE_VERSION: 8.5
   AGP_VERSION: 8.1.4
 
@@ -22,103 +20,93 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java & Android SDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platforms;android-${{ env.COMPILE_SDK }} build-tools;${{ env.BUILD_TOOLS }}"
-          accept-android-sdk-licenses: true
-
-      - name: Decode and Extract ZIP
+      - name: Initialize Centralized Structure
         run: |
-          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
-          if [ -z "$ZIP_DATA" ]; then exit 1; fi
-          mkdir -p android_project
-          cd android_project
-          echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
-          unzip -o project.zip || true
-          rm project.zip
-
-      - name: Prepare Android Project
-        working-directory: ./android_project
-        run: |
-          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
-          [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          [ -z "$APP_NAME" ] && APP_NAME="camera"
-          PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/java/com/systempro/master
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/values
 
-          if [ -d "src/main" ]; then cp -rf src/main/* app/src/main/ || true; fi
-          find app/src/main/java -name "*.java" -type f -exec mv {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
-
-          # AndroidManifest.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'$PACKAGE_NAME'">' >> app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.CAMERA" />' >> app/src/main/AndroidManifest.xml
-          echo '<uses-permission android:name="android.permission.FLASHLIGHT" />' >> app/src/main/AndroidManifest.xml
-          echo '<uses-feature android:name="android.hardware.camera" android:required="false" />' >> app/src/main/AndroidManifest.xml
-          echo '<application android:label="'$APP_NAME'" android:theme="@style/Theme.AppCompat.Light.DarkActionBar" android:allowBackup="true">' >> app/src/main/AndroidManifest.xml
-          echo '<activity android:name=".MainActivity" android:exported="true">' >> app/src/main/AndroidManifest.xml
-          echo '<intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '</activity></application></manifest>' >> app/src/main/AndroidManifest.xml
-
-          # Layout
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
-          echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center">' >> app/src/main/res/layout/activity_main.xml
-          echo '<Button android:id="@+id/mainButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Toggle Torch" />' >> app/src/main/res/layout/activity_main.xml
-          echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
-
-      - name: Generate Gradle Files
-        working-directory: ./android_project
+      - name: Inject Master Icon & Resources
         run: |
-          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
-          [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
+          # ڈیفالٹ آئیکن جنریٹر (اگر پے لوڈ میں آئیکن نہ ہو)
+          curl -Lo app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/google/material-design-icons/master/png/action/settings/android/res/mipmap-hdpi/ic_launcher_settings_white_24dp.png
 
+      - name: Centralized Dependency Engine
+        run: |
+          # build.gradle (Project Level)
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
+          
+          # settings.gradle
           echo 'include ":app"' > settings.gradle
 
-          # App build.gradle - Duplicate classes کو حل کرنے کے لیے کنفیگریشن
+          # app/build.gradle (Titan Configuration)
+          # یہاں ہم ڈپلیکیٹ کلاسز کو مستقل بلاک کر رہے ہیں
           echo "plugins { id 'com.android.application' }" > app/build.gradle
-          echo "android { namespace '$PACKAGE_NAME'; compileSdk ${{ env.COMPILE_SDK }}; defaultConfig { applicationId '$PACKAGE_NAME'; minSdk ${{ env.MIN_SDK }}; targetSdk ${{ env.TARGET_SDK }}; versionCode 1; versionName '1.0' }" >> app/build.gradle
-          echo "    configurations.all { exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'; exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8' } }" >> app/build.gradle
-          echo "dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.camera:camera-camera2:1.3.0'; implementation 'androidx.camera:camera-lifecycle:1.3.0'; implementation 'androidx.camera:camera-view:1.3.0' }" >> app/build.gradle
-          
-          echo 'android.useAndroidX=true' > gradle.properties
-          echo 'android.enableJetifier=true' >> gradle.properties
+          echo "android { 
+            namespace 'com.systempro.master'
+            compileSdk ${{ env.COMPILE_SDK }}
+            defaultConfig { 
+              applicationId 'com.systempro.master'
+              minSdk ${{ env.MIN_SDK }}
+              targetSdk ${{ env.TARGET_SDK }}
+              versionCode 1
+              versionName '1.0'
+            }
+            buildTypes { release { minifyEnabled false } }
+            configurations.all { 
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+            }
+          }" >> app/build.gradle
 
-      - name: Setup Gradle Wrapper
-        working-directory: ./android_project
+          # ہارڈ ویئر اور UI کی تمام ماسٹر ڈیپنڈنسیز
+          echo "dependencies { 
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.camera:camera-camera2:1.3.0'
+            implementation 'androidx.camera:camera-lifecycle:1.3.0'
+            implementation 'androidx.camera:camera-view:1.3.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }" >> app/build.gradle
+
+      - name: Master Manifest & Permissions
+        run: |
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              <application 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+      - name: Build & Hardware Optimize
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Build APK
-        working-directory: ./android_project
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
+      - name: Deliver System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: android_project/app/build/outputs/apk/debug/*.apk
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          name: "System Pro Build ${{ github.run_id }}"
-          files: android_project/app/build/outputs/apk/debug/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: System-Pro-Titan-V1400
+          path: app/build/outputs/apk/debug/*.apk
