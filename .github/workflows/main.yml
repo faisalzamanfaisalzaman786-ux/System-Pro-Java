@@ -1,7 +1,6 @@
 name: Dynamic APK Builder from ZipForge Pro
 
 on:
-  push:
   repository_dispatch:
     types: [build-from-b64]
 
@@ -23,19 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: "platforms;android-${{ env.COMPILE_SDK }} build-tools;${{ env.BUILD_TOOLS }}"
           accept-android-sdk-licenses: true
-
       - name: Decode and Extract ZIP
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
@@ -49,7 +45,6 @@ jobs:
           unzip -o project.zip
           rm project.zip
           echo "✅ Extraction complete"
-
       - name: Prepare Android Project (Fix Package, Java, Icon, App Name)
         working-directory: ./android_project
         run: |
@@ -171,7 +166,8 @@ LAYOUT
             echo "⚠️ No icon provided"
           fi
 
-      - name: 🔧 Auto‑fix missing layout resources (btn_toggle_torch)
+      # 👇 نیا سٹیپ: غائب بٹن کو خود بخود شامل کریں
+      - name: 🔧 Auto-fix missing btn_toggle_torch
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
@@ -179,20 +175,16 @@ LAYOUT
             if [ -f "src/main/AndroidManifest.xml" ]; then
               PACKAGE_NAME=$(grep -oP 'package="\K[^"]+' src/main/AndroidManifest.xml | head -1)
             fi
-            if [ -z "$PACKAGE_NAME" ]; then
-              PACKAGE_NAME="com.zipforge.app"
-            fi
+            [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
           fi
           PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
           LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
           JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
-
           if grep -q 'R\.id\.btn_toggle_torch' "$JAVA_FILE" 2>/dev/null; then
             if [ -f "$LAYOUT_FILE" ] && ! grep -q 'btn_toggle_torch' "$LAYOUT_FILE"; then
-              echo "⚠️ Adding missing button btn_toggle_torch"
               ROOT_TAG=$(grep -oP '^\s*<\K\w+' "$LAYOUT_FILE" | head -1)
               sed -i "/<\/$ROOT_TAG>/i \ \ \ \ <Button\n        android:id=\"@+id/btn_toggle_torch\"\n        android:layout_width=\"wrap_content\"\n        android:layout_height=\"wrap_content\"\n        android:text=\"Torch\"\n        android:layout_marginTop=\"16dp\" />\n" "$LAYOUT_FILE"
-              echo "✅ Fixed layout"
+              echo "✅ Added missing button btn_toggle_torch"
             fi
           fi
 
