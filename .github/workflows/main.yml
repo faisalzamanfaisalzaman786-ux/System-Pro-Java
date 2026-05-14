@@ -37,7 +37,7 @@ jobs:
       - name: Decode and Extract ZIP
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
-          if [ -z "$ZIP_DATA" ]; then echo "❌ No zip_data"; exit 1; fi
+          if [ -z "$ZIP_DATA" ]; then exit 1; fi
           mkdir -p android_project
           cd android_project
           echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
@@ -51,64 +51,28 @@ jobs:
           [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
           APP_NAME="${{ github.event.client_payload.app_name }}"
           [ -z "$APP_NAME" ] && APP_NAME="ZipForge"
-
-          # پکیج پاتھ بنانا
           PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          
-          # فولڈرز کی درست ترتیب
+
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          
-          # اگر زپ فائل میں سورس موجود ہے تو اسے کاپی کریں
-          if [ -d "src/main" ]; then
-            cp -rf src/main/* app/src/main/ || true
-          fi
 
-          # تمام جاوا فائلز کو پکیج فولڈر میں منتقل کریں اور پکیج نیم درست کریں
-          find app/src/main/java -name "*.java" -type f | while read file; do
-            mv "$file" "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
-          done
+          if [ -d "src/main" ]; then cp -rf src/main/* app/src/main/ || true; fi
+          find app/src/main/java -name "*.java" -type f -exec mv {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
 
-          # ڈیفالٹ مینی فیسٹ بنانا اگر موجود نہ ہو
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat > app/src/main/AndroidManifest.xml <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PACKAGE_NAME">
-    <application android:label="$APP_NAME" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
-          fi
+          # AndroidManifest.xml بنانا (بغیر EOF کے)
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'$PACKAGE_NAME'">' >> app/src/main/AndroidManifest.xml
+          echo '<application android:label="'$APP_NAME'" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">' >> app/src/main/AndroidManifest.xml
+          echo '<activity android:name=".MainActivity" android:exported="true">' >> app/src/main/AndroidManifest.xml
+          echo '<intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>' >> app/src/main/AndroidManifest.xml
+          echo '</activity></application></manifest>' >> app/src/main/AndroidManifest.xml
 
-          # لے آؤٹ بنانا جس میں بٹن شامل ہے
-          cat > app/src/main/res/layout/activity_main.xml <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
-    <Button
-        android:id="@+id/mainButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Click Me" />
-</LinearLayout>
-EOF
-
-          # تھیم بنانا تاکہ بلڈ فیل نہ ہو
-          cat > app/src/main/res/values/styles.xml <<EOF
-<resources>
-    <style name="Theme.Zip" parent="Theme.AppCompat.Light.DarkActionBar" />
-</resources>
-EOF
+          # بٹن والا لے آؤٹ بنانا
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+          echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center">' >> app/src/main/res/layout/activity_main.xml
+          echo '<Button android:id="@+id/mainButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Click Me" />' >> app/src/main/res/layout/activity_main.xml
+          echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
 
       - name: Generate Gradle Files
         working-directory: ./android_project
@@ -116,38 +80,15 @@ EOF
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
           [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
 
-          # Root build.gradle
-          cat > build.gradle <<EOF
-buildscript {
-    repositories { google(); mavenCentral() }
-    dependencies { classpath "com.android.tools.build:gradle:${{ env.AGP_VERSION }}" }
-}
-allprojects {
-    repositories { google(); mavenCentral() }
-}
-EOF
-
+          # build.gradle فائلز بنانا
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
+          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
 
-          # App build.gradle - Namespace کا اضافہ
-          cat > app/build.gradle <<EOF
-plugins { id 'com.android.application' }
-android {
-    namespace '$PACKAGE_NAME'
-    compileSdk ${{ env.COMPILE_SDK }}
-    defaultConfig {
-        applicationId '$PACKAGE_NAME'
-        minSdk ${{ env.MIN_SDK }}
-        targetSdk ${{ env.TARGET_SDK }}
-        versionCode 1
-        versionName "1.0"
-    }
-}
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-}
-EOF
+          echo "plugins { id 'com.android.application' }" > app/build.gradle
+          echo "android { namespace '$PACKAGE_NAME'; compileSdk ${{ env.COMPILE_SDK }}; defaultConfig { applicationId '$PACKAGE_NAME'; minSdk ${{ env.MIN_SDK }}; targetSdk ${{ env.TARGET_SDK }}; versionCode 1; versionName '1.0' } }" >> app/build.gradle
+          echo "dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }" >> app/build.gradle
+          
           echo 'android.useAndroidX=true' > gradle.properties
 
       - name: Setup Gradle Wrapper
