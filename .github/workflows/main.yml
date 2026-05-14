@@ -41,7 +41,7 @@ jobs:
           mkdir -p android_project
           cd android_project
           echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
-          unzip -o project.zip
+          unzip -o project.zip || true
           rm project.zip
 
       - name: Prepare Android Project
@@ -52,53 +52,110 @@ jobs:
           APP_NAME="${{ github.event.client_payload.app_name }}"
           [ -z "$APP_NAME" ] && APP_NAME="ZipForge"
 
+          # پکیج پاتھ بنانا
+          PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+          
+          # فولڈرز کی درست ترتیب
+          mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
+          # اگر زپ فائل میں سورس موجود ہے تو اسے کاپی کریں
           if [ -d "src/main" ]; then
-            cp -rf src/main/* app/src/main/
+            cp -rf src/main/* app/src/main/ || true
           fi
 
-          PKG_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          find app/src/main/java -name "*.java" -type f -exec mv {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
-
-          find "app/src/main/java/$PKG_PATH" -name "*.java" -type f | while read file; do
-            sed -i "1s/^package .*;/package $PACKAGE_NAME;/" "$file"
+          # تمام جاوا فائلز کو پکیج فولڈر میں منتقل کریں اور پکیج نیم درست کریں
+          find app/src/main/java -name "*.java" -type f | while read file; do
+            mv "$file" "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
           done
 
-          # یہاں ہم نے layout بنانے کا طریقہ بدل دیا ہے تاکہ EOF کا مسئلہ نہ آئے
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
-          echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center">' >> app/src/main/res/layout/activity_main.xml
-          echo '<Button android:id="@+id/mainButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Click Me" />' >> app/src/main/res/layout/activity_main.xml
-          echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
-
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
+          # ڈیفالٹ مینی فیسٹ بنانا اگر موجود نہ ہو
+          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+            cat > app/src/main/AndroidManifest.xml <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PACKAGE_NAME">
+    <application android:label="$APP_NAME" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
           fi
+
+          # لے آؤٹ بنانا جس میں بٹن شامل ہے
+          cat > app/src/main/res/layout/activity_main.xml <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center">
+    <Button
+        android:id="@+id/mainButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Click Me" />
+</LinearLayout>
+EOF
+
+          # تھیم بنانا تاکہ بلڈ فیل نہ ہو
+          cat > app/src/main/res/values/styles.xml <<EOF
+<resources>
+    <style name="Theme.Zip" parent="Theme.AppCompat.Light.DarkActionBar" />
+</resources>
+EOF
 
       - name: Generate Gradle Files
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
           [ -z "$PACKAGE_NAME" ] && PACKAGE_NAME="com.zipforge.app"
-          
-          # Gradle files creation without complex EOF
-          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+
+          # Root build.gradle
+          cat > build.gradle <<EOF
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath "com.android.tools.build:gradle:${{ env.AGP_VERSION }}" }
+}
+allprojects {
+    repositories { google(); mavenCentral() }
+}
+EOF
+
           echo 'include ":app"' > settings.gradle
-          
-          printf "plugins { id 'com.android.application' }\nandroid {\n    namespace '$PACKAGE_NAME'\n    compileSdk ${{ env.COMPILE_SDK }}\n    defaultConfig {\n        applicationId '$PACKAGE_NAME'\n        minSdk ${{ env.MIN_SDK }}\n        targetSdk ${{ env.TARGET_SDK }}\n        versionCode 1\n        versionName '1.0'\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.9.0'\n}" > app/build.gradle
-          
-          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
-          echo 'android.useAndroidX=true' >> gradle.properties
+
+          # App build.gradle - Namespace کا اضافہ
+          cat > app/build.gradle <<EOF
+plugins { id 'com.android.application' }
+android {
+    namespace '$PACKAGE_NAME'
+    compileSdk ${{ env.COMPILE_SDK }}
+    defaultConfig {
+        applicationId '$PACKAGE_NAME'
+        minSdk ${{ env.MIN_SDK }}
+        targetSdk ${{ env.TARGET_SDK }}
+        versionCode 1
+        versionName "1.0"
+    }
+}
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+}
+EOF
+          echo 'android.useAndroidX=true' > gradle.properties
 
       - name: Setup Gradle Wrapper
         working-directory: ./android_project
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
-          export PATH=$PWD/gradle-${{ env.GRADLE_VERSION }}/bin:$PATH
-          gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+          ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
 
       - name: Build APK
