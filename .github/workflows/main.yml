@@ -166,8 +166,8 @@ LAYOUT
             echo "⚠️ No icon provided"
           fi
 
-      # 👇 نیا سٹیپ: غائب بٹن کو خود بخود شامل کریں
-      - name: 🔧 Auto-fix missing btn_toggle_torch
+      # ✅ یہ واحد اضافی سٹیپ ہے - باقی سب کچھ ویسے کا ویسا
+      - name: Auto-fix missing btn_toggle_torch
         working-directory: ./android_project
         run: |
           PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
