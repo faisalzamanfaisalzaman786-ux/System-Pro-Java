@@ -43,22 +43,15 @@ jobs:
 
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+              <style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar">
                   <item name="colorPrimary">#FF00E5FF</item>
                   <item name="colorSecondary">#FF00FF00</item>
                   <item name="android:statusBarColor">#000000</item>
               </style>
-              <style name="ShapeAppearance" parent="">
-                  <item name="cornerFamily">rounded</item>
-                  <item name="cornerSize">8dp</item>
-              </style>
-              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.Holo.ProgressBar" />
-              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.Holo.ProgressBar.Horizontal" />
           </resources>' > app/src/main/res/values/themes.xml
 
           echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.master">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
