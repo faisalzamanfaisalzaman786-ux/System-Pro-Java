@@ -43,9 +43,13 @@ jobs:
 
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <attr name="progressTint" format="color" />
-              <attr name="actionTextColor" format="color" />
-              <style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar">
+              <attr name="progressTint" format="color|reference" />
+              <attr name="actionTextColor" format="color|reference" />
+          </resources>' > app/src/main/res/values/attrs.xml
+
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#FF00E5FF</item>
                   <item name="colorSecondary">#FF00FF00</item>
                   <item name="android:statusBarColor">#000000</item>
