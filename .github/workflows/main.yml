@@ -28,39 +28,37 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Initialize Core
+      - name: Initialize Asset Folders
         run: |
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
 
-      - name: Atomic Resource Injection
+      - name: Inject Master Assets & Icons
         run: |
-          # ضروری ڈرا ایبلز کی تیاری
+          # ڈیفالٹ آئیکن (اگر زپ میں نہ ہو تو بلڈ بچانے کے لیے)
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4,5V11C4,16.55 7.84,21.74 12,23C16.16,21.74 20,16.55 20,11V5L12,2Z"/></vector>' > app/src/main/res/mipmap-hdpi/ic_launcher.xml
+          
+          # ضروری بیک گراؤنڈز
           echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > app/src/main/res/drawable/edittext_background.xml
           echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
 
-          # تمام مسنگ اسٹائلز اور ایٹریبیوٹس کا مجموعہ
+          # ماسٹر اسٹائلز انجکشن
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <attr name="progressTint" format="color|reference" />
               <attr name="actionTextColor" format="color|reference" />
-              
-              <style name="ShapeAppearance" parent="">
-                  <item name="cornerFamily">rounded</item>
-                  <item name="cornerSize">8dp</item>
-              </style>
-
+              <style name="ShapeAppearance" parent=""><item name="cornerFamily">rounded</item><item name="cornerSize">8dp</item></style>
               <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.ProgressBar" />
               <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.ProgressBar.Horizontal" />
               <style name="Widget.MaterialComponents.Spinner" parent="android:Widget.Spinner" />
-
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#FF00E5FF</item>
                   <item name="android:statusBarColor">#000000</item>
               </style>
           </resources>' > app/src/main/res/values/system_pro_core_fixed.xml
 
-      - name: Decode and Sync Source
+      - name: Sync Source and Preserve Assets
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
@@ -68,26 +66,21 @@ jobs:
             unzip -o project.zip -d temp_src || true
             mkdir -p app/src/main/java
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
-            cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
-            
-            # ری فیکٹرنگ: زپ سے آنے والی فائلوں کو ماسٹر پیکج سے جوڑنا
+            # ریسورسز کاپی کرتے وقت آئیکنز کو اوور رائٹ نہیں ہونے دینا اگر وہ پہلے سے موجود ہوں
+            cp -rn temp_src/app/src/main/res/* app/src/main/res/ || true
             find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
           fi
 
-      - name: Generate Clean Manifest
+      - name: Manifest Protection
         run: |
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
                   android:theme="@style/Theme.SystemPro">
-                  <activity
-                      android:name="com.system.pro.MainActivity"
-                      android:exported="true">
+                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -96,40 +89,22 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Build Engine
+      - name: Build and Assembly
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
-          
           echo "plugins { id 'com.android.application' }" > app/build.gradle
-          echo "android { 
-            namespace 'com.systempro.master'
-            compileSdk ${{ env.COMPILE_SDK }}
-            defaultConfig { 
-              applicationId 'com.systempro.master'
-              minSdk ${{ env.MIN_SDK }}
-              targetSdk ${{ env.TARGET_SDK }}
-              versionCode 1
-              versionName '1.0'
-            }
-          }" >> app/build.gradle
-          
-          echo "dependencies { 
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.11.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }" >> app/build.gradle
+          echo "android { namespace 'com.systempro.master'; compileSdk ${{ env.COMPILE_SDK }}; defaultConfig { applicationId 'com.systempro.master'; minSdk ${{ env.MIN_SDK }}; targetSdk ${{ env.TARGET_SDK }}; versionCode 1; versionName '1.0' } }" >> app/build.gradle
+          echo "dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }" >> app/build.gradle
 
-      - name: Execute Verified Assembly
-        run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Finalize Release
+      - name: Release Build
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
