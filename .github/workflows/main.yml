@@ -23,29 +23,33 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: ZipForge Auto-Correction Engine
+      - name: Dynamic Package & Structure Engine
         run: |
-          rm -rf app/src/main/java app/src/main/res
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-hdpi
-          
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
-            cp -f temp_files/MainActivity.java app/src/main/java/com/system/pro/ || true
-            cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            sed -i 's/package .*;/package com.system.pro;/g' app/src/main/java/com/system/pro/MainActivity.java
-            sed -i 's/import .*\.R;/import com.system.pro.R;/g' app/src/main/java/com/system/pro/MainActivity.java
+            # Extract Package Name from MainActivity.java
+            RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
+            if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
+            echo "DETECTED_PACKAGE=$RAW_PKG" >> $GITHUB_ENV
+            
+            # Create Dynamic Folder Structure
+            PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
+            mkdir -p app/src/main/java/$PKG_PATH
+            mkdir -p app/src/main/res/layout
+            mkdir -p app/src/main/res/mipmap-hdpi
+            
+            cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
+            cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
             fi
           fi
 
-      - name: Master Shield Manifest Injection
+      - name: Inject Dynamic Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -54,20 +58,14 @@ jobs:
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-              <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
+                  <activity android:name="${{ env.DETECTED_PACKAGE }}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -77,7 +75,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Engine with ProGuard Protection
+      - name: Smart Build Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -86,10 +84,10 @@ jobs:
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace 'com.system.pro'
+              namespace '${{ env.DETECTED_PACKAGE }}'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.system.pro"
+                  applicationId "${{ env.DETECTED_PACKAGE }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -98,11 +96,6 @@ jobs:
               buildTypes {
                   debug {
                       minifyEnabled true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-                  release {
-                      minifyEnabled true
-                      shrinkResources true
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
@@ -115,7 +108,7 @@ jobs:
           EOF
           touch app/proguard-rules.pro
 
-      - name: Execute Assembly
+      - name: Run Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -123,16 +116,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Protected-Build
+          name: ${{ env.DETECTED_PACKAGE }}-Build
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          files: app/build/outputs/apk/debug/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
