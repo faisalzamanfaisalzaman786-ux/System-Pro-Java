@@ -23,13 +23,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: ZipForge Source Alignment
+      - name: ZipForge Auto-Alignment & Auto-Correction
         run: |
           # 1. پرانا ڈھانچہ صاف کر کے نیا بنانا
           rm -rf app/src/main/java app/src/main/res
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
@@ -37,19 +36,22 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
-            # 2. فلیٹ فائلوں کو صحیح اینڈرائیڈ فولڈرز میں منتقل کرنا
+            # 2. فائلوں کو منتقل کرنا
             cp -f temp_files/MainActivity.java app/src/main/java/com/system/pro/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # آئیکن کی منتقلی
+            # 3. آٹو کریکشن: جاوا کوڈ کے اندر پیکیج نیم اور R امپورٹ کو ٹھیک کرنا
+            # یہ کمانڈ کسی بھی پرانے پیکیج نیم کو com.system.pro سے بدل دے گی
+            sed -i 's/package .*;/package com.system.pro;/g' app/src/main/java/com/system/pro/MainActivity.java
+            sed -i 's/import .*\.R;/import com.system.pro.R;/g' app/src/main/java/com/system/pro/MainActivity.java
+            
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
             fi
           fi
 
-      - name: Master Shield Permissions & Manifest
+      - name: Master Shield Manifest
         run: |
-          # یہاں ہم مینی فیسٹ کو خود جنریٹ کریں گے تاکہ کوئی غلطی نہ رہے
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -63,6 +65,7 @@ jobs:
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
+                  android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name="com.system.pro.MainActivity" android:exported="true">
                       <intent-filter>
@@ -74,7 +77,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Engine (Fixed for com.system.pro)
+      - name: Build Engine (Pure Shield com.system.pro)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -97,6 +100,7 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.biometric:biometric:1.1.0'
           }
           EOF
 
