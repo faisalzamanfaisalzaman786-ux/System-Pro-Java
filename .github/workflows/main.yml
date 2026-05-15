@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Dynamic Package & Resource Engine
+      - name: Dynamic Package & Force Resource Fix
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
@@ -32,7 +32,7 @@ jobs:
             
             RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
             if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
-            echo "DETECTED_PACKAGE=$RAW_PKG" >> $GITHUB_ENV
+            echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
             
             PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
             mkdir -p app/src/main/java/$PKG_PATH
@@ -44,50 +44,24 @@ jobs:
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # Create dummy drawables to prevent "not found" errors
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/edittext_background.xml
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
-            
-            if [ -f temp_files/ic_launcher.png ]; then
-              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
-            fi
+            # ایرر ختم کرنے کے لیے مصنوعی ریسورسز بنائیں
+            echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/fix_resources.xml
+            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/></shape>' > app/src/main/res/drawable/edittext_background.xml
+            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/></shape>' > app/src/main/res/drawable/spinner_background.xml
           fi
 
-      - name: Master Material Theme Fix
+      - name: Master Theme Injection
         run: |
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#00FFCC</item>
-                  <item name="colorSecondary">#a855f7</item>
                   <item name="android:statusBarColor">#02040c</item>
               </style>
           </resources>
           EOF
 
-      - name: Dynamic Manifest Fix
-        run: |
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity android:name="${{ env.DETECTED_PACKAGE }}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Smart Build Engine
+      - name: Build Engine (The Final Lock)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -96,10 +70,10 @@ jobs:
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace '${{ env.DETECTED_PACKAGE }}'
+              namespace '${{ env.FINAL_PKG }}'
               compileSdk 34
               defaultConfig {
-                  applicationId "${{ env.DETECTED_PACKAGE }}"
+                  applicationId "${{ env.FINAL_PKG }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -115,12 +89,11 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
           touch app/proguard-rules.pro
 
-      - name: Run Assembly
+      - name: Run Final Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -128,8 +101,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Deliver Fixed APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.DETECTED_PACKAGE }}-Protected
+          name: System-Pro-Fixed-Build
           path: app/build/outputs/apk/debug/*.apk
