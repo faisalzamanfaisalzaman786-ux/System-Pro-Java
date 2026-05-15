@@ -23,36 +23,64 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Dynamic Payload Processing
+      - name: Dynamic Payload Sync
         run: |
-          # مکمل صفائی
-          rm -rf app/src/main/java
-          rm -rf app/src/main/res
-          rm -f app/src/main/AndroidManifest.xml
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res
+          rm -rf app/src/main/java app/src/main/res
+          mkdir -p app/src/main/java app/src/main/res
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
-            
-            # پے لوڈ کی منتقلی
-            if [ -d temp_src/app/src/main/java ]; then
-              cp -rf temp_src/app/src/main/java/* app/src/main/java/
-            fi
-            
-            if [ -d temp_src/app/src/main/res ]; then
-              cp -rf temp_src/app/src/main/res/* app/src/main/res/
-            fi
-            
-            if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
-              cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            else
-              # اگر مینی فیسٹ مسنگ ہو تو ڈیفالٹ بنانا (بیک اپ)
-              echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.master"><application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name="com.system.pro.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-            fi
+            cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
+            cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
           fi
+
+      - name: Inject Universal Master Manifest
+        run: |
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.master">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+              <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+              <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  
+                  <activity
+                      android:name="com.system.pro.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
       - name: Build Engine
         run: |
@@ -77,6 +105,7 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.biometric:biometric:1.1.0'
           }
           EOF
 
@@ -88,7 +117,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Release APK
+      - name: Deliver APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
