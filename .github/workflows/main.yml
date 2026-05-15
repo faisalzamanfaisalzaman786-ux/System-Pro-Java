@@ -23,56 +23,48 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Dynamic Payload Sync
+      - name: ZipForge Source Alignment
         run: |
+          # 1. پرانا ڈھانچہ صاف کر کے نیا بنانا
           rm -rf app/src/main/java app/src/main/res
-          mkdir -p app/src/main/java app/src/main/res
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
-            unzip -o project.zip -d temp_src || true
-            cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
-            cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
+            unzip -o project.zip -d temp_files || true
+            
+            # 2. فلیٹ فائلوں کو صحیح اینڈرائیڈ فولڈرز میں منتقل کرنا
+            cp -f temp_files/MainActivity.java app/src/main/java/com/system/pro/ || true
+            cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
+            
+            # آئیکن کی منتقلی
+            if [ -f temp_files/ic_launcher.png ]; then
+              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
+            fi
           fi
 
-      - name: Inject Universal Master Manifest
+      - name: Master Shield Permissions & Manifest
         run: |
+          # یہاں ہم مینی فیسٹ کو خود جنریٹ کریں گے تاکہ کوئی غلطی نہ رہے
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.master">
-
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-              <uses-permission android:name="android.permission.USE_FINGERPRINT" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
+              <uses-permission android:name="android.permission.USE_BIOMETRIC" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  
-                  <activity
-                      android:name="com.system.pro.MainActivity"
-                      android:exported="true">
+                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -82,7 +74,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Engine
+      - name: Build Engine (Fixed for com.system.pro)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -91,10 +83,10 @@ jobs:
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace 'com.systempro.master'
+              namespace 'com.system.pro'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.systempro.master"
+                  applicationId "com.system.pro"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -105,11 +97,10 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              implementation 'androidx.biometric:biometric:1.1.0'
           }
           EOF
 
-      - name: Execute Assembly
+      - name: Run Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
