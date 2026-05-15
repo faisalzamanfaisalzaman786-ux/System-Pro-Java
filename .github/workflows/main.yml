@@ -23,9 +23,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Total Purge & Force Package Sync
+      - name: Total Purge & Size Optimization
         run: |
-          # مکمل صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           
@@ -34,21 +33,17 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
-            # پیکیج نیم نکالیں (com.system.pro3 وغیرہ)
             RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
             if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
             echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
             
-            # نیا سٹرکچر بنائیں
             PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
             mkdir -p app/src/main/java/$PKG_PATH
             mkdir -p app/src/main/res/layout
             mkdir -p app/src/main/res/values
             mkdir -p app/src/main/res/drawable
-            mkdir -p app/src/main/res/mipmap-anydpi-v26
             mkdir -p app/src/main/res/mipmap-hdpi
             
-            # فائلیں کاپی کریں
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
@@ -56,39 +51,28 @@ jobs:
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             
-            # فیل سیف آئیکن (ic_launcher fix)
+            # آئیکن فکس
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             else
-              # اگر آئیکن غائب ہے تو ایک سادہ رنگ والا آئیکن خود بنائیں
-              echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00FFCC" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+              echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#00FFCC"/></shape>' > app/src/main/res/drawable/ic_launcher_bg.xml
             fi
-            
-            # ضروری اسٹائلز
-            echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/styles.xml
           fi
 
-      - name: Generate Fixed Manifest
+      - name: Inject ProGuard Rules (Size Reducer)
         run: |
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
+          # یہ فائل سائز کم کرنے کے لیے دوبارہ بنائی گئی ہے
+          cat <<EOF > app/proguard-rules.pro
+          -optimizationpasses 5
+          -dontpreverify
+          -allowaccessmodification
+          -optimizations !code/simplification/arithmetic,!field/*,!class/merging/*
+          -keep public class * extends android.app.Activity
+          -keep public class * extends android.app.Application
+          -keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
           EOF
 
-      - name: Master Build Engine
+      - name: Build Shield Engine (Ultra Shrink)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -106,6 +90,13 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  debug {
+                      minifyEnabled true
+                      shrinkResources true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -113,7 +104,7 @@ jobs:
           }
           EOF
 
-      - name: Execute Clean Build
+      - name: Execute Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -121,8 +112,8 @@ jobs:
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Deliver Final APK
+      - name: Deliver Optimized APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.FINAL_PKG }}-Build
+          name: ${{ env.FINAL_PKG }}-Small-Build
           path: app/build/outputs/apk/debug/*.apk
