@@ -17,60 +17,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Environment
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Precise Payload Placement
+      - name: Dynamic Payload Processing
         run: |
-          # سب سے پہلے پرانے ڈھانچے کو مکمل صاف کریں تاکہ مکسنگ نہ ہو
-          rm -rf app/src/main/java app/src/main/res
-          mkdir -p app/src/main/java app/src/main/res
+          # 1. پرانی تمام فائلوں کی مکمل صفائی (نئے پیکیج کے لیے جگہ بنانا)
+          rm -rf app/src/main/java
+          rm -rf app/src/main/res
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
-            # 1. جاوا فائلوں کو ان کے اصلی پاتھ پر منتقل کرنا
+            # 2. پے لوڈ سے نیا سٹرکچر کاپی کرنا (بغیر کسی تبدیلی کے)
             if [ -d temp_src/app/src/main/java ]; then
               cp -rf temp_src/app/src/main/java/* app/src/main/java/
             fi
             
-            # 2. تمام ریسورسز (Icons, Layouts, Values) کو منتقل کرنا
             if [ -d temp_src/app/src/main/res ]; then
               cp -rf temp_src/app/src/main/res/* app/src/main/res/
             fi
             
-            # 3. مینی فیسٹ کو اٹھانا (اگر پے لوڈ میں موجود ہے)
+            # 3. مینی فیسٹ کو پے لوڈ سے اٹھانا (تاکہ پیکیج نیم آپ والا رہے)
             if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
               cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
             fi
           fi
 
-      - name: Build Engine (Fixed Structure)
+      - name: Build Engine (Pure Shield)
         run: |
-          # یہاں ہم نیم اسپیس کو ہارڈ کوڈ نہیں کریں گے تاکہ پے لوڈ کے پیکیج نیم سے تصادم نہ ہو
+          # گریڈل فائلز بنانا جو صرف بلڈ کو سہارا دیں گی
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
           
-          # ایپ لیول گریڈل - ہم صرف ضروری لائبریریاں دیں گے
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace 'com.systempro.master' # یہ صرف گریڈل کے لیے ہے
+              namespace 'com.systempro.master' # یہ صرف اندرونی بلڈ کے لیے ہے
               compileSdk 34
               defaultConfig {
-                  applicationId "com.systempro.master"
+                  applicationId "com.systempro.master" # یہاں آپ کا ڈائنامک پیکیج خود بخود مینی فیسٹ سے اوور رائڈ ہو جائے گا
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              buildFeatures { viewBinding true }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -87,7 +86,13 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Delivery
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Dynamic-APK
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
