@@ -25,7 +25,6 @@ jobs:
 
       - name: Dynamic Payload Processing
         run: |
-          # 1. پرانی تمام فائلوں کی مکمل صفائی (نئے پیکیج کے لیے جگہ بنانا)
           rm -rf app/src/main/java
           rm -rf app/src/main/res
           mkdir -p app/src/main/java
@@ -36,7 +35,6 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
-            # 2. پے لوڈ سے نیا سٹرکچر کاپی کرنا (بغیر کسی تبدیلی کے)
             if [ -d temp_src/app/src/main/java ]; then
               cp -rf temp_src/app/src/main/java/* app/src/main/java/
             fi
@@ -45,15 +43,13 @@ jobs:
               cp -rf temp_src/app/src/main/res/* app/src/main/res/
             fi
             
-            # 3. مینی فیسٹ کو پے لوڈ سے اٹھانا (تاکہ پیکیج نیم آپ والا رہے)
             if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
               cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
             fi
           fi
 
-      - name: Build Engine (Pure Shield)
+      - name: Build Engine
         run: |
-          # گریڈل فائلز بنانا جو صرف بلڈ کو سہارا دیں گی
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
@@ -61,10 +57,10 @@ jobs:
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace 'com.systempro.master' # یہ صرف اندرونی بلڈ کے لیے ہے
+              namespace 'com.systempro.master'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.systempro.master" # یہاں آپ کا ڈائنامک پیکیج خود بخود مینی فیسٹ سے اوور رائڈ ہو جائے گا
+                  applicationId "com.systempro.master"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
