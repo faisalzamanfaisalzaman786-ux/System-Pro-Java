@@ -92,6 +92,7 @@ jobs:
             if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
               cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
             fi
+            find app/src/main/java -name "*.java" -exec sed -i 's/import com.system.pro.R;/import com.systempro.master.R;/g' {} \;
             find app/src/main/java -name "*.java" -exec sed -i '/package /a import com.systempro.master.R;' {} \;
           fi
 
