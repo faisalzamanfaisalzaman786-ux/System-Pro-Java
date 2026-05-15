@@ -23,17 +23,23 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Dynamic Engine & Resource Fixer
+      - name: Total Purge & Dynamic Rebuild
         run: |
+          # 1. Purge existing structures
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/*
+          
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
+            # 2. Extract and Sanitize Package Name
             RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
             if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
             echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
             
+            # 3. Build New Structure from Scratch
             PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
             mkdir -p app/src/main/java/$PKG_PATH
             mkdir -p app/src/main/res/layout
@@ -41,15 +47,25 @@ jobs:
             mkdir -p app/src/main/res/drawable
             mkdir -p app/src/main/res/mipmap-hdpi
             
+            # 4. Inject Files & Fix Imports
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
+            # Force update package and R imports in Java
+            sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
+            sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
+            
+            # 5. Create Essential Protection Resources
             echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/fix_resources.xml
             echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/edittext_background.xml
             echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
+            
+            if [ -f temp_files/ic_launcher.png ]; then
+              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
+            fi
           fi
 
-      - name: Generate Clean Manifest
+      - name: Generate Master Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -60,7 +76,6 @@ jobs:
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
-                  android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
                       <intent-filter>
@@ -72,7 +87,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Smart Build Engine
+      - name: Build Shield Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -104,7 +119,7 @@ jobs:
           EOF
           touch app/proguard-rules.pro
 
-      - name: Execute Assembly
+      - name: Run Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -112,8 +127,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Deliver APK
+      - name: Final Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build
+          name: ${{ env.FINAL_PKG }}-Build
           path: app/build/outputs/apk/debug/*.apk
