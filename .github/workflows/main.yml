@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Dynamic Package & Force Resource Fix
+      - name: Dynamic Engine & Resource Fixer
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
@@ -44,24 +44,35 @@ jobs:
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # ایرر ختم کرنے کے لیے مصنوعی ریسورسز بنائیں
             echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/fix_resources.xml
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/></shape>' > app/src/main/res/drawable/edittext_background.xml
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/></shape>' > app/src/main/res/drawable/spinner_background.xml
+            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/edittext_background.xml
+            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
           fi
 
-      - name: Master Theme Injection
+      - name: Generate Clean Manifest
         run: |
-          cat <<EOF > app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-                  <item name="android:statusBarColor">#02040c</item>
-              </style>
-          </resources>
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
           EOF
 
-      - name: Build Engine (The Final Lock)
+      - name: Smart Build Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -93,7 +104,7 @@ jobs:
           EOF
           touch app/proguard-rules.pro
 
-      - name: Run Final Assembly
+      - name: Execute Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -101,8 +112,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Deliver Fixed APK
+      - name: Deliver APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Fixed-Build
+          name: System-Pro-Build
           path: app/build/outputs/apk/debug/*.apk
