@@ -23,9 +23,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Total Purge & Dynamic Rebuild
+      - name: Total Purge & Force Package Sync
         run: |
-          # 1. Purge existing structures
+          # پرانا تمام ڈیٹا مکمل ختم کریں
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           
@@ -34,12 +34,12 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
-            # 2. Extract and Sanitize Package Name
+            # پیکیج نیم نکالیں (جیسے com.system.pro3)
             RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
             if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
             echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
             
-            # 3. Build New Structure from Scratch
+            # نیا سٹرکچر بنائیں
             PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
             mkdir -p app/src/main/java/$PKG_PATH
             mkdir -p app/src/main/res/layout
@@ -47,31 +47,19 @@ jobs:
             mkdir -p app/src/main/res/drawable
             mkdir -p app/src/main/res/mipmap-hdpi
             
-            # 4. Inject Files & Fix Imports
+            # فائلیں کاپی کریں
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # Force update package and R imports in Java
+            # زبردستی پیکیج نیم ریپلیس کریں (Force Sync)
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
-            sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
-            
-            # 5. Create Essential Protection Resources
-            echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/fix_resources.xml
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/edittext_background.xml
-            echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2c3d62"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
-            
-            if [ -f temp_files/ic_launcher.png ]; then
-              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/
-            fi
           fi
 
-      - name: Generate Master Manifest
+      - name: Manifest & Theme Injection
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -87,7 +75,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Shield Engine
+      - name: Final Shield Build Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -105,29 +93,23 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  debug {
-                      minifyEnabled true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-          touch app/proguard-rules.pro
 
-      - name: Run Build
+      - name: Clean & Assemble
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # بلڈ سے پہلے مکمل صفائی (Clean)
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: Final Delivery
+      - name: Deliver Fixed APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_PKG }}-Build
