@@ -25,7 +25,6 @@ jobs:
 
       - name: ZipForge Auto-Alignment & Auto-Correction
         run: |
-          # 1. پرانا ڈھانچہ صاف کر کے نیا بنانا
           rm -rf app/src/main/java app/src/main/res
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
@@ -35,13 +34,9 @@ jobs:
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
-            
-            # 2. فائلوں کو منتقل کرنا
             cp -f temp_files/MainActivity.java app/src/main/java/com/system/pro/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # 3. آٹو کریکشن: جاوا کوڈ کے اندر پیکیج نیم اور R امپورٹ کو ٹھیک کرنا
-            # یہ کمانڈ کسی بھی پرانے پیکیج نیم کو com.system.pro سے بدل دے گی
             sed -i 's/package .*;/package com.system.pro;/g' app/src/main/java/com/system/pro/MainActivity.java
             sed -i 's/import .*\.R;/import com.system.pro.R;/g' app/src/main/java/com/system/pro/MainActivity.java
             
@@ -60,7 +55,9 @@ jobs:
               <uses-permission android:name="android.permission.FLASHLIGHT" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+              <uses-permission android:name="android.permission.USE_FINGERPRINT" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -112,10 +109,19 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Deliver APK
+      - name: Upload Artifact (Action Download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Create Release (Public Download)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
+          name: Release Build ${{ github.run_id }}
           files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
