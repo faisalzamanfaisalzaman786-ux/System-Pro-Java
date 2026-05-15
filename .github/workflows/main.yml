@@ -25,7 +25,7 @@ jobs:
 
       - name: Total Purge & Force Package Sync
         run: |
-          # پرانا تمام ڈیٹا مکمل ختم کریں
+          # مکمل صفائی
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           
@@ -34,7 +34,7 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
-            # پیکیج نیم نکالیں (جیسے com.system.pro3)
+            # پیکیج نیم نکالیں (com.system.pro3 وغیرہ)
             RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
             if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
             echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
@@ -45,17 +45,30 @@ jobs:
             mkdir -p app/src/main/res/layout
             mkdir -p app/src/main/res/values
             mkdir -p app/src/main/res/drawable
+            mkdir -p app/src/main/res/mipmap-anydpi-v26
             mkdir -p app/src/main/res/mipmap-hdpi
             
             # فائلیں کاپی کریں
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # زبردستی پیکیج نیم ریپلیس کریں (Force Sync)
+            # پیکیج اور امپورٹس فکس کریں
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
+            sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
+            
+            # فیل سیف آئیکن (ic_launcher fix)
+            if [ -f temp_files/ic_launcher.png ]; then
+              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            else
+              # اگر آئیکن غائب ہے تو ایک سادہ رنگ والا آئیکن خود بنائیں
+              echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00FFCC" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+            fi
+            
+            # ضروری اسٹائلز
+            echo '<resources><style name="ShapeAppearance"/></resources>' > app/src/main/res/values/styles.xml
           fi
 
-      - name: Manifest & Theme Injection
+      - name: Generate Fixed Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -75,7 +88,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Final Shield Build Engine
+      - name: Master Build Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -100,16 +113,15 @@ jobs:
           }
           EOF
 
-      - name: Clean & Assemble
+      - name: Execute Clean Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
-          # بلڈ سے پہلے مکمل صفائی (Clean)
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Deliver Fixed APK
+      - name: Deliver Final APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_PKG }}-Build
