@@ -47,35 +47,37 @@ jobs:
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
+            # پیکیج اور امپورٹس کو زبردستی فکس کریں
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             
-            # آئیکن اور کلر سیٹنگز (سائز کم رکھنے کے لیے)
-            echo '<resources><style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/></resources>' > app/src/main/res/values/styles.xml
+            # ڈیفالٹ ریسورسز
+            echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>' > app/src/main/res/values/styles.xml
             echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#000000"/></shape>' > app/src/main/res/drawable/ic_launcher_background.xml
           fi
 
-      - name: Inject ProGuard (Size Optimizer)
+      - name: Inject ProGuard (Fixed for R8)
         run: |
+          # یہاں سے -optimize ہٹا دیا گیا ہے تاکہ ایرر نہ آئے
           cat <<EOF > app/proguard-rules.pro
           -dontobfuscate
-          -optimize
           -keepattributes *Annotation*
           -keep public class * extends android.app.Activity
           -keep public class * extends android.app.Application
           -keep public class ${{ env.FINAL_PKG }}.** { *; }
           EOF
 
-      - name: Fixed Android Manifest
+      - name: Fixed Android Manifest (No Package Attribute)
         run: |
+          # یہاں سے package attribute ہٹا دیا گیا ہے جیسا کہ اینڈرائیڈ نے تجویز کیا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ env.FINAL_PKG }}">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:label="System Pro"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
+                  android:theme="@style/Theme.SystemPro">
+                  <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -85,7 +87,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Engine (Ultra Shrink Mode)
+      - name: Build Engine (Size Optimized)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -117,7 +119,7 @@ jobs:
           }
           EOF
 
-      - name: Execute Clean Assembly
+      - name: Execute Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
