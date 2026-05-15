@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: ZipForge Auto-Correction
+      - name: ZipForge Auto-Correction Engine
         run: |
           rm -rf app/src/main/java app/src/main/res
           mkdir -p app/src/main/java/com/system/pro
@@ -45,7 +45,7 @@ jobs:
             fi
           fi
 
-      - name: Master Shield Manifest (With Background & Runtime Support)
+      - name: Master Shield Manifest Injection
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -57,7 +57,6 @@ jobs:
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.USE_BIOMETRIC" />
               <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-              
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -74,17 +73,11 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-                  
-                  <receiver android:name=".BootReceiver" android:exported="false">
-                      <intent-filter>
-                          <action android:name="android.intent.action.BOOT_COMPLETED" />
-                      </intent-filter>
-                  </receiver>
               </application>
           </manifest>
           EOF
 
-      - name: Build Engine (Gradle 8.5)
+      - name: Build Engine with ProGuard Protection
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -102,6 +95,17 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  debug {
+                      minifyEnabled true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  release {
+                      minifyEnabled true
+                      shrinkResources true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -109,8 +113,9 @@ jobs:
               implementation 'androidx.biometric:biometric:1.1.0'
           }
           EOF
+          touch app/proguard-rules.pro
 
-      - name: Run Assembly
+      - name: Execute Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -118,13 +123,13 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Artifact (Direct Download Link)
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V-Build
+          name: System-Pro-Protected-Build
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
