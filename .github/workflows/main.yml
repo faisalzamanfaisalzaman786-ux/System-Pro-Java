@@ -36,14 +36,11 @@ jobs:
 
       - name: Inject Master Resources & Fix Missing Assets
         run: |
-          # Default Icon
           curl -Lo app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/google/material-design-icons/master/png/action/settings/android/res/mipmap-hdpi/ic_launcher_settings_white_24dp.png
           
-          # Fix: Create Missing Backgrounds to avoid processDebugResources failure
           echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > app/src/main/res/drawable/edittext_background.xml
           echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
 
-          # Fix: Centralized Themes and Styles
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -59,6 +56,25 @@ jobs:
               <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.Holo.ProgressBar.Horizontal" />
           </resources>' > app/src/main/res/values/themes.xml
 
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.master">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.SystemPro">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
       - name: Decode and Extract Source
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
@@ -67,16 +83,17 @@ jobs:
             unzip -o project.zip -d temp_src || true
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/layout/* app/src/main/res/layout/ || true
+            if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
+              cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            fi
           fi
 
       - name: Centralized Dependency Engine
         run: |
-          # Project Level Build File
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
 
-          # App Level Build File with Duplicate Class Fix
           echo "plugins { id 'com.android.application' }" > app/build.gradle
           echo "android { 
             namespace 'com.systempro.master'
@@ -95,7 +112,6 @@ jobs:
             }
           }" >> app/build.gradle
 
-          # Hardware & UI Master Dependencies
           echo "dependencies { 
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.9.0'
