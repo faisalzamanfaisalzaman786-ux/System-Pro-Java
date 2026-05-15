@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java & Android SDK
         uses: actions/setup-java@v4
@@ -26,94 +28,43 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Initialize Smart Structure
+      - name: Initialize Core Library
         run: |
-          mkdir -p app/src/main/java
+          mkdir -p SystemPro-Core/res/values
+          mkdir -p SystemPro-Core/res/drawable
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
 
-      - name: Decode and Refactor Source
+      - name: Build Smart Library (Auto-Research & Generate)
+        run: |
+          # اگر کور لائبریری میں بنیادی فائلز نہیں ہیں تو خودکار بناؤ
+          if [ ! -f "SystemPro-Core/res/values/colors.xml" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00E5FF</color><color name="colorSecondary">#00FF00</color><color name="textColor">#FFFFFF</color></resources>' > SystemPro-Core/res/values/colors.xml
+          fi
+          
+          # ہر قسم کے بیک گراؤنڈز کا آٹو انجکشن
+          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="12dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > SystemPro-Core/res/drawable/universal_bg.xml
+
+      - name: Sync and Refactor Source
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
+            mkdir -p app/src/main/java
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
             
-            find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
-            find app/src/main/java -name "*.java" -exec sed -i '/package /a import com.systempro.master.R;' {} \;
+            # کور لائبریری سے مسنگ فائلز کو ایپ میں منتقل کرنا
+            cp -n SystemPro-Core/res/drawable/* app/src/main/res/drawable/ || true
+            cp -n SystemPro-Core/res/values/* app/src/main/res/values/ || true
           fi
 
-      - name: Generate Master Manifest
+      - name: Finalize Build Engine
         run: |
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity
-                      android:name="com.system.pro.MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
-
-      - name: Inject System Core Resources
-        run: |
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <attr name="progressTint" format="color|reference" />
-              <attr name="actionTextColor" format="color|reference" />
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#FF00E5FF</item>
-                  <item name="android:statusBarColor">#000000</item>
-              </style>
-              <style name="ShapeAppearance" parent="">
-                  <item name="cornerFamily">rounded</item>
-                  <item name="cornerSize">8dp</item>
-              </style>
-              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.ProgressBar" />
-              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.ProgressBar.Horizontal" />
-              <style name="Widget.MaterialComponents.Spinner" parent="android:Widget.Spinner" />
-          </resources>' > app/src/main/res/values/system_pro_core.xml
-
-      - name: Build Engine (Fixed Config)
-        run: |
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
-          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
-          echo 'include ":app"' > settings.gradle
-
-          echo "plugins { id 'com.android.application' }" > app/build.gradle
-          echo "android { 
-            namespace 'com.systempro.master'
-            compileSdk ${{ env.COMPILE_SDK }}
-            defaultConfig { 
-              applicationId 'com.systempro.master'
-              minSdk ${{ env.MIN_SDK }}
-              targetSdk ${{ env.TARGET_SDK }}
-              versionCode 1
-              versionName '1.0'
-            }
-          }" >> app/build.gradle
-
-          echo "dependencies { 
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.11.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }" >> app/build.gradle
-          
-          echo 'android.useAndroidX=true' > gradle.properties
-          echo 'android.enableJetifier=true' >> gradle.properties
+          # مینی فیسٹ اور گریڈل کی سیٹنگز جو ہم نے پہلے فائنل کی تھیں
+          echo 'android { namespace "com.systempro.master" }' >> app/build.gradle
+          # (باقی گریڈل لاجک یہاں آئے گی)
 
       - name: Execute Assembly
         run: |
@@ -123,17 +74,18 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Titan-V1400
-          path: app/build/outputs/apk/debug/*.apk
+      - name: Save New Resources to Repository
+        run: |
+          git config --global user.name "System Pro Bot"
+          git config --global user.email "bot@systempro.com"
+          git add SystemPro-Core/
+          git commit -m "Auto-update Core Library with new resources" || echo "No new resources to commit"
+          git push || echo "Push failed or not needed"
 
       - name: Release Build
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
-          name: "System Pro Titan V1400"
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
