@@ -28,61 +28,88 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Initialize Core Library
+      - name: Initialize Offline Core
         run: |
           mkdir -p SystemPro-Core/res/values
           mkdir -p SystemPro-Core/res/drawable
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-      - name: Build Smart Library (Auto-Research & Generate)
+      - name: Master Resource Patch (No Duplicates)
         run: |
-          # اگر کور لائبریری میں بنیادی فائلز نہیں ہیں تو خودکار بناؤ
-          if [ ! -f "SystemPro-Core/res/values/colors.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00E5FF</color><color name="colorSecondary">#00FF00</color><color name="textColor">#FFFFFF</color></resources>' > SystemPro-Core/res/values/colors.xml
-          fi
-          
-          # ہر قسم کے بیک گراؤنڈز کا آٹو انجکشن
-          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="12dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > SystemPro-Core/res/drawable/universal_bg.xml
+          # بنیادی کلرز اور ایٹریبیوٹس جو کبھی ڈپلیکیٹ نہیں ہونے چاہئیں
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#FF00E5FF</color>
+              <color name="colorSecondary">#FF00FF00</color>
+              <attr name="progressTint" format="color|reference" />
+              <attr name="actionTextColor" format="color|reference" />
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="android:statusBarColor">#000000</item>
+              </style>
+          </resources>' > SystemPro-Core/res/values/system_pro_master.xml
 
-      - name: Sync and Refactor Source
+      - name: Sync and Deduplicate Source
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
+            # پہلے زپ فائل سے ڈیٹا کاپی کریں
             mkdir -p app/src/main/java
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
             
-            # کور لائبریری سے مسنگ فائلز کو ایپ میں منتقل کرنا
-            cp -n SystemPro-Core/res/drawable/* app/src/main/res/drawable/ || true
-            cp -n SystemPro-Core/res/values/* app/src/main/res/values/ || true
+            # اب 'Deduplication Patch' چلائیں: 
+            # کور لائبریری کی فائلز کو زپ فائل کی فائلز پر اوور رائٹ کریں تاکہ ترجیح ماسٹر سسٹم کو ملے
+            cp -f SystemPro-Core/res/drawable/* app/src/main/res/drawable/ || true
+            cp -f SystemPro-Core/res/values/system_pro_master.xml app/src/main/res/values/ || true
+            
+            # جاوا کوڈ میں پیکج ری فیکٹرنگ
+            find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
           fi
 
-      - name: Finalize Build Engine
+      - name: Build and Assembly
         run: |
-          # مینی فیسٹ اور گریڈل کی سیٹنگز جو ہم نے پہلے فائنل کی تھیں
-          echo 'android { namespace "com.systempro.master" }' >> app/build.gradle
-          # (باقی گریڈل لاجک یہاں آئے گی)
+          # بلڈ انجن کی کنفیگریشن
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
+          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
+          echo 'include ":app"' > settings.gradle
+          
+          # ایپ لیول گریڈل
+          echo "plugins { id 'com.android.application' }" > app/build.gradle
+          echo "android { 
+            namespace 'com.systempro.master'
+            compileSdk ${{ env.COMPILE_SDK }}
+            defaultConfig { 
+              applicationId 'com.systempro.master'
+              minSdk ${{ env.MIN_SDK }}
+              targetSdk ${{ env.TARGET_SDK }}
+            }
+          }" >> app/build.gradle
+          
+          echo "dependencies { 
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.11.0'
+          }" >> app/build.gradle
 
-      - name: Execute Assembly
-        run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Save New Resources to Repository
+      - name: Commit Changes to Master Library
         run: |
           git config --global user.name "System Pro Bot"
           git config --global user.email "bot@systempro.com"
           git add SystemPro-Core/
-          git commit -m "Auto-update Core Library with new resources" || echo "No new resources to commit"
-          git push || echo "Push failed or not needed"
+          git commit -m "Cleanup and Deduplicate Master Library" || echo "No changes"
+          git push || echo "Push skipped"
 
-      - name: Release Build
+      - name: Deliver APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
