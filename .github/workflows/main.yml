@@ -71,7 +71,7 @@ jobs:
                   android:label="System Pro"
                   android:theme="@style/Theme.SystemPro">
                   <activity
-                      android:name=".MainActivity"
+                      android:name="com.system.pro.MainActivity"
                       android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -92,6 +92,7 @@ jobs:
             if [ -f temp_src/app/src/main/AndroidManifest.xml ]; then
               cp -f temp_src/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest.xml
             fi
+            find app/src/main/java -name "*.java" -exec sed -i '/package /a import com.systempro.master.R;' {} \;
           fi
 
       - name: Centralized Dependency Engine
