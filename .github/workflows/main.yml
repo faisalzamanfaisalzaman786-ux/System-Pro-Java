@@ -32,22 +32,43 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
 
-      - name: Decode and Sync Source
+      - name: Decode and Refactor Source
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
-            # اصلی لاجک: سورس فائلز کو منتقل کرنا اور ان کا ڈھانچہ برقرار رکھنا
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
             
-            # ری فیکٹرنگ: تمام جاوا فائلوں میں پیکج اور R کلاس کو درست کرنا
             find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
+            find app/src/main/java -name "*.java" -exec sed -i '/package /a import com.systempro.master.R;' {} \;
           fi
 
-      - name: Inject Master Attributes (Real Linking)
+      - name: Generate Master Manifest
+        run: |
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.SystemPro">
+                  <activity
+                      android:name="com.system.pro.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+      - name: Inject System Core Resources
         run: |
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -57,9 +78,16 @@ jobs:
                   <item name="colorPrimary">#FF00E5FF</item>
                   <item name="android:statusBarColor">#000000</item>
               </style>
-          </resources>' > app/src/main/res/values/system_pro_master.xml
+              <style name="ShapeAppearance" parent="">
+                  <item name="cornerFamily">rounded</item>
+                  <item name="cornerSize">8dp</item>
+              </style>
+              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.ProgressBar" />
+              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.ProgressBar.Horizontal" />
+              <style name="Widget.MaterialComponents.Spinner" parent="android:Widget.Spinner" />
+          </resources>' > app/src/main/res/values/system_pro_core.xml
 
-      - name: Build Engine (Fixed Versions)
+      - name: Build Engine (Fixed Config)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -87,7 +115,7 @@ jobs:
           echo 'android.useAndroidX=true' > gradle.properties
           echo 'android.enableJetifier=true' >> gradle.properties
 
-      - name: Execute Verified Build
+      - name: Execute Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -95,8 +123,17 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Deliver Result
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Verified-Build
+          name: System-Pro-Titan-V1400
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Release Build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "System Pro Titan V1400"
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
