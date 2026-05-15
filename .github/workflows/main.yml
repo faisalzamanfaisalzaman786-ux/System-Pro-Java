@@ -35,9 +35,8 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-      - name: Master Resource Patch (No Duplicates)
+      - name: Master Resource Patch
         run: |
-          # بنیادی کلرز اور ایٹریبیوٹس جو کبھی ڈپلیکیٹ نہیں ہونے چاہئیں
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#FF00E5FF</color>
@@ -56,29 +55,42 @@ jobs:
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
-            
-            # پہلے زپ فائل سے ڈیٹا کاپی کریں
             mkdir -p app/src/main/java
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
-            
-            # اب 'Deduplication Patch' چلائیں: 
-            # کور لائبریری کی فائلز کو زپ فائل کی فائلز پر اوور رائٹ کریں تاکہ ترجیح ماسٹر سسٹم کو ملے
             cp -f SystemPro-Core/res/drawable/* app/src/main/res/drawable/ || true
             cp -f SystemPro-Core/res/values/system_pro_master.xml app/src/main/res/values/ || true
-            
-            # جاوا کوڈ میں پیکج ری فیکٹرنگ
             find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
           fi
 
-      - name: Build and Assembly
+      - name: Generate Verified Manifest
         run: |
-          # بلڈ انجن کی کنفیگریشن
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.SystemPro">
+                  <activity
+                      android:name="com.system.pro.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+      - name: Final Build Configuration
+        run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
           echo 'include ":app"' > settings.gradle
           
-          # ایپ لیول گریڈل
           echo "plugins { id 'com.android.application' }" > app/build.gradle
           echo "android { 
             namespace 'com.systempro.master'
@@ -87,29 +99,34 @@ jobs:
               applicationId 'com.systempro.master'
               minSdk ${{ env.MIN_SDK }}
               targetSdk ${{ env.TARGET_SDK }}
+              versionCode 1
+              versionName '1.0'
             }
           }" >> app/build.gradle
           
           echo "dependencies { 
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" >> app/build.gradle
 
+      - name: Execute Assembly
+        run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
           ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Commit Changes to Master Library
+      - name: Update Master Library
         run: |
           git config --global user.name "System Pro Bot"
           git config --global user.email "bot@systempro.com"
           git add SystemPro-Core/
-          git commit -m "Cleanup and Deduplicate Master Library" || echo "No changes"
+          git commit -m "Cleanup Master Library" || echo "No changes"
           git push || echo "Push skipped"
 
-      - name: Deliver APK
+      - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
