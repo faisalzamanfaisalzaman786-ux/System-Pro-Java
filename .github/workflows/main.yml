@@ -26,10 +26,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Force Clean Structure & Payload Sync
+      - name: Wipe and Sync Payload
         run: |
-          # پرانا سارا کچرا صاف کریں
-          rm -rf app/src/main/java app/src/main/res
+          # مکمل صفائی تاکہ پرانا آئیکن یا کوڈ مکس نہ ہو
+          rm -rf app/src/main/*
           mkdir -p app/src/main/java app/src/main/res/values app/src/main/res/mipmap-hdpi
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
@@ -37,19 +37,18 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_src || true
             
-            # صرف جاوا اور ریسورسز اٹھائیں
+            # صرف پے لوڈ سے ڈیٹا اٹھانا
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
             
-            # جاوا میں R کلاس کی میپنگ (یہ بٹنز لنک کرنے کے لیے لازمی ہے)
+            # جاوا میں R کلاس کی زبردستی میپنگ (بٹنز کے لیے)
             find app/src/main/java -name "*.java" -exec sed -i '/import .*\.R;/d' {} \;
             find app/src/main/java -name "*.java" -exec sed -i '/package /a import com.systempro.master.R;' {} \;
           fi
 
-      - name: Atomic Manifest Injection
+      - name: Inject Pro Manifest
         run: |
-          # مینی فیسٹ اب ہم خود لکھیں گے تاکہ پارسنگ ایرر نہ آئے
-          # یہ مینی فیسٹ آپ کے پے لوڈ کی MainActivity اور آئیکن کو خود بخود ڈھونڈ لے گا
+          # مینی فیسٹ کو کلین فارمیٹ میں دوبارہ لکھنا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -73,7 +72,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Build Engine (With ViewBinding)
+      - name: Build Engine (Fixed Dependencies)
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -89,7 +88,6 @@ jobs:
               versionCode 1
               versionName '1.0'
             }
-            buildFeatures { viewBinding true }
           }" >> app/build.gradle
           echo "dependencies { 
             implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -97,7 +95,7 @@ jobs:
             implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" >> app/build.gradle
 
-      - name: Execute Assembly
+      - name: Execute Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -105,7 +103,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Release APK
+      - name: Artifacts & Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
