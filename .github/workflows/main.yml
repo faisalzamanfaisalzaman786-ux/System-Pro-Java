@@ -28,28 +28,39 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Initialize Offline Core
+      - name: Initialize Core
         run: |
-          mkdir -p SystemPro-Core/res/values
-          mkdir -p SystemPro-Core/res/drawable
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-      - name: Master Resource Patch
+      - name: Atomic Resource Injection
         run: |
+          # ضروری ڈرا ایبلز کی تیاری
+          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/><stroke android:width="1dp" android:color="#44FFFFFF"/></shape>' > app/src/main/res/drawable/edittext_background.xml
+          echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#22FFFFFF"/><corners android:radius="8dp"/></shape>' > app/src/main/res/drawable/spinner_background.xml
+
+          # تمام مسنگ اسٹائلز اور ایٹریبیوٹس کا مجموعہ
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <color name="colorPrimary">#FF00E5FF</color>
-              <color name="colorSecondary">#FF00FF00</color>
               <attr name="progressTint" format="color|reference" />
               <attr name="actionTextColor" format="color|reference" />
+              
+              <style name="ShapeAppearance" parent="">
+                  <item name="cornerFamily">rounded</item>
+                  <item name="cornerSize">8dp</item>
+              </style>
+
+              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.ProgressBar" />
+              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.ProgressBar.Horizontal" />
+              <style name="Widget.MaterialComponents.Spinner" parent="android:Widget.Spinner" />
+
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimary">#FF00E5FF</item>
                   <item name="android:statusBarColor">#000000</item>
               </style>
-          </resources>' > SystemPro-Core/res/values/system_pro_master.xml
+          </resources>' > app/src/main/res/values/system_pro_core_fixed.xml
 
-      - name: Sync and Deduplicate Source
+      - name: Decode and Sync Source
         run: |
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
@@ -58,12 +69,12 @@ jobs:
             mkdir -p app/src/main/java
             cp -rf temp_src/app/src/main/java/* app/src/main/java/ || true
             cp -rf temp_src/app/src/main/res/* app/src/main/res/ || true
-            cp -f SystemPro-Core/res/drawable/* app/src/main/res/drawable/ || true
-            cp -f SystemPro-Core/res/values/system_pro_master.xml app/src/main/res/values/ || true
+            
+            # ری فیکٹرنگ: زپ سے آنے والی فائلوں کو ماسٹر پیکج سے جوڑنا
             find app/src/main/java -name "*.java" -exec sed -i 's/import .*\.R;/import com.systempro.master.R;/g' {} \;
           fi
 
-      - name: Generate Verified Manifest
+      - name: Generate Clean Manifest
         run: |
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -85,7 +96,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Final Build Configuration
+      - name: Build Engine
         run: |
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
           echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
@@ -110,7 +121,7 @@ jobs:
             implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" >> app/build.gradle
 
-      - name: Execute Assembly
+      - name: Execute Verified Assembly
         run: |
           wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
           unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
@@ -118,15 +129,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Update Master Library
-        run: |
-          git config --global user.name "System Pro Bot"
-          git config --global user.email "bot@systempro.com"
-          git add SystemPro-Core/
-          git commit -m "Cleanup Master Library" || echo "No changes"
-          git push || echo "Push skipped"
-
-      - name: Release APK
+      - name: Finalize Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
