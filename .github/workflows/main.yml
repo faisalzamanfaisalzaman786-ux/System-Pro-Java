@@ -9,77 +9,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      - name: Decode Central Payload
+        run: |
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res
+          unzip -o app_payload.zip
 
-    - name: Process Base64 Payload
-      env:
-        PAYLOAD_DATA: ${{ github.event.client_payload.payload }}
-        APP_NAME: ${{ github.event.client_payload.app_name }}
-        PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
-      run: |
-        mkdir -p temp_payload
-        echo "$PAYLOAD_DATA" | base64 -d > temp_payload/project.zip
-        unzip -o temp_payload/project.zip -d temp_payload/extracted
-        
-        mkdir -p app/src/main/java/com/diagnostic/tool
-        mkdir -p app/src/main/res/layout
-        mkdir -p app/src/main/res/values
-        mkdir -p app/src/main/res/drawable
+      - name: Setup Gradle Wrapper Explicitly
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
 
-        if [ -f "temp_payload/extracted/MainActivity.java" ]; then
-          cp temp_payload/extracted/MainActivity.java app/src/main/java/com/diagnostic/tool/
-        else
-          echo 'package com.diagnostic.tool; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }' > app/src/main/java/com/diagnostic/tool/MainActivity.java
-        fi
+      - name: Grant Execute Permission to Gradle
+        run: chmod +x gradlew
 
-        if [ -f "temp_payload/extracted/activity_main.xml" ]; then
-          cp temp_payload/extracted/activity_main.xml app/src/main/res/layout/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#02040c" android:padding="15dp"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro Default" android:textColor="#00FFCC" android:textSize="20sp" android:gravity="center"/></LinearLayout>' > app/src/main/res/layout/activity_main.xml
-        fi
+      - name: Build Android Debug APK
+        run: ./gradlew assembleDebug --no-daemon
 
-        if [ -f "temp_payload/extracted/AndroidManifest.xml" ]; then
-          cp temp_payload/extracted/AndroidManifest.xml app/src/main/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-        fi
-
-        if [ -f "temp_payload/extracted/colors.xml" ]; then
-          cp temp_payload/extracted/colors.xml app/src/main/res/values/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#02040c</color><color name="neon_cyan">#00FFCC</color></resources>' > app/src/main/res/values/colors.xml
-        fi
-
-        if [ -f "temp_payload/extracted/neon_button.xml" ]; then
-          cp temp_payload/extracted/neon_button.xml app/src/main/res/drawable/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?><shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#0c1222"/><stroke android:width="2dp" android:color="#00FFCC"/></shape>' > app/src/main/res/drawable/neon_button.xml
-        fi
-
-        if [ -f "temp_payload/extracted/app_icon.png" ]; then
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          cp temp_payload/extracted/app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        fi
-
-        sed -i "s/namespace .*/namespace \"$PACKAGE_NAME\"/g" app/build.gradle
-        sed -i "s/applicationId .*/applicationId \"$PACKAGE_NAME\"/g" app/build.gradle
-        sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
-
-    - name: Build Android Debug APK
-      run: ./gradlew assembleDebug --no-daemon
-
-    - name: Upload Build Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: System-Pro-Final-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: app/build/outputs/apk/debug/app-debug.apk
