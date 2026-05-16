@@ -47,6 +47,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           
           echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#00FFCC</item></style></resources>' > app/src/main/res/values/styles.xml
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n<color name="colorPrimary">#00FFCC</color>\n</resources>' > app/src/main/res/values/colors.xml
           
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
@@ -62,21 +63,9 @@ jobs:
               cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
             fi
             
-            RAW_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
-            if [ ! -z "$RAW_XML" ]; then
-              awk '/<resources>/{flag=1;print "<?xml version=\"1.0\" encoding=\"utf-8\"?>"} flag; /<\/resources>/{flag=0}' "$RAW_XML" > app/src/main/res/values/colors.xml
-              awk '/<shape>|<shape /{flag=1;print "<?xml version=\"1.0\" encoding=\"utf-8\"?>"} flag; /<\/shape>/{flag=0}' "$RAW_XML" > app/src/main/res/drawable/neon_button.xml
-              awk '/<RelativeLayout>|<RelativeLayout /{flag=1;print "<?xml version=\"1.0\" encoding=\"utf-8\"?>"} flag; /<\/RelativeLayout>/{flag=0}' "$RAW_XML" > app/src/main/res/layout/activity_main.xml
-              
-              if [ ! -s app/src/main/res/values/colors.xml ]; then
-                echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n<color name="bg_dark">#02040c</color>\n<color name="neon_cyan">#00FFCC</color>\n<color name="neon_purple">#a855f7</color>\n<color name="card_blue">#0D1426</color>\n<color name="text_light">#eef5ff</color>\n</resources>' > app/src/main/res/values/colors.xml
-              fi
-              if [ ! -s app/src/main/res/drawable/neon_button.xml ]; then
-                echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">\n<solid android:color="#0D00FFCC"/>\n<corners android:radius="12dp"/>\n<stroke android:width="2dp" android:color="#00FFCC"/>\n</shape>' > app/src/main/res/drawable/neon_button.xml
-              fi
-              if [ ! -s app/src/main/res/layout/activity_main.xml ]; then
-                cp -f "$RAW_XML" app/src/main/res/layout/activity_main.xml
-              fi
+            TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
+            if [ ! -z "$TARGET_XML" ]; then
+              cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
             fi
             
             if [ -f temp_files/ic_launcher.png ]; then
