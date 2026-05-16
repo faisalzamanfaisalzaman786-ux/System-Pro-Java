@@ -1,123 +1,85 @@
 name: System Pro Titan Master Build
+
 on:
   repository_dispatch:
-    types: [build-from-b64]
-
-permissions:
-  contents: write
-  actions: read
-
-env:
-  GRADLE_VERSION: 8.5
+    types: [trigger_b64_build]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          clean: true
-          fetch-depth: 0
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
 
-      - name: Centralized Engine - Payload Processing
-        run: |
-          REQ_PKG="${{ github.event.client_payload.package_name }}"
-          REQ_NAME="${{ github.event.client_payload.app_name }}"
-          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
-          
-          if [ -z "$REQ_PKG" ]; then REQ_PKG="com.zipforge.pro"; fi
-          if [ -z "$REQ_NAME" ]; then REQ_NAME="System Pro"; fi
-          
-          echo "FINAL_PKG=$REQ_PKG" >> $GITHUB_ENV
-          echo "FINAL_NAME=$REQ_NAME" >> $GITHUB_ENV
-          
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          rm -rf temp_files project.zip
-          
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          
-          echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#00FFCC</item></style></resources>' > app/src/main/res/values/styles.xml
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n<color name="colorPrimary">#00FFCC</color>\n</resources>' > app/src/main/res/values/colors.xml
-          
-          if [ ! -z "$ZIP_DATA" ]; then
-            echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
-            unzip -o project.zip -d temp_files || true
-            
-            TARGET_JAVA=$(find temp_files -name "MainActivity.java" | head -n 1)
-            if [ ! -z "$TARGET_JAVA" ]; then
-              sed -i "s|package [^;]*;|package $REQ_PKG;|g" "$TARGET_JAVA"
-              sed -i 's|editJava.setText(prefs.getString("java_code", "package .*||g' "$TARGET_JAVA"
-              
-              PKG_PATH=$(echo $REQ_PKG | tr '.' '/')
-              mkdir -p app/src/main/java/$PKG_PATH
-              cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
-            fi
-            
-            TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
-            if [ ! -z "$TARGET_XML" ]; then
-              cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
-            fi
-            
-            if [ -f temp_files/ic_launcher.png ]; then
-              cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            elif [ -f temp_files/icon.png ]; then
-              cp -f temp_files/icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            fi
-          fi
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
-      - name: Injection Dynamic Manifest
-        run: |
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
-              
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="${{ env.FINAL_NAME }}"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+    - name: Process Base64 Payload
+      env:
+        PAYLOAD_DATA: ${{ github.event.client_payload.payload }}
+        APP_NAME: ${{ github.event.client_payload.app_name }}
+        PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+      run: |
+        mkdir -p temp_payload
+        echo "$PAYLOAD_DATA" | base64 -d > temp_payload/project.zip
+        unzip -o temp_payload/project.zip -d temp_payload/extracted
+        
+        mkdir -p app/src/main/java/com/diagnostic/tool
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/drawable
 
-      - name: Injection Dynamic Configuration
-        run: |
-          sed -i "s|namespace '.*'|namespace '${{ env.FINAL_PKG }}'|g" app/build.gradle
-          sed -i "s|applicationId '.*'|applicationId '${{ env.FINAL_PKG }}'|g" app/build.gradle
-          
-          echo "-keep public class ${{ env.FINAL_PKG }}.** { *; }" >> app/proguard-rules.pro
+        if [ -f "temp_payload/extracted/MainActivity.java" ]; then
+          cp temp_payload/extracted/MainActivity.java app/src/main/java/com/diagnostic/tool/
+        else
+          echo 'package com.diagnostic.tool; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }' > app/src/main/java/com/diagnostic/tool/MainActivity.java
+        fi
 
-      - name: Execute Assembly
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
-          unzip -q gradle-${{ env.GRADLE_VERSION }}-bin.zip
-          ./gradle-${{ env.GRADLE_VERSION }}/bin/gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
-          chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+        if [ -f "temp_payload/extracted/activity_main.xml" ]; then
+          cp temp_payload/extracted/activity_main.xml app/src/main/res/layout/
+        else
+          echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#02040c" android:padding="15dp"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro Default" android:textColor="#00FFCC" android:textSize="20sp" android:gravity="center"/></LinearLayout>' > app/src/main/res/layout/activity_main.xml
+        fi
 
-      - name: Deliver Final APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/*.apk
+        if [ -f "temp_payload/extracted/AndroidManifest.xml" ]; then
+          cp temp_payload/extracted/AndroidManifest.xml app/src/main/
+        else
+          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+        fi
+
+        if [ -f "temp_payload/extracted/colors.xml" ]; then
+          cp temp_payload/extracted/colors.xml app/src/main/res/values/
+        else
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#02040c</color><color name="neon_cyan">#00FFCC</color></resources>' > app/src/main/res/values/colors.xml
+        fi
+
+        if [ -f "temp_payload/extracted/neon_button.xml" ]; then
+          cp temp_payload/extracted/neon_button.xml app/src/main/res/drawable/
+        else
+          echo '<?xml version="1.0" encoding="utf-8"?><shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#0c1222"/><stroke android:width="2dp" android:color="#00FFCC"/></shape>' > app/src/main/res/drawable/neon_button.xml
+        fi
+
+        if [ -f "temp_payload/extracted/app_icon.png" ]; then
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          cp temp_payload/extracted/app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        fi
+
+        sed -i "s/namespace .*/namespace \"$PACKAGE_NAME\"/g" app/build.gradle
+        sed -i "s/applicationId .*/applicationId \"$PACKAGE_NAME\"/g" app/build.gradle
+        sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
+
+    - name: Build Android Debug APK
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: System-Pro-Final-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
