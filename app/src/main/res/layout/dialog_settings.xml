@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <EditText
+        android:id="@+id/etRepo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="username/repository"
+        android:inputType="textUri" />
+    <EditText
+        android:id="@+id/etToken"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="GitHub Token"
+        android:inputType="textPassword" />
+    <EditText
+        android:id="@+id/etAppName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="App Name" />
+    <EditText
+        android:id="@+id/etPkg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Package Name" />
+</LinearLayout>
