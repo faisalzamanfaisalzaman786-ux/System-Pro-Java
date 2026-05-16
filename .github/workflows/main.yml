@@ -25,7 +25,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: false
 
       - name: Advanced Engine - Permission & Icon Fix
         run: |
