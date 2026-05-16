@@ -21,9 +21,18 @@ jobs:
       - name: Decode Central Payload
         run: |
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res
+          mkdir -p app/src/main/java/com/diagnostic/tool
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           unzip -o app_payload.zip
+          
+          [ -f MainActivity.java ] && mv MainActivity.java app/src/main/java/com/diagnostic/tool/
+          [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
+          [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
+          [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
+          [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/
+          [ -f app_icon.png ] && mv app_icon.png app/src/main/res/drawable/ic_launcher.png || true
 
       - name: Setup Gradle Wrapper Explicitly
         uses: gradle/actions/setup-gradle@v4
