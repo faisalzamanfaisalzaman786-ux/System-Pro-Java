@@ -47,17 +47,14 @@ jobs:
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
-            # --- زبردستی رن ٹائم پرمیشن کا کوڈ انجیکٹ کرنا ---
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             
-            # --- پے لوڈ سے آئیکن نکالنا ---
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             elif [ -f temp_files/icon.png ]; then
               cp -f temp_files/icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             else
-              # اگر کوئی بھی نہیں تو ایمرجنسی آئیکن
               echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#00FFCC"/></shape>' > app/src/main/res/drawable/ic_launcher_background.xml
             fi
             
@@ -139,8 +136,24 @@ jobs:
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Deliver Final APK
+      - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
+
+      # ========== نیا مرحلہ: GitHub Release بنانا ==========
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: |
+            Automated build from dispatch #${{ github.run_number }}
+            APK attached below.
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
