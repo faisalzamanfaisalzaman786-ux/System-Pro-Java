@@ -16,17 +16,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+          cache: false
 
       - name: Advanced Engine - Permission & Icon Fix
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
+          rm -rf temp_files project.zip
           
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
@@ -136,24 +141,8 @@ jobs:
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload APK as Artifact
+      - name: Deliver Final APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V2-Final
           path: app/build/outputs/apk/debug/*.apk
-
-      # ========== نیا مرحلہ: GitHub Release بنانا ==========
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-          body: |
-            Automated build from dispatch #${{ github.run_number }}
-            APK attached below.
-          files: app/build/outputs/apk/debug/*.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
