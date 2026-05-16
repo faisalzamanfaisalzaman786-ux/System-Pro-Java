@@ -38,9 +38,14 @@ jobs:
           echo "FINAL_NAME=$REQ_NAME" >> $GITHUB_ENV
           
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/mipmap-*
+          rm -rf app/src/main/res/*
           rm -rf temp_files project.zip
+          
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/mipmap-hdpi
+          
+          echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#00FFCC</item></style></resources>' > app/src/main/res/values/styles.xml
           
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
@@ -56,13 +61,11 @@ jobs:
               cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
             fi
             
-            mkdir -p app/src/main/res/layout
             TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
             if [ ! -z "$TARGET_XML" ]; then
               cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
             fi
             
-            mkdir -p app/src/main/res/mipmap-hdpi
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             elif [ -f temp_files/icon.png ]; then
