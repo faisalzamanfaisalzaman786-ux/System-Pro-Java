@@ -43,6 +43,7 @@ jobs:
           
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
           echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#00FFCC</item></style></resources>' > app/src/main/res/values/styles.xml
@@ -65,6 +66,18 @@ jobs:
             if [ ! -z "$TARGET_XML" ]; then
               cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
             fi
+            
+            TARGET_COLORS=$(find temp_files -name "colors.xml" | head -n 1)
+            if [ ! -z "$TARGET_COLORS" ]; then
+              cp -f "$TARGET_COLORS" app/src/main/res/values/colors.xml
+            fi
+            
+            TARGET_THEMES=$(find temp_files -name "themes.xml" | head -n 1)
+            if [ ! -z "$TARGET_THEMES" ]; then
+              cp -f "$TARGET_THEMES" app/src/main/res/values/themes.xml
+            fi
+            
+            find temp_files -type f \( -name "*.xml" ! -name "activity_main.xml" ! -name "colors.xml" ! -name "themes.xml" ! -name "AndroidManifest.xml" \) -exec cp -f {} app/src/main/res/drawable/ \;
             
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
