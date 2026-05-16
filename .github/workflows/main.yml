@@ -125,6 +125,9 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildFeatures {
+                  buildConfig true
+              }
               buildTypes {
                   debug {
                       minifyEnabled true
