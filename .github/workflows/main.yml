@@ -62,25 +62,17 @@ jobs:
               cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
             fi
             
-            TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
-            if [ ! -z "$TARGET_XML" ]; then
-              sed -i '1b; /<?xml/d' "$TARGET_XML"
-              cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
+            RAW_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
+            if [ ! -z "$RAW_XML" ]; then
+              echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
+              sed -n '/<resources>/,/<\/resources>/p' "$RAW_XML" >> app/src/main/res/values/colors.xml
+              
+              echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/drawable/neon_button.xml
+              sed -n '/<shape/,/<\/shape>/p' "$RAW_XML" >> app/src/main/res/drawable/neon_button.xml
+              
+              echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+              sed -n '/<RelativeLayout/,/<\/RelativeLayout>/p' "$RAW_XML" >> app/src/main/res/layout/activity_main.xml
             fi
-            
-            TARGET_COLORS=$(find temp_files -name "colors.xml" | head -n 1)
-            if [ ! -z "$TARGET_COLORS" ]; then
-              sed -i '1b; /<?xml/d' "$TARGET_COLORS"
-              cp -f "$TARGET_COLORS" app/src/main/res/values/colors.xml
-            fi
-            
-            TARGET_THEMES=$(find temp_files -name "themes.xml" | head -n 1)
-            if [ ! -z "$TARGET_THEMES" ]; then
-              sed -i '1b; /<?xml/d' "$TARGET_THEMES"
-              cp -f "$TARGET_THEMES" app/src/main/res/values/themes.xml
-            fi
-            
-            find temp_files -type f \( -name "*.xml" ! -name "activity_main.xml" ! -name "colors.xml" ! -name "themes.xml" ! -name "AndroidManifest.xml" \) -exec sh -c 'sed -i "1b; /<?xml/d" "$1"; cp -f "$1" app/src/main/res/drawable/' _ {} \;
             
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
