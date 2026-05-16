@@ -31,7 +31,7 @@ jobs:
           REQ_NAME="${{ github.event.client_payload.app_name }}"
           ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           
-          if [ -z "$REQ_PKG" ]; then REQ_PKG="com.system.pro"; fi
+          if [ -z "$REQ_PKG" ]; then REQ_PKG="com.zipforge.pro"; fi
           if [ -z "$REQ_NAME" ]; then REQ_NAME="System Pro"; fi
           
           echo "FINAL_PKG=$REQ_PKG" >> $GITHUB_ENV
@@ -49,7 +49,7 @@ jobs:
             TARGET_JAVA=$(find temp_files -name "MainActivity.java" | head -n 1)
             if [ ! -z "$TARGET_JAVA" ]; then
               sed -i "s|package [^;]*;|package $REQ_PKG;|g" "$TARGET_JAVA"
-              sed -i 's|editJava.setText(prefs.getString("java_code", "package .*|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;\"));|g' "$TARGET_JAVA"
+              sed -i 's|editJava.setText(prefs.getString("java_code", "package .*||g' "$TARGET_JAVA"
               
               PKG_PATH=$(echo $REQ_PKG | tr '.' '/')
               mkdir -p app/src/main/java/$PKG_PATH
