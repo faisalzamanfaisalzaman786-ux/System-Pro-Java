@@ -37,24 +37,31 @@ jobs:
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
-            RAW_PKG=$(grep "package " temp_files/MainActivity.java | head -n 1 | cut -d' ' -f2 | tr -d ';')
-            if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
-            echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
+            TARGET_JAVA=$(find temp_files -name "MainActivity.java" | head -n 1)
+            if [ ! -z "$TARGET_JAVA" ]; then
+              sed -i 's|editJava.setText(prefs.getString("java_code", "package .*|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;\"));|g' "$TARGET_JAVA"
+              
+              RAW_PKG=$(grep "package " "$TARGET_JAVA" | head -n 1 | cut -d' ' -f2 | tr -d ';')
+              if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
+              echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
+              
+              PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
+              mkdir -p app/src/main/java/$PKG_PATH
+              cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
+            else
+              echo "FINAL_PKG=com.system.pro" >> $GITHUB_ENV
+              mkdir -p app/src/main/java/com/system/pro
+            fi
             
-            PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
-            mkdir -p app/src/main/java/$PKG_PATH
             mkdir -p app/src/main/res/layout
             mkdir -p app/src/main/res/values
             mkdir -p app/src/main/res/drawable
             mkdir -p app/src/main/res/mipmap-hdpi
             
-            cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
-            cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
-            
-            sed -i 's|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;\"));|g' app/src/main/java/$PKG_PATH/MainActivity.java
-            
-            sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
-            sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
+            TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
+            if [ ! -z "$TARGET_XML" ]; then
+              cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
+            fi
             
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
