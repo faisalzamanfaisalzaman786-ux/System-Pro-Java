@@ -51,6 +51,8 @@ jobs:
             cp -f temp_files/MainActivity.java app/src/main/java/$PKG_PATH/ || true
             cp -f temp_files/activity_main.xml app/src/main/res/layout/ || true
             
+            sed -i 's|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;\"));|g' app/src/main/java/$PKG_PATH/MainActivity.java
+            
             sed -i "s/package .*;/package $RAW_PKG;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             sed -i "s/import .*\.R;/import $RAW_PKG.R;/g" app/src/main/java/$PKG_PATH/MainActivity.java
             
@@ -58,8 +60,6 @@ jobs:
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             elif [ -f temp_files/icon.png ]; then
               cp -f temp_files/icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            else
-              echo '<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#00FFCC"/></shape>' > app/src/main/res/drawable/ic_launcher_background.xml
             fi
             
             echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>' > app/src/main/res/values/styles.xml
