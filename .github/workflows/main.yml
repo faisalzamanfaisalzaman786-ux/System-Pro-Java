@@ -9,7 +9,6 @@ permissions:
 
 env:
   GRADLE_VERSION: 8.5
-  AGP_VERSION: 8.1.4
 
 jobs:
   build:
@@ -26,66 +25,66 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Advanced Engine - Permission & Icon Fix
+      - name: Centralized Engine - Payload Processing
         run: |
+          REQ_PKG="${{ github.event.client_payload.package_name }}"
+          REQ_NAME="${{ github.event.client_payload.app_name }}"
+          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
+          
+          if [ -z "$REQ_PKG" ]; then REQ_PKG="com.system.pro"; fi
+          if [ -z "$REQ_NAME" ]; then REQ_NAME="System Pro"; fi
+          
+          echo "FINAL_PKG=$REQ_PKG" >> $GITHUB_ENV
+          echo "FINAL_NAME=$REQ_NAME" >> $GITHUB_ENV
+          
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/mipmap-*
           rm -rf temp_files project.zip
           
-          ZIP_DATA="${{ github.event.client_payload.zip_data }}"
           if [ ! -z "$ZIP_DATA" ]; then
             echo "$ZIP_DATA" | tr -d '\n\r ' | base64 -d > project.zip
             unzip -o project.zip -d temp_files || true
             
             TARGET_JAVA=$(find temp_files -name "MainActivity.java" | head -n 1)
             if [ ! -z "$TARGET_JAVA" ]; then
+              sed -i "s|package [^;]*;|package $REQ_PKG;|g" "$TARGET_JAVA"
               sed -i 's|editJava.setText(prefs.getString("java_code", "package .*|editJava.setText(prefs.getString("java_code", "package com.zipforge.pro;\"));|g' "$TARGET_JAVA"
               
-              RAW_PKG=$(grep "package " "$TARGET_JAVA" | head -n 1 | cut -d' ' -f2 | tr -d ';')
-              if [ -z "$RAW_PKG" ]; then RAW_PKG="com.system.pro"; fi
-              echo "FINAL_PKG=$RAW_PKG" >> $GITHUB_ENV
-              
-              PKG_PATH=$(echo $RAW_PKG | tr '.' '/')
+              PKG_PATH=$(echo $REQ_PKG | tr '.' '/')
               mkdir -p app/src/main/java/$PKG_PATH
               cp -f "$TARGET_JAVA" app/src/main/java/$PKG_PATH/MainActivity.java
-            else
-              echo "FINAL_PKG=com.system.pro" >> $GITHUB_ENV
-              mkdir -p app/src/main/java/com/system/pro
             fi
             
             mkdir -p app/src/main/res/layout
-            mkdir -p app/src/main/res/values
-            mkdir -p app/src/main/res/drawable
-            mkdir -p app/src/main/res/mipmap-hdpi
-            
             TARGET_XML=$(find temp_files -name "activity_main.xml" | head -n 1)
             if [ ! -z "$TARGET_XML" ]; then
               cp -f "$TARGET_XML" app/src/main/res/layout/activity_main.xml
             fi
             
+            mkdir -p app/src/main/res/mipmap-hdpi
             if [ -f temp_files/ic_launcher.png ]; then
               cp -f temp_files/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             elif [ -f temp_files/icon.png ]; then
               cp -f temp_files/icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             fi
-            
-            echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>' > app/src/main/res/values/styles.xml
           fi
 
-      - name: Master Manifest (With Permissions)
+      - name: Injection Dynamic Manifest
         run: |
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <uses-permission android:name="android.permission.INTERNET" />
               <uses-feature android:name="android.hardware.camera" android:required="false" />
               <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
               
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro"
+                  android:label="${{ env.FINAL_NAME }}"
                   android:theme="@style/Theme.SystemPro">
                   <activity android:name="${{ env.FINAL_PKG }}.MainActivity" android:exported="true">
                       <intent-filter>
@@ -97,50 +96,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: ProGuard Size Management
+      - name: Injection Dynamic Configuration
         run: |
-          cat <<EOF > app/proguard-rules.pro
-          -dontobfuscate
-          -keepattributes *Annotation*
-          -keep public class * extends android.app.Activity
-          -keep public class * extends android.app.Application
-          -keep public class ${{ env.FINAL_PKG }}.** { *; }
-          EOF
-
-      - name: Build Shield Engine
-        run: |
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:${{ env.AGP_VERSION }}' } }" > build.gradle
-          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
-          echo 'include ":app"' > settings.gradle
+          sed -i "s|namespace '.*'|namespace '${{ env.FINAL_PKG }}'|g" app/build.gradle
+          sed -i "s|applicationId '.*'|applicationId '${{ env.FINAL_PKG }}'|g" app/build.gradle
           
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace '${{ env.FINAL_PKG }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ env.FINAL_PKG }}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildFeatures {
-                  buildConfig true
-              }
-              buildTypes {
-                  debug {
-                      minifyEnabled true
-                      shrinkResources false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
+          echo "-keep public class ${{ env.FINAL_PKG }}.** { *; }" >> app/proguard-rules.pro
 
       - name: Execute Assembly
         run: |
