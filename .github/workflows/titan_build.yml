@@ -115,18 +115,15 @@ jobs:
 
           echo "[STEP 4] Scanning and re-mapping custom Java files..." >> $REPORT
           if [ -d extracted_payload ]; then
-              find extracted_payload -type f -name "*.java" | while read -r java_file; do
-                  basename_java=$(basename "$java_file")
-                  echo "Processing Code Component: $basename_java" >> $REPORT
-                  sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
-                  if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
-                      sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
-                  fi
-                  mv "$java_file" "app/src/main/java/$PKG_PATH/$basename_java"
-              done
+              cp -r extracted_payload/*.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
           fi
 
-          if [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+          if [ -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+              sed -i "s|^package .*|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+              if ! grep -q "import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"; then
+                  sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"
+              fi
+          else
               cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
               package placeholder;
               import android.os.Bundle;
@@ -289,7 +286,7 @@ jobs:
                         <intent-filter>
                             <action android:name="android.intent.action.MAIN" />
                             <category android:name="android.intent.category.LAUNCHER" />
-                        </manifest-filter>
+                        </intent-filter>
                     </activity>
                 </application>
             </manifest>
