@@ -34,12 +34,29 @@ jobs:
           [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/
           [ -f app_icon.png ] && mv app_icon.png app/src/main/res/drawable/ic_launcher.png || true
 
-      - name: Inject Missing Resources and Material Styles
+      - name: Inject Missing Resources and System Themes
         run: |
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/spinner_background.xml
           
-          mkdir -p app/build.gradle.tmp
+          cat << 'EOF' > app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@android:color/holo_blue_dark</item>
+                  <item name="colorSecondary">@android:color/holo_blue_light</item>
+                  <item name="windowNoTitle">true</item>
+                  <item name="windowActionBar">false</item>
+              </style>
+              <style name="ShapeAppearance">
+                  <item name="cornerSize">4dp</item>
+              </style>
+              <style name="Widget.MaterialComponents.ProgressBar" parent="android:Widget.ProgressBar"/>
+              <style name="Widget.MaterialComponents.ProgressBar.Horizontal" parent="android:Widget.ProgressBar.Horizontal"/>
+              <style name="Widget.MaterialComponents.Spinner" parent="android:Widget.Spinner"/>
+          </resources>
+          EOF
+
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
