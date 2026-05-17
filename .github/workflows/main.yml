@@ -20,8 +20,10 @@ jobs:
 
       - name: Decode Central Payload
         run: |
+          rm -rf app/src/main/java
+          rm -rf app/src/main/res
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
-          mkdir -p app/src/main/java/com/diagnostic/tool
+          mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
@@ -32,7 +34,9 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           unzip -o app_payload.zip
           
-          [ -f MainActivity.java ] && mv MainActivity.java app/src/main/java/com/diagnostic/tool/
+          find . -maxdepth 1 -name "MainActivity.java" -exec sed -i 's/package com.diagnostic.tool;/package com.system.pro;/g' {} +
+          
+          [ -f MainActivity.java ] && mv MainActivity.java app/src/main/java/com/system/pro/
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
