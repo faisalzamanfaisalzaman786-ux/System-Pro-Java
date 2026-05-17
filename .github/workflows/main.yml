@@ -25,6 +25,11 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
           unzip -o app_payload.zip
           
           [ -f MainActivity.java ] && mv MainActivity.java app/src/main/java/com/diagnostic/tool/
@@ -32,7 +37,15 @@ jobs:
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
           [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/
-          [ -f app_icon.png ] && mv app_icon.png app/src/main/res/drawable/ic_launcher.png || true
+          
+          if [ -f app_icon.png ]; then
+            cp app_icon.png app/src/main/res/drawable/ic_launcher.png
+            cp app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp app_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            mv app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          fi
 
       - name: Inject Missing Resources and System Themes
         run: |
