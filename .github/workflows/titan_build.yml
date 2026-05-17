@@ -60,6 +60,20 @@ jobs:
           echo "[STEP 3] Deploying Workspace Resources..." >> $REPORT
           if [ -d extracted_payload ]; then
               find extracted_payload -type f -name "activity_main.xml" -exec mv {} app/src/main/res/layout/ \; >> $REPORT 2>&1
+              find extracted_payload -type f -name "colors.xml" -exec mv {} app/src/main/res/values/ \; >> $REPORT 2>&1
+              find extracted_payload -type f -name "neon_button.xml" -exec mv {} app/src/main/res/drawable/ \; >> $REPORT 2>&1
+          fi
+
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+              cat << 'EOF' > app/src/main/res/values/colors.xml
+              <?xml version="1.0" encoding="utf-8"?>
+              <resources>
+                  <color name="colorPrimary">#02040c</color>
+                  <color name="colorAccent">#00ffcc</color>
+                  <color name="background_dark">#02040c</color>
+                  <color name="neon_glow">#00ffcc</color>
+              </resources>
+  EOF
           fi
 
           if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
@@ -80,16 +94,6 @@ jobs:
   EOF
           fi
 
-          cat << 'EOF' > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#02040c</color>
-              <color name="colorAccent">#00ffcc</color>
-              <color name="background_dark">#02040c</color>
-              <color name="neon_glow">#00ffcc</color>
-          </resources>
-  EOF
-
           cat << EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -109,50 +113,35 @@ jobs:
           </manifest>
           EOF
 
-          echo "[STEP 4] Synthesizing Auto-Generated Java Engine with Framework IDs..." >> $REPORT
-          cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          package placeholder;
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.EditText;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
+          echo "[STEP 4] Scanning and re-mapping custom Java files..." >> $REPORT
+          if [ -d extracted_payload ]; then
+              find extracted_payload -type f -name "*.java" | while read -r java_file; do
+                  basename_java=$(basename "$java_file")
+                  echo "Processing Code Component: $basename_java" >> $REPORT
+                  sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
+                  if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
+                      sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
+                  fi
+                  mv "$java_file" "app/src/main/java/$PKG_PATH/$basename_java"
+              fi
+          fi
 
-          public class MainActivity extends AppCompatActivity {
-              private EditText inputField1, inputField2;
-              private TextView resultDisplay;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
-
-                  inputField1 = findViewById(android.R.id.text1);
-                  inputField2 = findViewById(android.R.id.text2);
-                  resultDisplay = findViewById(android.R.id.title);
-                  Button btnCalculate = findViewById(android.R.id.button1);
-
-                  if (btnCalculate != null) {
-                      btnCalculate.setOnClickListener(new View.OnClickListener() {
-                          @Override
-                          public void onClick(View v) {
-                              if (inputField1 != null && inputField2 != null && resultDisplay != null) {
-                                  String val1 = inputField1.getText().toString();
-                                  String val2 = inputField2.getText().toString();
-                                  if (!val1.isEmpty() && !val2.isEmpty()) {
-                                      double n1 = Double.parseDouble(val1);
-                                      double n2 = Double.parseDouble(val2);
-                                      resultDisplay.setText("TOTAL RESULT: " + (n1 + n2));
-                                  }
-                              }
-                          }
-                      });
+          if [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+              cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+              package placeholder;
+              import android.os.Bundle;
+              import androidx.appcompat.app.AppCompatActivity;
+              public class MainActivity extends AppCompatActivity {
+                  @Override
+                  protected void onCreate(Bundle savedInstanceState) {
+                      super.onCreate(savedInstanceState);
+                      setContentView(resources_placeholder);
                   }
               }
-          }
   EOF
-          sed -i "s|package placeholder;|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+              sed -i "s|package placeholder;|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+              sed -i "s|resources_placeholder|$PKG_NAME.R.layout.activity_main|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+          fi
           
           if [ -f app_icon.png ] && [ -s app_icon.png ]; then
             cp app_icon.png app/src/main/res/drawable/ic_launcher.png
@@ -243,14 +232,166 @@ jobs:
       - name: Build Android Debug APK
         run: |
           REPORT="output_report/build_error_report.txt"
-          echo "[STEP 6] Triggering Primary Framework ID Compilation..." >> $REPORT
+          echo "[STEP 6] Triggering Primary Compilation..." >> $REPORT
           
           ./gradlew assembleDebug --no-daemon 2> output_report/gradle_err.log && (
             echo "BUILD_STATUS=SUCCESS" >> $REPORT
-            echo "Auto-generated Framework ID core code compiled successfully!" >> $REPORT
+            echo "Custom payload source code compiled successfully!" >> $REPORT
           ) || (
-            echo "BUILD_STATUS=FAIL" >> $REPORT
+            echo "BUILD_STATUS=FALLBACK_TRIGGERED" >> $REPORT
+            echo "=====================================" >> $REPORT
+            echo "CRITICAL ERROR: Main custom code failed to build!" >> $REPORT
+            echo "Deploying Smart Fallback Stack..." >> $REPORT
+            echo "=====================================" >> $REPORT
             cat output_report/gradle_err.log >> $REPORT
+            
+            rm -rf app
+            mkdir -p app/src/main/res/layout
+            mkdir -p app/src/main/res/values
+            mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
+            
+            cat << EOF > app/build.gradle
+            plugins {
+                id 'com.android.application'
+            }
+            android {
+                namespace '${{ env.TARGET_PACKAGE }}'
+                compileSdk 34
+                defaultConfig {
+                    applicationId '${{ env.TARGET_PACKAGE }}'
+                    minSdk 24
+                    targetSdk 34
+                    versionCode 1
+                    versionName "1.0"
+                }
+                buildTypes {
+                    release {
+                        minifyEnabled false
+                    }
+                }
+            }
+            dependencies {
+                implementation 'androidx.appcompat:appcompat:1.6.1'
+                implementation 'com.google.android.material:material:1.11.0'
+            }
+          EOF
+            
+            cat << EOF > app/src/main/AndroidManifest.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="${{ env.TARGET_PACKAGE }}">
+                <application
+                    android:allowBackup="true"
+                    android:icon="@drawable/ic_launcher"
+                    android:label="Titan Fallback Calc"
+                    android:theme="@style/Theme.AppCompat.NoActionBar">
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+          EOF
+
+            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:background="#111217"
+                android:padding="20dp"
+                android:gravity="center">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="FALLBACK CALC ENGINE"
+                    android:textColor="#ff4444"
+                    android:textSize="20sp"
+                    android:layout_marginBottom="20dp"/>
+                <EditText
+                    android:id="@+id/num1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="0"
+                    android:textColor="#ffffff"
+                    android:inputType="numberDecimal"
+                    android:background="@android:drawable/editbox_background"
+                    android:padding="10dp"
+                    android:layout_marginBottom="10dp"/>
+                <EditText
+                    android:id="@+id/num2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="0"
+                    android:textColor="#ffffff"
+                    android:inputType="numberDecimal"
+                    android:background="@android:drawable/editbox_background"
+                    android:padding="10dp"
+                    android:layout_marginBottom="20dp"/>
+                <Button
+                    android:id="@+id/btnAdd"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="EXECUTE"
+                    android:backgroundTint="#ff4444"/>
+                <TextView
+                    android:id="@+id/resultText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RESULT: 0"
+                    android:textColor="#ffffff"
+                    android:textSize="18sp"
+                    android:layout_marginTop="20dp"/>
+            </LinearLayout>
+          EOF
+
+            cat << 'EOF' > app/src/main/res/values/colors.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <color name="colorPrimary">#111217</color>
+                <color name="colorAccent">#ff4444</color>
+            </resources>
+          EOF
+
+            cat << 'EOF' > app/src/main/java/${{ env.TARGET_PACKAGE }}/MainActivity.java
+            package placeholder;
+            import android.os.Bundle;
+            import android.view.View;
+            import android.widget.Button;
+            import android.widget.EditText;
+            import android.widget.TextView;
+            import androidx.appcompat.app.AppCompatActivity;
+            public class MainActivity extends AppCompatActivity {
+                private EditText num1, num2;
+                private TextView resultText;
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
+                    num1 = findViewById(getResources().getIdentifier("num1", "id", getPackageName()));
+                    num2 = findViewById(getResources().getIdentifier("num2", "id", getPackageName()));
+                    resultText = findViewById(getResources().getIdentifier("resultText", "id", getPackageName()));
+                    Button btnAdd = findViewById(getResources().getIdentifier("btnAdd", "id", getPackageName()));
+                    btnAdd.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            String s1 = num1.getText().toString();
+                            String s2 = num2.getText().toString();
+                            if(!s1.isEmpty() && !s2.isEmpty()) {
+                                double res = Double.parseDouble(s1) + Double.parseDouble(s2);
+                                resultText.setText("RESULT: " + res);
+                            }
+                        }
+                    });
+                }
+            }
+          EOF
+            sed -i "s|package placeholder;|package ${{ env.TARGET_PACKAGE }};|g" app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java
+            
+            ./gradlew assembleDebug --no-daemon
           )
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
