@@ -29,7 +29,6 @@ jobs:
           
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
           
-          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -39,23 +38,104 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
-          unzip -o app_payload.zip
           
-          find . -maxdepth 1 -name "MainActivity.java" -exec sed -i "s/package .*/package $PKG_NAME;/g" {} +
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip || true
+          if [ -s app_payload.zip ]; then
+            unzip -o app_payload.zip || true
+          fi
           
-          [ -f MainActivity.java ] && mv MainActivity.java "app/src/main/java/$PKG_PATH/"
-          [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
-          [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
-          [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
-          [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/
+          if [ ! -s AndroidManifest.xml ]; then
+            cat << 'EOF' > AndroidManifest.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                <application
+                    android:allowBackup="true"
+                    android:icon="@drawable/ic_launcher"
+                    android:label="System Pro"
+                    android:theme="@style/Theme.AppCompat.NoActionBar">
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+          EOF
+          fi
+
+          if [ ! -s activity_main.xml ]; then
+            cat << 'EOF' > activity_main.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_size"
+                android:layout_height="match_size"
+                android:background="#02040c">
+                <TextView
+                    android:id="@+id/titleText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="System Pro Interface"
+                    android:textColor="#00ffcc"
+                    android:textSize="24sp"
+                    android:layout_centerInParent="true"/>
+            </RelativeLayout>
+          EOF
+          fi
+
+          if [ ! -s colors.xml ]; then
+            cat << 'EOF' > colors.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <color name="colorPrimary">#02040c</color>
+                <color name="colorAccent">#00ffcc</color>
+                <color name="background_dark">#02040c</color>
+                <color name="neon_glow">#00ffcc</color>
+            </resources>
+          EOF
+          fi
+
+          if [ ! -s MainActivity.java ]; then
+            cat << 'EOF' > MainActivity.java
+            package placeholder;
+            import android.os.Bundle;
+            import androidx.appcompat.app.AppCompatActivity;
+            public class MainActivity extends AppCompatActivity {
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    setContentView(resources_placeholder);
+                }
+            }
+          EOF
+            sed -i "s|package placeholder;|package $PKG_NAME;|g" MainActivity.java
+            sed -i "s|resources_placeholder|app.src.main.res.layout.activity_main|g" MainActivity.java
+            sed -i "s|app.src.main.res.layout.activity_main|$PKG_NAME.R.layout.activity_main|g" MainActivity.java
+          else
+            find . -maxdepth 1 -name "MainActivity.java" -exec sed -i "s/package .*/package $PKG_NAME;/g" {} +
+          fi
+
+          mv MainActivity.java "app/src/main/java/$PKG_PATH/"
+          mv AndroidManifest.xml app/src/main/
+          mv activity_main.xml app/src/main/res/layout/
+          mv colors.xml app/src/main/res/values/
+          [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/ || true
           
-          if [ -f app_icon.png ]; then
+          if [ -f app_icon.png ] && [ -s app_icon.png ]; then
             cp app_icon.png app/src/main/res/drawable/ic_launcher.png
             cp app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
             cp app_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
             cp app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             mv app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            curl -s -o default_icon.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch default_icon.png
+            cp default_icon.png app/src/main/res/drawable/ic_launcher.png
+            cp default_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp default_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp default_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp default_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            mv default_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
       - name: Inject Missing Resources and System Themes
