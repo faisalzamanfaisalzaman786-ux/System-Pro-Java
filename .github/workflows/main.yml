@@ -46,6 +46,18 @@ jobs:
             unzip -o app_payload.zip || true
           fi
           
+          find . -type f -name "colors.xml" | while read -r file; do
+            sed -i 's|^[[:space:]]*xml version|<?xml version|g' "$file"
+            sed -i '/<?xml/d' "$file"
+            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' "$file"
+          done
+
+          find . -type f -name "activity_main.xml" | while read -r file; do
+            sed -i 's|^[[:space:]]*xml version|<?xml version|g' "$file"
+            sed -i '/<?xml/d' "$file"
+            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' "$file"
+          done
+
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -65,10 +77,26 @@ jobs:
           EOF
 
           if [ -f activity_main.xml ] && [ -s activity_main.xml ]; then
-            sed -i '/<?xml/d' activity_main.xml
-            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' activity_main.xml
             mv activity_main.xml app/src/main/res/layout/
-          else
+          fi
+
+          if [ -f colors.xml ] && [ -s colors.xml ]; then
+            mv colors.xml app/src/main/res/values/
+          fi
+
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat << 'EOF' > app/src/main/res/values/colors.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <color name="colorPrimary">#02040c</color>
+                <color name="colorAccent">#00ffcc</color>
+                <color name="background_dark">#02040c</color>
+                <color name="neon_glow">#00ffcc</color>
+            </resources>
+          EOF
+          fi
+
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
             cat << 'EOF' > app/src/main/res/layout/activity_main.xml
             <?xml version="1.0" encoding="utf-8"?>
             <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -84,22 +112,6 @@ jobs:
                     android:textSize="24sp"
                     android:layout_centerInParent="true"/>
             </RelativeLayout>
-          EOF
-          fi
-
-          if [ -f colors.xml ] && [ -s colors.xml ]; then
-            sed -i '/<?xml/d' colors.xml
-            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' colors.xml
-            mv colors.xml app/src/main/res/values/
-          else
-            cat << 'EOF' > app/src/main/res/values/colors.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <color name="colorPrimary">#02040c</color>
-                <color name="colorAccent">#00ffcc</color>
-                <color name="background_dark">#02040c</color>
-                <color name="neon_glow">#00ffcc</color>
-            </resources>
           EOF
           fi
 
