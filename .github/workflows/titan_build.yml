@@ -46,17 +46,8 @@ jobs:
             unzip -o app_payload.zip || true
           fi
           
-          find . -type f -name "colors.xml" | while read -r file; do
-            sed -i 's|^[[:space:]]*xml version|<?xml version|g' "$file"
-            sed -i '/<?xml/d' "$file"
-            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' "$file"
-          done
-
-          find . -type f -name "activity_main.xml" | while read -r file; do
-            sed -i 's|^[[:space:]]*xml version|<?xml version|g' "$file"
-            sed -i '/<?xml/d' "$file"
-            sed -i '1i <?xml version="1.0" encoding="utf-8"?>' "$file"
-          done
+          find . -type f -name "colors.xml" -exec rm -f {} +
+          find . -type f -name "activity_main.xml" -exec rm -f {} +
 
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -76,44 +67,32 @@ jobs:
           </manifest>
           EOF
 
-          if [ -f activity_main.xml ] && [ -s activity_main.xml ]; then
-            mv activity_main.xml app/src/main/res/layout/
-          fi
-
-          if [ -f colors.xml ] && [ -s colors.xml ]; then
-            mv colors.xml app/src/main/res/values/
-          fi
-
-          if [ ! -f app/src/main/res/values/colors.xml ]; then
-            cat << 'EOF' > app/src/main/res/values/colors.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <color name="colorPrimary">#02040c</color>
-                <color name="colorAccent">#00ffcc</color>
-                <color name="background_dark">#02040c</color>
-                <color name="neon_glow">#00ffcc</color>
-            </resources>
+          cat << 'EOF' > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#02040c</color>
+              <color name="colorAccent">#00ffcc</color>
+              <color name="background_dark">#02040c</color>
+              <color name="neon_glow">#00ffcc</color>
+          </resources>
           EOF
-          fi
 
-          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="#02040c">
-                <TextView
-                    android:id="@+id/titleText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="System Pro Interface"
-                    android:textColor="#00ffcc"
-                    android:textSize="24sp"
-                    android:layout_centerInParent="true"/>
-            </RelativeLayout>
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#02040c">
+              <TextView
+                  android:id="@+id/titleText"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="System Pro Interface"
+                  android:textColor="#00ffcc"
+                  android:textSize="24sp"
+                  android:layout_centerInParent="true"/>
+          </RelativeLayout>
           EOF
-          fi
 
           [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/ || true
 
