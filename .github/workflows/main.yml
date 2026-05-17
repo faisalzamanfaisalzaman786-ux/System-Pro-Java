@@ -65,6 +65,8 @@ jobs:
           EOF
 
           if [ -f activity_main.xml ] && [ -s activity_main.xml ]; then
+            sed -i '/^[[:space:]]*$/d' activity_main.xml
+            sed -i 's|^[[:space:]]*xml version|<?xml version|g' activity_main.xml
             mv activity_main.xml app/src/main/res/layout/
           else
             cat << 'EOF' > app/src/main/res/layout/activity_main.xml
@@ -86,6 +88,11 @@ jobs:
           fi
 
           if [ -f colors.xml ] && [ -s colors.xml ]; then
+            sed -i '/^[[:space:]]*$/d' colors.xml
+            sed -i 's|^[[:space:]]*xml version|<?xml version|g' colors.xml
+            if ! grep -q "<?xml" colors.xml; then
+              sed -i '1i <?xml version="1.0" encoding="utf-8"?>' colors.xml
+            fi
             mv colors.xml app/src/main/res/values/
           else
             cat << 'EOF' > app/src/main/res/values/colors.xml
