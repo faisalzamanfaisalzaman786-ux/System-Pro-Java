@@ -89,7 +89,7 @@ jobs:
             mv colors.xml app/src/main/res/values/
           else
             cat << 'EOF' > app/src/main/res/values/colors.xml
-            <?xml version="1.0" encoding="utf-8"?>
+            xml version="1.0" encoding="utf-8"?>
             <resources>
                 <color name="colorPrimary">#02040c</color>
                 <color name="colorAccent">#00ffcc</color>
@@ -234,8 +234,10 @@ jobs:
           ./gradlew assembleDebug --no-daemon || true
           if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
             echo "Main build failed, executing pure fallback isolation..."
-            rm -rf app/build
-            rm -rf app/src/main/java/*
+            rm -rf app
+            mkdir -p app/src/main/res/layout
+            mkdir -p app/src/main/res/values
+            mkdir -p app/src/main/java/com/system/pro
             
             cat << 'EOF' > app/build.gradle
             plugins {
@@ -263,8 +265,49 @@ jobs:
             }
             EOF
             
-            mkdir -p "app/src/main/java/com/system/pro"
-            cat << 'EOF' > "app/src/main/java/com/system/pro/MainActivity.java"
+            cat << 'EOF' > app/src/main/AndroidManifest.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                <application
+                    android:allowBackup="true"
+                    android:icon="@drawable/ic_launcher"
+                    android:label="System Pro"
+                    android:theme="@style/Theme.AppCompat.NoActionBar">
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+          EOF
+
+            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#02040c">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="System Pro Interface"
+                    android:textColor="#00ffcc"
+                    android:textSize="24sp"
+                    android:layout_centerInParent="true"/>
+            </RelativeLayout>
+          EOF
+
+            cat << 'EOF' > app/src/main/res/values/colors.xml
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <color name="colorPrimary">#02040c</color>
+                <color name="colorAccent">#00ffcc</color>
+            </resources>
+          EOF
+
+            cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
             package com.system.pro;
             import android.os.Bundle;
             import androidx.appcompat.app.AppCompatActivity;
