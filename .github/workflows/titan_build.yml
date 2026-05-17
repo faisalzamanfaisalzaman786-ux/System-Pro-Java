@@ -1,4 +1,4 @@
-name: com.system.titan.pro
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -25,7 +25,7 @@ jobs:
           rm -rf app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME=${RAW_PKG:-"com.system.pro"}
+          PKG_NAME=${RAW_PKG:-"com.system.pro.titan.master"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
@@ -48,10 +48,12 @@ jobs:
           
           find . -type f -name "colors.xml" -exec rm -f {} +
           find . -type f -name "activity_main.xml" -exec rm -f {} +
+          find . -type f -name "AndroidManifest.xml" -exec rm -f {} +
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          cat << EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG_NAME">
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
@@ -97,31 +99,33 @@ jobs:
           [ -f neon_button.xml ] && mv neon_button.xml app/src/main/res/drawable/ || true
 
           HAS_JAVA_FILES=false
-          find . -maxdepth 1 -name "*.java" | while read -r java_file; do
-              HAS_JAVA_FILES=true
-              sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
-              if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
-                  sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
+          find . -type f -name "*.java" | while read -r java_file; do
+              basename_java=$(basename "$java_file")
+              if [ "$basename_java" != "MainActivity.java" ]; then
+                  HAS_JAVA_FILES=true
+                  sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
+                  sed -i "s|com.old.garbage.package.structure|$PKG_NAME|g" "$java_file"
+                  if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
+                      sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
+                  fi
+                  mv "$java_file" "app/src/main/java/$PKG_PATH/"
               fi
-              mv "$java_file" "app/src/main/java/$PKG_PATH/"
           done
 
-          if [ "$HAS_JAVA_FILES" = false ] || [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
-            cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            package placeholder;
-            import android.os.Bundle;
-            import androidx.appcompat.app.AppCompatActivity;
-            public class MainActivity extends AppCompatActivity {
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(resources_placeholder);
-                }
-            }
+          cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package placeholder;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(resources_placeholder);
+              }
+          }
           EOF
-            sed -i "s|package placeholder;|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-            sed -i "s|resources_placeholder|$PKG_NAME.R.layout.activity_main|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-          fi
+          sed -i "s|package placeholder;|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i "s|resources_placeholder|$PKG_NAME.R.layout.activity_main|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
           
           if [ -f app_icon.png ] && [ -s app_icon.png ]; then
             cp app_icon.png app/src/main/res/drawable/ic_launcher.png
@@ -259,9 +263,10 @@ jobs:
             }
           EOF
             
-            cat << 'EOF' > app/src/main/AndroidManifest.xml
+            cat << EOF > app/src/main/AndroidManifest.xml
             <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="${{ env.TARGET_PACKAGE }}">
                 <application
                     android:allowBackup="true"
                     android:icon="@drawable/ic_launcher"
