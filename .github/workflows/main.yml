@@ -242,7 +242,7 @@ jobs:
             rm -rf app/build
             rm -rf app/src/main/java/*
             
-            cat << EOF > app/build.gradle
+            cat << 'EOF' > app/build.gradle
             plugins {
                 id 'com.android.application'
             }
