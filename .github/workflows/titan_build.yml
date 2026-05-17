@@ -112,33 +112,6 @@ jobs:
               </application>
           </manifest>
           EOF
-
-          echo "[STEP 4] Scanning and re-mapping custom Java files..." >> $REPORT
-          if [ -d extracted_payload ]; then
-              cp -r extracted_payload/*.java app/src/main/java/$PKG_PATH/ 2>/dev/null || true
-          fi
-
-          if [ -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
-              sed -i "s|^package .*|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-              if ! grep -q "import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"; then
-                  sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"
-              fi
-          else
-              cat << 'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-              package placeholder;
-              import android.os.Bundle;
-              import androidx.appcompat.app.AppCompatActivity;
-              public class MainActivity extends AppCompatActivity {
-                  @Override
-                  protected void onCreate(Bundle savedInstanceState) {
-                      super.onCreate(savedInstanceState);
-                      setContentView(resources_placeholder);
-                  }
-              }
-  EOF
-              sed -i "s|package placeholder;|package $PKG_NAME;|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-              sed -i "s|resources_placeholder|$PKG_NAME.R.layout.activity_main|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-          fi
           
           if [ -f app_icon.png ] && [ -s app_icon.png ]; then
             cp app_icon.png app/src/main/res/drawable/ic_launcher.png
@@ -157,10 +130,34 @@ jobs:
             mv default_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
+      - name: Refactor and Deploy Java Components
+        run: |
+          if [ -d extracted_payload ]; then
+            cp -r extracted_payload/*.java app/src/main/java/${{ env.TARGET_PATH }}/ 2>/dev/null || true
+          fi
+          if [ -f "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java" ]; then
+            sed -i "s|^package .*|package ${{ env.TARGET_PACKAGE }};|g" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+            sed -i "/package ${{ env.TARGET_PACKAGE }};/a import ${{ env.TARGET_PACKAGE }}.R;" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          else
+            mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
+            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+            package placeholder;
+            import android.os.Bundle;
+            import androidx.appcompat.app.AppCompatActivity;
+            public class MainActivity extends AppCompatActivity {
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    setContentView(resources_placeholder);
+                }
+            }
+          EOF
+            sed -i "s|package placeholder;|package ${{ env.TARGET_PACKAGE }};|g" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+            sed -i "s|resources_placeholder|${{ env.TARGET_PACKAGE }}.R.layout.activity_main|g" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          fi
+
       - name: Inject Missing Resources and System Themes
         run: |
-          REPORT="output_report/build_error_report.txt"
-          echo "[STEP 5] Injecting core dependencies and layout bindings..." >> $REPORT
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/spinner_background.xml
           
@@ -229,17 +226,11 @@ jobs:
       - name: Build Android Debug APK
         run: |
           REPORT="output_report/build_error_report.txt"
-          echo "[STEP 6] Triggering Primary Compilation..." >> $REPORT
           
           ./gradlew assembleDebug --no-daemon 2> output_report/gradle_err.log && (
             echo "BUILD_STATUS=SUCCESS" >> $REPORT
-            echo "Custom payload source code compiled successfully!" >> $REPORT
           ) || (
             echo "BUILD_STATUS=FALLBACK_TRIGGERED" >> $REPORT
-            echo "=====================================" >> $REPORT
-            echo "CRITICAL ERROR: Main custom code failed to build!" >> $REPORT
-            echo "Deploying Smart Fallback Stack (Task Vault)..." >> $REPORT
-            echo "=====================================" >> $REPORT
             cat output_report/gradle_err.log >> $REPORT
             
             rm -rf app
