@@ -25,7 +25,7 @@ jobs:
           rm -rf app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME=${RAW_PKG:-"com.system.pro.titan.master"}
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
@@ -104,7 +104,6 @@ jobs:
               if [ "$basename_java" != "MainActivity.java" ]; then
                   HAS_JAVA_FILES=true
                   sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
-                  sed -i "s|com.old.garbage.package.structure|$PKG_NAME|g" "$java_file"
                   if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
                       sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
                   fi
@@ -230,8 +229,15 @@ jobs:
 
       - name: Build Android Debug APK
         run: |
-          ./gradlew assembleDebug --no-daemon || (
-            echo "Main build failed, executing instant fallback isolation..."
+          mkdir -p output_report
+          echo "BUILD_STATUS=SUCCESS" > output_report/build_error_report.txt
+          ./gradlew assembleDebug --no-daemon 2> output_report/gradle_err.log || (
+            echo "BUILD_STATUS=FALLBACK_TRIGGERED" > output_report/build_error_report.txt
+            echo "=== CRITICAL ERROR REPORT ===" >> output_report/build_error_report.txt
+            echo "Main custom source code compilation failed!" >> output_report/build_error_report.txt
+            echo "Gradle Error Stack Below:" >> output_report/build_error_report.txt
+            cat output_report/gradle_err.log >> output_report/build_error_report.txt
+            
             rm -rf app
             mkdir -p app/src/main/res/layout
             mkdir -p app/src/main/res/values
@@ -323,9 +329,10 @@ jobs:
             
             ./gradlew assembleDebug --no-daemon
           )
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      - name: Upload Build Artifact
+      - name: Upload Build Artifact with Error Report
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: output_report/
