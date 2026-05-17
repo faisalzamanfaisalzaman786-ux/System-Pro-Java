@@ -109,7 +109,7 @@ jobs:
           HAS_JAVA_FILES=false
           find . -maxdepth 1 -name "*.java" | while read -r java_file; do
               HAS_JAVA_FILES=true
-              sed -i "s/package .*/package $PKG_NAME;/g" "$java_file"
+              sed -i "s|^package .*|package $PKG_NAME;|g" "$java_file"
               if ! grep -q "import $PKG_NAME.R;" "$java_file"; then
                   sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
               fi
@@ -241,21 +241,46 @@ jobs:
             echo "Main build failed, clearing and executing pure fallback baseline..."
             rm -rf app/build
             rm -rf app/src/main/java/*
-            mkdir -p "app/src/main/java/${{ env.TARGET_PATH }}"
-            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
-            package placeholder;
+            
+            cat << EOF > app/build.gradle
+            plugins {
+                id 'com.android.application'
+            }
+            android {
+                namespace 'com.system.pro'
+                compileSdk 34
+                defaultConfig {
+                    applicationId 'com.system.pro'
+                    minSdk 24
+                    targetSdk 34
+                    versionCode 1
+                    versionName "1.0"
+                }
+                buildTypes {
+                    release {
+                        minifyEnabled false
+                    }
+                }
+            }
+            dependencies {
+                implementation 'androidx.appcompat:appcompat:1.6.1'
+                implementation 'com.google.android.material:material:1.11.0'
+            }
+            EOF
+            
+            mkdir -p "app/src/main/java/com/system/pro"
+            cat << 'EOF' > "app/src/main/java/com/system/pro/MainActivity.java"
+            package com.system.pro;
             import android.os.Bundle;
             import androidx.appcompat.app.AppCompatActivity;
             public class MainActivity extends AppCompatActivity {
                 @Override
                 protected void onCreate(Bundle savedInstanceState) {
                     super.onCreate(savedInstanceState);
-                    setContentView(resources_placeholder);
+                    setContentView(R.layout.activity_main);
                 }
             }
           EOF
-            sed -i "s|package placeholder;|package ${{ env.TARGET_PACKAGE }};|g" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
-            sed -i "s|resources_placeholder|${{ env.TARGET_PACKAGE }}.R.layout.activity_main|g" "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
             ./gradlew assembleDebug --no-daemon
           fi
 
