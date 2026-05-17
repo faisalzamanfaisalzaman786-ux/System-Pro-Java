@@ -22,8 +22,15 @@ jobs:
         run: |
           rm -rf app/src/main/java
           rm -rf app/src/main/res
+          
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.pro"}
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
-          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
@@ -34,9 +41,9 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           unzip -o app_payload.zip
           
-          find . -maxdepth 1 -name "MainActivity.java" -exec sed -i 's/package com.diagnostic.tool;/package com.system.pro;/g' {} +
+          find . -maxdepth 1 -name "MainActivity.java" -exec sed -i "s/package .*/package $PKG_NAME;/g" {} +
           
-          [ -f MainActivity.java ] && mv MainActivity.java app/src/main/java/com/system/pro/
+          [ -f MainActivity.java ] && mv MainActivity.java "app/src/main/java/$PKG_PATH/"
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
@@ -74,15 +81,15 @@ jobs:
           </resources>
           EOF
 
-          cat << 'EOF' > app/build.gradle
+          cat << EOF > app/build.gradle
           plugins {
               id 'com.android.application'
           }
           android {
-              namespace 'com.system.pro'
+              namespace '${{ env.TARGET_PACKAGE }}'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.system.pro"
+                  applicationId '${{ env.TARGET_PACKAGE }}'
                   minSdk 24
                   targetSdk 34
                   versionCode 1
