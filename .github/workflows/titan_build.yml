@@ -123,7 +123,7 @@ jobs:
                       sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$java_file"
                   fi
                   mv "$java_file" "app/src/main/java/$PKG_PATH/$basename_java"
-              fi
+              done
           fi
 
           if [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
@@ -241,7 +241,7 @@ jobs:
             echo "BUILD_STATUS=FALLBACK_TRIGGERED" >> $REPORT
             echo "=====================================" >> $REPORT
             echo "CRITICAL ERROR: Main custom code failed to build!" >> $REPORT
-            echo "Deploying Smart Fallback Stack..." >> $REPORT
+            echo "Deploying Smart Fallback Stack (Task Vault)..." >> $REPORT
             echo "=====================================" >> $REPORT
             cat output_report/gradle_err.log >> $REPORT
             
@@ -283,13 +283,13 @@ jobs:
                 <application
                     android:allowBackup="true"
                     android:icon="@drawable/ic_launcher"
-                    android:label="Titan Fallback Calc"
+                    android:label="Titan Task Vault"
                     android:theme="@style/Theme.AppCompat.NoActionBar">
                     <activity android:name=".MainActivity" android:exported="true">
                         <intent-filter>
                             <action android:name="android.intent.action.MAIN" />
                             <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
+                        </manifest-filter>
                     </activity>
                 </application>
             </manifest>
@@ -297,95 +297,110 @@ jobs:
 
             cat << 'EOF' > app/src/main/res/layout/activity_main.xml
             <?xml version="1.0" encoding="utf-8"?>
-            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:background="#111217"
-                android:padding="20dp"
-                android:gravity="center">
+                android:background="#02040c"
+                android:padding="16dp">
                 <TextView
+                    android:id="@+id/todo_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="FALLBACK CALC ENGINE"
+                    android:text="FALLBACK TASK VAULT"
                     android:textColor="#ff4444"
                     android:textSize="20sp"
-                    android:layout_marginBottom="20dp"/>
-                <EditText
-                    android:id="@+id/num1"
+                    android:textStyle="bold"
+                    android:layout_centerHorizontal="true"
+                    android:layout_marginTop="10dp"/>
+                <LinearLayout
+                    android:id="@+id/input_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="0"
-                    android:textColor="#ffffff"
-                    android:inputType="numberDecimal"
-                    android:background="@android:drawable/editbox_background"
-                    android:padding="10dp"
-                    android:layout_marginBottom="10dp"/>
-                <EditText
-                    android:id="@+id/num2"
+                    android:orientation="horizontal"
+                    android:layout_below="@id/todo_title"
+                    android:layout_marginTop="20dp"
+                    android:weightSum="4">
+                    <EditText
+                        android:id="@+id/task_input"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="3"
+                        android:hint="Backup Task Mode..."
+                        android:textColor="#ffffff"
+                        android:textColorHint="#556677"
+                        android:padding="10dp"
+                        android:background="@android:drawable/editbox_background"/>
+                    <Button
+                        android:id="@+id/btn_add_task"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:layout_marginLeft="8dp"
+                        android:text="ADD"
+                        android:backgroundTint="#ff4444"/>
+                </LinearLayout>
+                <ScrollView
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="0"
-                    android:textColor="#ffffff"
-                    android:inputType="numberDecimal"
-                    android:background="@android:drawable/editbox_background"
-                    android:padding="10dp"
-                    android:layout_marginBottom="20dp"/>
-                <Button
-                    android:id="@+id/btnAdd"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="EXECUTE"
-                    android:backgroundTint="#ff4444"/>
-                <TextView
-                    android:id="@+id/resultText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="RESULT: 0"
-                    android:textColor="#ffffff"
-                    android:textSize="18sp"
-                    android:layout_marginTop="20dp"/>
-            </LinearLayout>
+                    android:layout_height="match_parent"
+                    android:layout_below="@id/input_container"
+                    android:layout_marginTop="15dp"
+                    android:fillViewport="true">
+                    <LinearLayout
+                        android:id="@+id/task_list_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                    </LinearLayout>
+                </ScrollView>
+            </RelativeLayout>
           EOF
 
             cat << 'EOF' > app/src/main/res/values/colors.xml
             <?xml version="1.0" encoding="utf-8"?>
             <resources>
-                <color name="colorPrimary">#111217</color>
+                <color name="colorPrimary">#02040c</color>
                 <color name="colorAccent">#ff4444</color>
             </resources>
           EOF
 
             cat << 'EOF' > app/src/main/java/${{ env.TARGET_PACKAGE }}/MainActivity.java
             package placeholder;
+            import android.graphics.Color;
             import android.os.Bundle;
             import android.view.View;
             import android.widget.Button;
             import android.widget.EditText;
+            import android.widget.LinearLayout;
             import android.widget.TextView;
             import androidx.appcompat.app.AppCompatActivity;
             public class MainActivity extends AppCompatActivity {
-                private EditText num1, num2;
-                private TextView resultText;
+                private EditText taskInput;
+                private LinearLayout taskListContainer;
                 @Override
                 protected void onCreate(Bundle savedInstanceState) {
                     super.onCreate(savedInstanceState);
                     setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
-                    num1 = findViewById(getResources().getIdentifier("num1", "id", getPackageName()));
-                    num2 = findViewById(getResources().getIdentifier("num2", "id", getPackageName()));
-                    resultText = findViewById(getResources().getIdentifier("resultText", "id", getPackageName()));
-                    Button btnAdd = findViewById(getResources().getIdentifier("btnAdd", "id", getPackageName()));
-                    btnAdd.setOnClickListener(new View.OnClickListener() {
-                        @Override
-                        public void onClick(View v) {
-                            String s1 = num1.getText().toString();
-                            String s2 = num2.getText().toString();
-                            if(!s1.isEmpty() && !s2.isEmpty()) {
-                                double res = Double.parseDouble(s1) + Double.parseDouble(s2);
-                                resultText.setText("RESULT: " + res);
+                    taskInput = findViewById(getResources().getIdentifier("task_input", "id", getPackageName()));
+                    taskListContainer = findViewById(getResources().getIdentifier("task_list_container", "id", getPackageName()));
+                    Button btnAddTask = findViewById(getResources().getIdentifier("btn_add_task", "id", getPackageName()));
+                    if (btnAddTask != null) {
+                        btnAddTask.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                String txt = taskInput.getText().toString().trim();
+                                if(!txt.isEmpty()) {
+                                    final LinearLayout row = new LinearLayout(MainActivity.this);
+                                    row.setPadding(10,10,10,10);
+                                    TextView tv = new TextView(MainActivity.this);
+                                    tv.setText(txt);
+                                    tv.setTextColor(Color.WHITE);
+                                    row.addView(tv);
+                                    taskListContainer.addView(row);
+                                    taskInput.setText("");
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
           EOF
