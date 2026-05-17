@@ -62,14 +62,16 @@ jobs:
                 </application>
             </manifest>
           EOF
+          else
+            sed -i 's/package="[^"]*"//g' AndroidManifest.xml
           fi
 
           if [ ! -s activity_main.xml ]; then
             cat << 'EOF' > activity_main.xml
             <?xml version="1.0" encoding="utf-8"?>
             <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_size"
-                android:layout_height="match_size"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:background="#02040c">
                 <TextView
                     android:id="@+id/titleText"
@@ -109,8 +111,7 @@ jobs:
             }
           EOF
             sed -i "s|package placeholder;|package $PKG_NAME;|g" MainActivity.java
-            sed -i "s|resources_placeholder|app.src.main.res.layout.activity_main|g" MainActivity.java
-            sed -i "s|app.src.main.res.layout.activity_main|$PKG_NAME.R.layout.activity_main|g" MainActivity.java
+            sed -i "s|resources_placeholder|$PKG_NAME.R.layout.activity_main|g" MainActivity.java
           else
             find . -maxdepth 1 -name "MainActivity.java" -exec sed -i "s/package .*/package $PKG_NAME;/g" {} +
           fi
