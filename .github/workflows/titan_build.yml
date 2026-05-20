@@ -65,29 +65,23 @@ jobs:
             find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
           fi
 
-      - name: Fix Package Name in Java Files (Robust)
+      - name: Fix Package Name & Imports in Java Files (Robust)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
-            # Fix package statement: allow leading whitespace (spaces/tabs), replace entire line
+            # 1. Fix package statement (allow leading whitespace)
             find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
-            
-            # Additionally, ensure that there is exactly one package line (some files might have none)
-            # If no package line found, add one at the top of the file
+            # 2. Fix import statements for R (critical fix)
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|import .*\.R;|import ${{ env.TARGET_PACKAGE }}.R;|g" {} \;
+            # 3. If any file still has no package line, add it at top
             for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
               if ! grep -q "^[[:space:]]*package" "$file"; then
-                # Insert package line at the beginning of the file
                 sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
               fi
             done
           fi
-          
-          # If MainActivity.java does not exist, create default one (already handled in next step, but ensure)
-          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
-            echo "No MainActivity.java found, will create default."
-          fi
 
-      - name: Build Main Class (Fallback)
+      - name: Build Main Class (Fallback if no Java file from payload)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
@@ -240,7 +234,7 @@ jobs:
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      - name: Upload Artifact (Always on success or failure)
+      - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
         with:
