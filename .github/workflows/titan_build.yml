@@ -65,14 +65,34 @@ jobs:
             find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
           fi
 
-      - name: Build Main Class
+      - name: Fix Package Name in Java Files (Robust)
         run: |
-          if [ -d "app/src/main/java/${{ env.TARGET_PATH }}" ]; then
-            find app/src/main/java/${{ env.TARGET_PATH }} -type f -name "*.java" -exec sed -i "s|^package .*|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ -d "$TARGET_DIR" ]; then
+            # Fix package statement: allow leading whitespace (spaces/tabs), replace entire line
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+            
+            # Additionally, ensure that there is exactly one package line (some files might have none)
+            # If no package line found, add one at the top of the file
+            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+              if ! grep -q "^[[:space:]]*package" "$file"; then
+                # Insert package line at the beginning of the file
+                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
+              fi
+            done
           fi
           
-          if [ ! -f "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java" ]; then
-            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          # If MainActivity.java does not exist, create default one (already handled in next step, but ensure)
+          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
+            echo "No MainActivity.java found, will create default."
+          fi
+
+      - name: Build Main Class (Fallback)
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
+            mkdir -p "$TARGET_DIR"
+            cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
           package ${{ env.TARGET_PACKAGE }};
 
           import android.Manifest;
@@ -220,8 +240,9 @@ jobs:
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      - name: Upload Artifact
+      - name: Upload Artifact (Always on success or failure)
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: System-Pro-V2-Final
           path: output_report/
