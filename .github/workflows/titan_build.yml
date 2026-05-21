@@ -105,55 +105,99 @@ jobs:
               echo "Fixed: $xmlfile"
             fi
           done
-          mkdir -p app/src/main/res/values
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
+
+      # ========== CRITICAL FIX: Ensure toggleButton exists in layout ==========
+      - name: Ensure toggleButton exists in activity_main.xml
+        run: |
+          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
+          if [ ! -f "$LAYOUT_FILE" ]; then
+            # Create layout with button
+            mkdir -p app/src/main/res/layout
+            cat > "$LAYOUT_FILE" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle Torch"
+                  android:layout_gravity="center" />
+          </LinearLayout>
+          EOF
+            echo "Created activity_main.xml with toggleButton"
+          else
+            # Check if toggleButton exists
+            if ! grep -q 'android:id="@+id/toggleButton"' "$LAYOUT_FILE"; then
+              # Add button before closing root tag
+              sed -i '/<\/[a-zA-Z]*>/i \
+    <Button \
+        android:id="@+id/toggleButton" \
+        android:layout_width="wrap_content" \
+        android:layout_height="wrap_content" \
+        android:text="Toggle Torch" />' "$LAYOUT_FILE"
+              echo "Added toggleButton to existing layout"
+            else
+              echo "toggleButton already exists"
+            fi
           fi
 
-      - name: Run Static Fixer
-        run: python3 static_fixer.py
-
-      - name: Core Environment Setup
+      - name: Ensure basic resources exist
         run: |
-          mkdir -p app/src/main/res/drawable app/src/main/res/values
-          cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
+          mkdir -p app/src/main/res/values app/src/main/res/drawable
+          # strings.xml
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#1AFFFFFF"/>
-              <corners android:radius="8dp"/>
-          </shape>
+          <resources>
+              <string name="app_name">System Pro</string>
+              <string name="torch_on">Torch On</string>
+              <string name="torch_off">Torch Off</string>
+          </resources>
           EOF
-          cat > app/src/main/res/drawable/button_background.xml << 'EOF'
+          fi
+          # colors.xml
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+          fi
+          # styles.xml
+          if [ ! -f app/src/main/res/values/styles.xml ]; then
+            cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOF
+          fi
+          # button background
+          if [ ! -f app/src/main/res/drawable/button_background.xml ]; then
+            cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
               <solid android:color="#6200EE"/>
               <corners android:radius="8dp"/>
           </shape>
           EOF
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources xmlns:android="http://schemas.android.com/apk/res/android">
-              <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="windowNoTitle">true</item>
-                  <item name="windowActionBar">false</item>
-              </style>
-          </resources>
-          EOF
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources xmlns:android="http://schemas.android.com/apk/res/android">
-              <color name="colorPrimary">#02040c</color>
-              <color name="colorAccent">#00ffcc</color>
-          </resources>
-          EOF
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources xmlns:android="http://schemas.android.com/apk/res/android">
-              <string name="app_name">System Pro</string>
-              <string name="torch_on">Torch On</string>
-              <string name="torch_off">Torch Off</string>
-          </resources>
-          EOF
+          fi
+
+      - name: Fix Java package and imports (simple sed)
+        run: |
+          # Fix package name in all Java files
+          find app/src/main/java -type f -name "*.java" -exec sed -i 's/^package .*;/package '"${{ env.TARGET_PACKAGE }}";' /g {} \;
+          # Fix import R
+          find app/src/main/java -type f -name "*.java" -exec sed -i 's/import .*\.R;/import '"${{ env.TARGET_PACKAGE }}".R;/g {} \;
 
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v4
