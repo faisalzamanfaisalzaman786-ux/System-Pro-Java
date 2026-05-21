@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build 
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -42,30 +42,36 @@ jobs:
             unzip -o app_payload.zip -d extracted_payload/ || true
           fi
 
-      - name: Force Custom Resources Integration
+      - name: Copy User Resources (No Default Override)
         run: |
+          # Copy layout if provided by user
+          if [ -f extracted_payload/activity_main.xml ]; then
+            cp -f extracted_payload/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "Using user's activity_main.xml"
+          elif [ -f extracted_payload/layout_config.txt ]; then
+            cp -f extracted_payload/layout_config.txt app/src/main/res/layout/activity_main.xml
+            echo "Using user's layout_config.txt as activity_main.xml"
+          fi
+          
+          # Copy colors.xml if provided
+          if [ -f extracted_payload/colors.xml ]; then
+            cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml
+            echo "Using user's colors.xml"
+          fi
+          
+          # Copy any other XML resources (like drawables, etc.) but don't overwrite if already copied
           if [ -d extracted_payload ]; then
-              find extracted_payload -type f -name "activity_main.xml" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
-              find extracted_payload -type f -name "layout_config.txt" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
-              find extracted_payload -type f -name "colors.xml" -exec cp -f {} app/src/main/res/values/colors.xml \;
-              find extracted_payload -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true
+            find extracted_payload -type f -name "*.xml" ! -name "activity_main.xml" ! -name "colors.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true
           fi
 
-          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android"><TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-          fi
-
-          if [ ! -f app/src/main/res/values/colors.xml ]; then
-              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
-          fi
-
-      - name: Deploy Source Components
+      - name: Copy User Java Sources
         run: |
           if [ -d extracted_payload ]; then
             find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
+            echo "Copied Java files from payload"
           fi
 
-      - name: Fix Package Name & Imports in Java Files (Robust)
+      - name: Fix Package Name & Imports in Java Files
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
@@ -78,44 +84,8 @@ jobs:
             done
           fi
 
-      # ================================================================
-      # SAFE RESOURCE FIXES: صرف نئی فائلیں بنائیں، موجودہ کو نہ بدلیں
-      # ================================================================
-      - name: Ensure toggleButton and torch strings
-        run: |
-          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-            mkdir -p app/src/main/res/layout
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:padding="16dp">
-              <Button
-                  android:id="@+id/toggleButton"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Toggle Torch"
-                  android:layout_gravity="center" />
-          </LinearLayout>
-          EOF
-          fi
-
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            mkdir -p app/src/main/res/values
-            cat > app/src/main/res/values/strings.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">System Pro</string>
-              <string name="torch_on">Torch On</string>
-              <string name="torch_off">Torch Off</string>
-          </resources>
-          EOF
-          fi
-      # ================================================================
-
-      - name: Build Main Class (Fallback if no Java file from payload)
+      # ========== FALLBACK ONLY IF USER DID NOT PROVIDE MAIN ACTIVITY ==========
+      - name: Fallback MainActivity (only if missing)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
@@ -155,24 +125,19 @@ jobs:
 
               private void checkAndRequestRuntimePermissions() {
                   List<String> permissionsNeeded = new ArrayList<>();
-
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                       addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
                       addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
                       addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
                   }
-
                   addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
-
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                       addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
                   }
-
                   if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                       addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
                       addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
                   }
-
                   if (!permissionsNeeded.isEmpty()) {
                       ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
                   } else {
@@ -212,27 +177,116 @@ jobs:
               }
           }
           EOF
+          echo "Created fallback MainActivity because user did not provide one"
           fi
 
-      - name: Core Environment Setup
+      # ========== ONLY ADD MISSING RESOURCES IF THEY ARE NEEDED FOR BUILD (but never overwrite user's) ==========
+      - name: Add minimal missing resources (only if build would fail without them)
         run: |
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          # Check if strings.xml exists, if not create minimal one (but never overwrite)
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            mkdir -p app/src/main/res/values
+            cat > app/src/main/res/values/strings.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">SystemPro</string>
+          </resources>
+          EOF
+            echo "Created minimal strings.xml (user did not provide)"
+          fi
           
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+          # Check if colors.xml exists, if not create minimal
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+            echo "Created minimal colors.xml (user did not provide)"
+          fi
+          
+          # Check if styles.xml exists, if not create minimal
+          if [ ! -f app/src/main/res/values/styles.xml ]; then
+            cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOF
+            echo "Created minimal styles.xml (user did not provide)"
+          fi
 
+      - name: Copy User App Icon
+        run: |
           if [ -f extracted_payload/app_icon.png ]; then
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            echo "Using user's app icon"
           else
-            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            # Create a dummy icon so build doesn't fail, but it's just a placeholder
+            echo "No user icon provided, using default dummy icon"
+            # Create a tiny 1x1 transparent PNG base64 (minimal)
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+      - name: Create AndroidManifest (without package attribute)
+        run: |
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+      - name: Create build.gradle
+        run: |
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
 
-      - name: Inject Master Hardware & Background Permissions
+          android {
+              namespace "${{ env.TARGET_PACKAGE }}"
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "${{ env.TARGET_PACKAGE }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+      - name: Inject Master Permissions (add missing ones only)
         run: |
           MANIFEST_PATH="app/src/main/AndroidManifest.xml"
           PERMISSIONS=(
@@ -258,91 +312,24 @@ jobs:
             fi
           done
 
-      - name: Setup Gradle 8.5 Explicitly
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
 
-      # ========== FIRST BUILD ATTEMPT ==========
-      - name: Build Asset APK (Attempt 1)
-        id: build1
-        continue-on-error: true
+      - name: Build APK
+        id: build
         run: |
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+            echo "APK built successfully"
+          else
+            echo "APK not found"
+            exit 1
           fi
 
-      # ========== AI AGENT FALLBACK (if build failed and GROQ_API_KEY exists) ==========
-      - name: 🤖 AI Agent Fallback (Groq)
-        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          echo "First build failed. Calling Groq AI Agent to fix errors..."
-          
-          ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
-          
-          # Collect relevant files
-          FILES_INFO=""
-          for file in $(find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) | head -20); do
-            FILES_INFO="$FILES_INFO\n=== $file ===\n$(cat "$file")\n"
-          done
-          
-          # System prompt for AI (minified to avoid YAML issues)
-          SYSTEM_PROMPT='You are an expert Android developer. Your ONLY task is to fix build errors. Return ONLY a JSON array of objects with "path" and "content". DO NOT add explanations or markdown. DO NOT change package names or logic. Fix only the errors. Add missing resources (strings, colors, drawables, IDs) if needed. Add missing imports. Fix syntax errors. If cannot fix, return [].'
-          
-          # User prompt with error and files
-          USER_PROMPT="Build error log: $ERROR_LOG\n\nProject files:$FILES_INFO\n\nFix the errors by returning a JSON array."
-          
-          # Call Groq API
-          RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
-            -H "Authorization: Bearer $GROQ_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"model\": \"llama-3.3-70b-versatile\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"$SYSTEM_PROMPT\"},
-                {\"role\": \"user\", \"content\": \"$USER_PROMPT\"}
-              ],
-              \"temperature\": 0.1,
-              \"max_tokens\": 4000
-            }")
-          
-          # Extract and apply JSON fixes
-          echo "$RESPONSE" | python3 -c "
-          import sys, json, re, os
-          text = sys.stdin.read()
-          match = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
-          if match:
-              try:
-                  fixes = json.loads(match.group())
-                  for fix in fixes:
-                      path = fix.get('path')
-                      content = fix.get('content')
-                      if path and content:
-                          os.makedirs(os.path.dirname(path), exist_ok=True)
-                          with open(path, 'w') as f:
-                              f.write(content)
-                          print(f'Applied fix: {path}')
-                  print('AI_FIXES_APPLIED=true')
-              except Exception as e:
-                  print(f'Error parsing JSON: {e}')
-          else:
-              print('No valid JSON found in AI response')
-          "
-
-      # ========== SECOND BUILD ATTEMPT (after AI fix) ==========
-      - name: Build Asset APK (Attempt 2 - after AI)
-        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
-        run: |
-          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
-          fi
-
-      # ========== UPLOAD ARTIFACT (always) ==========
-      - name: Upload Artifact (Always)
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
