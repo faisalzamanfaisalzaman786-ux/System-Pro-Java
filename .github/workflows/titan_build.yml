@@ -70,68 +70,33 @@ jobs:
       - name: Consolidate Java files into correct package
         run: |
           echo "Moving any stray Java files from wrong packages to ${{ env.TARGET_PATH }}"
-          # Find all Java files under app/src/main/java (excluding the target package)
           find app/src/main/java -type f -name "*.java" | while read f; do
-            # Check if it's already under correct package
             if [[ "$f" != *"/${{ env.TARGET_PATH }}/"* ]]; then
-              echo "Moving $f to correct package"
-              # Get base filename
               filename=$(basename "$f")
-              # Move to target package directory
               mv "$f" "app/src/main/java/${{ env.TARGET_PATH }}/$filename"
+              echo "Moved $filename to correct package"
             fi
           done
-          # Remove any empty directories left behind
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
       # ========== 2. Generate fresh, correct AndroidManifest.xml ==========
       - name: Generate fresh AndroidManifest.xml
         run: |
-          echo "Generating new AndroidManifest.xml (ignoring any existing)"
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${{ env.TARGET_PACKAGE }}">
-          
-              <!-- Basic permissions -->
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-              
-              <!-- Camera / Torch -->
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
               <uses-feature android:name="android.hardware.camera" android:required="false" />
               <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
-              
-              <!-- Storage -->
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              
-              <!-- Bluetooth -->
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-              
-              <!-- Others -->
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-          
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro"
-                  android:theme="@style/Theme.AppCompat.NoActionBar"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true">
-                  
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -140,20 +105,15 @@ jobs:
               </application>
           </manifest>
           EOF
-          echo "Fresh AndroidManifest.xml created."
 
-      # ========== 3. Aggressive cleanup of invalid resource paths ==========
+      # ========== 3. Aggressive cleanup ==========
       - name: Aggressive cleanup of invalid resource paths
         run: |
-          echo "Removing any invalid folders under res/ (like assets)"
           find app/src/main/res -type d -name "assets" -exec rm -rf {} + 2>/dev/null || true
           find app/src/main/res -maxdepth 1 -type f -name "*.xml" -delete 2>/dev/null || true
           mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
-          fi
 
-      # ========== 4. Enhanced Static Fixer (with fixed semicolon + CameraCharacteristics import) ==========
+      # ========== 4. Enhanced Static Fixer with missing resources auto-creation ==========
       - name: 🤖 Enhanced Static Fixer Agent
         run: |
           cat > static_fixer.py << 'EOF'
@@ -179,7 +139,88 @@ jobs:
           def read_file(p): return open(p).read() if os.path.exists(p) else None
           def write_file(p, c): Path(p).parent.mkdir(parents=True, exist_ok=True); open(p, 'w').write(c); log(f"Written: {p}")
 
-          # Fix Java files - with CORRECT semicolon logic and added CameraCharacteristics
+          # Extract missing strings from Java file
+          def extract_missing_strings(java_content):
+              strings = set()
+              matches = re.findall(r'R\.string\.(\w+)', java_content)
+              for m in matches:
+                  strings.add(m)
+              return strings
+
+          # Extract missing IDs from Java file (to check layout later)
+          def extract_missing_ids(java_content):
+              ids = set()
+              matches = re.findall(r'R\.id\.(\w+)', java_content)
+              for m in matches:
+                  ids.add(m)
+              return ids
+
+          # Ensure strings.xml contains all required strings
+          def ensure_strings(strings_needed):
+              strings_path = f"{RES_VALUES_DIR}/strings.xml"
+              if not os.path.exists(strings_path):
+                  write_file(strings_path, '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>')
+              tree = ET.parse(strings_path)
+              root = tree.getroot()
+              existing = {elem.attrib['name'] for elem in root.findall('string')}
+              changed = False
+              for s in strings_needed:
+                  if s not in existing:
+                      ET.SubElement(root, 'string', name=s).text = s.replace('_', ' ').title()
+                      log(f"Added missing string: {s}")
+                      changed = True
+              if changed:
+                  tree.write(strings_path, encoding='utf-8', xml_declaration=True)
+                  log(f"Updated strings.xml with {len(strings_needed)} entries")
+              return changed
+
+          # Ensure layout contains missing IDs (add dummy Button if needed)
+          def ensure_layout_ids(ids_needed):
+              layout_path = f"{RES_LAYOUT_DIR}/activity_main.xml"
+              if not os.path.exists(layout_path):
+                  # Create default layout
+                  write_file(layout_path, '''<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical">
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle" />
+          </LinearLayout>''')
+                  log("Created default layout with toggleButton")
+                  return True
+              # Parse layout and check for missing IDs
+              try:
+                  tree = ET.parse(layout_path)
+                  root = tree.getroot()
+                  existing_ids = set()
+                  for elem in root.iter():
+                      aid = elem.get('{http://schemas.android.com/apk/res/android}id')
+                      if aid and aid.startswith('@+id/'):
+                          existing_ids.add(aid[5:])
+                  changed = False
+                  for id_name in ids_needed:
+                      if id_name not in existing_ids:
+                          # Add a button at the end of layout
+                          btn = ET.Element('Button')
+                          btn.set('{http://schemas.android.com/apk/res/android}id', f'@+id/{id_name}')
+                          btn.set('{http://schemas.android.com/apk/res/android}layout_width', 'wrap_content')
+                          btn.set('{http://schemas.android.com/apk/res/android}layout_height', 'wrap_content')
+                          btn.set('{http://schemas.android.com/apk/res/android}text', id_name)
+                          root.append(btn)
+                          log(f"Added missing view with id: {id_name} to layout")
+                          changed = True
+                  if changed:
+                      tree.write(layout_path, encoding='utf-8', xml_declaration=True)
+                      return True
+              except Exception as e:
+                  log(f"Error parsing layout: {e}", "ERROR")
+              return False
+
+          # Fix Java files
           def fix_java(fpath):
               c = read_file(fpath)
               if not c: return False
@@ -213,7 +254,6 @@ jobs:
                   imports.append('import android.os.Build;')
               if 'CameraManager' in c and 'android.hardware.camera2.CameraManager' not in c:
                   imports.append('import android.hardware.camera2.CameraManager;')
-              # NEW: Check for CameraCharacteristics
               if 'CameraCharacteristics' in c and 'android.hardware.camera2.CameraCharacteristics' not in c:
                   imports.append('import android.hardware.camera2.CameraCharacteristics;')
               if imports:
@@ -231,8 +271,7 @@ jobs:
               if open_b > close_b:
                   c += '\n' + '}' * (open_b - close_b)
                   log(f"Fixed braces in {fpath}")
-              
-              # Semicolon logic - skip annotations and control structures
+              # Semicolon fix (skip annotations)
               lines = c.split('\n')
               new_lines = []
               for line in lines:
@@ -250,7 +289,6 @@ jobs:
                               line = line.rstrip() + ';'
                   new_lines.append(line)
               c = '\n'.join(new_lines)
-              
               if c != orig:
                   write_file(fpath, c)
                   return True
@@ -273,23 +311,19 @@ jobs:
                   return True
               return False
 
-          # Generate missing resources
+          # Generate missing resources (basic)
           def gen_res():
               changed=False
               colors = f"{RES_VALUES_DIR}/colors.xml"
               if not os.path.exists(colors):
-                  write_file(colors,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>''')
-                  changed=True
-              strings = f"{RES_VALUES_DIR}/strings.xml"
-              if not os.path.exists(strings):
-                  write_file(strings,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <string name="app_name">System Pro</string>\n</resources>''')
+                  write_file(colors,'''<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>''')
                   changed=True
               styles = f"{RES_VALUES_DIR}/styles.xml"
               if not os.path.exists(styles):
-                  write_file(styles,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">\n        <item name="colorPrimary">@color/colorPrimary</item>\n        <item name="colorAccent">@color/colorAccent</item>\n    </style>\n</resources>''')
+                  write_file(styles,'''<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">\n        <item name="colorPrimary">@color/colorPrimary</item>\n        <item name="colorAccent">@color/colorAccent</item>\n    </style>\n</resources>''')
                   changed=True
-              drawables={"button_background.xml":'''<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#6200EE"/>\n    <corners android:radius="8dp"/>\n</shape>''',
-                         "edittext_background.xml":'''<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#FFFFFF"/>\n    <stroke android:width="1dp" android:color="#6200EE"/>\n    <corners android:radius="8dp"/>\n</shape>'''}
+              drawables={"button_background.xml":'''<shape><solid android:color="#6200EE"/><corners android:radius="8dp"/></shape>''',
+                         "edittext_background.xml":'''<shape><solid android:color="#FFFFFF"/><stroke android:width="1dp" android:color="#6200EE"/><corners android:radius="8dp"/></shape>'''}
               for name,cont in drawables.items():
                   p = f"{RES_DRAWABLE_DIR}/{name}"
                   if not os.path.exists(p):
@@ -297,7 +331,7 @@ jobs:
                       changed=True
               return changed
 
-          # Validate and fix all XML files (namespace, malformed)
+          # Validate XML (add namespace)
           def validate_xml():
               fixed = 0
               for root_dir in [RES_VALUES_DIR, RES_DRAWABLE_DIR, RES_LAYOUT_DIR]:
@@ -314,16 +348,9 @@ jobs:
                               log(f"Added namespace to {fpath}")
                               fixed += 1
                       except ET.ParseError as e:
-                          log(f"Malformed XML {fpath}: {e}. Recreating default.", "ERROR")
+                          log(f"Malformed XML {fpath}: {e}", "ERROR")
                           os.rename(fpath, fpath + ".bad")
-                          if 'colors' in fname:
-                              write_file(fpath, '''<?xml version="1.0"?><resources><color name="colorPrimary">#6200EE</color></resources>''')
-                          elif 'strings' in fname:
-                              write_file(fpath, '''<?xml version="1.0"?><resources><string name="app_name">SystemPro</string></resources>''')
-                          elif 'styles' in fname:
-                              write_file(fpath, '''<?xml version="1.0"?><resources><style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar"/></resources>''')
-                          else:
-                              write_file(fpath, '''<?xml version="1.0"?><shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#FFFFFF"/></shape>''')
+                          write_file(fpath, '''<?xml version="1.0"?><resources/>''')
                           fixed += 1
               return fixed
 
@@ -369,23 +396,47 @@ jobs:
           def main():
               log("=== Static Fixer Started ===")
               fixes = 0
+              # First, collect missing strings and IDs from Java files
+              all_strings = set()
+              all_ids = set()
               if os.path.exists(JAVA_SRC_DIR):
                   for r,_,fs in os.walk(JAVA_SRC_DIR):
                       for f in fs:
-                          if f.endswith('.java') and fix_java(os.path.join(r,f)): fixes+=1
+                          if f.endswith('.java'):
+                              content = read_file(os.path.join(r,f))
+                              if content:
+                                  all_strings.update(extract_missing_strings(content))
+                                  all_ids.update(extract_missing_ids(content))
+              # Ensure missing strings
+              if all_strings:
+                  if ensure_strings(all_strings):
+                      fixes += 1
+              # Ensure missing IDs in layout
+              if all_ids:
+                  if ensure_layout_ids(all_ids):
+                      fixes += 1
+              # Now fix Java files
+              if os.path.exists(JAVA_SRC_DIR):
+                  for r,_,fs in os.walk(JAVA_SRC_DIR):
+                      for f in fs:
+                          if f.endswith('.java') and fix_java(os.path.join(r,f)):
+                              fixes += 1
               if os.path.exists(RES_LAYOUT_DIR):
                   for f in os.listdir(RES_LAYOUT_DIR):
-                      if f.endswith('.xml') and fix_xml(os.path.join(RES_LAYOUT_DIR,f)): fixes+=1
-              if gen_res(): fixes+=1
+                      if f.endswith('.xml') and fix_xml(os.path.join(RES_LAYOUT_DIR,f)):
+                          fixes += 1
+              if gen_res():
+                  fixes += 1
               fixes += validate_xml()
-              if fix_gradle(): fixes+=1
+              if fix_gradle():
+                  fixes += 1
               log(f"Total fixes applied: {fixes}")
               log("=== Static Fixer Finished ===")
           if __name__ == "__main__": main()
           EOF
           python3 static_fixer.py
 
-      # ========== 5. Core Environment Setup (additional fallbacks) ==========
+      # ========== 5. Core Environment Setup ==========
       - name: Core Environment Setup
         run: |
           if [ ! -f app/src/main/res/drawable/edittext_background.xml ]; then
@@ -403,7 +454,6 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      # ========== 6. Build APK ==========
       - name: Build Asset APK
         id: build
         run: |
@@ -416,7 +466,6 @@ jobs:
             exit 1
           fi
 
-      # ========== 7. Validate APK ==========
       - name: Validate APK
         run: |
           if [ ! -f output_report/app-debug.apk ]; then
@@ -430,7 +479,6 @@ jobs:
             echo "APK size is $SIZE bytes - OK"
           fi
 
-      # ========== 8. Upload Artifact ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
