@@ -65,11 +65,11 @@ jobs:
           
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      # ========== Static Fixer Agent (Python) - Runs First ==========
-      - name: 🤖 Static Fixer Agent
+      # ========== Enhanced Static Fixer Agent (Python) ==========
+      - name: 🤖 Enhanced Static Fixer Agent
         run: |
           cat > static_fixer.py << 'EOF'
-          import os, re, sys
+          import os, re, sys, xml.etree.ElementTree as ET
           from pathlib import Path
 
           TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.system.titan.pro")
@@ -100,7 +100,6 @@ jobs:
                           lines.insert(i+1, f'import {TARGET_PACKAGE}.R;')
                           break
                   c = '\n'.join(lines)
-              # Common imports
               imports = []
               if 'Toast.makeText' in c and 'android.widget.Toast' not in c:
                   imports.append('import android.widget.Toast;')
@@ -186,24 +185,59 @@ jobs:
                   return True
               return False
 
-          # Generate missing resources
+          # Generate missing resources (with namespace fix)
           def gen_res():
               changed=False
               colors=f"{RES_VALUES_DIR}/colors.xml"
               if not os.path.exists(colors):
-                  write_file(colors,'''<?xml version="1.0"?><resources><color name="colorPrimary">#6200EE</color><color name="colorAccent">#03DAC5</color></resources>'''); changed=True
+                  write_file(colors,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>'''); changed=True
               strings=f"{RES_VALUES_DIR}/strings.xml"
               if not os.path.exists(strings):
-                  write_file(strings,'''<?xml version="1.0"?><resources><string name="app_name">System Pro</string></resources>'''); changed=True
+                  write_file(strings,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <string name="app_name">System Pro</string>\n</resources>'''); changed=True
               styles=f"{RES_VALUES_DIR}/styles.xml"
               if not os.path.exists(styles):
-                  write_file(styles,'''<?xml version="1.0"?><resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorAccent">@color/colorAccent</item></style></resources>'''); changed=True
-              drawables={"button_background.xml":'''<shape><solid android:color="#6200EE"/><corners android:radius="8dp"/></shape>''',"edittext_background.xml":'''<shape><solid android:color="#FFFFFF"/><stroke android:width="1dp" android:color="#6200EE"/><corners android:radius="8dp"/></shape>'''}
+                  write_file(styles,'''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">\n        <item name="colorPrimary">@color/colorPrimary</item>\n        <item name="colorAccent">@color/colorAccent</item>\n    </style>\n</resources>'''); changed=True
+              drawables={"button_background.xml":'''<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#6200EE"/>\n    <corners android:radius="8dp"/>\n</shape>''',
+                         "edittext_background.xml":'''<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#FFFFFF"/>\n    <stroke android:width="1dp" android:color="#6200EE"/>\n    <corners android:radius="8dp"/>\n</shape>'''}
               for name,cont in drawables.items():
                   p=f"{RES_DRAWABLE_DIR}/{name}"
                   if not os.path.exists(p):
                       write_file(p,cont); changed=True
               return changed
+
+          # Fix malformed XML and add missing namespace
+          def validate_and_fix_xml_files():
+              fixed = 0
+              for root_dir in [RES_VALUES_DIR, RES_DRAWABLE_DIR, RES_LAYOUT_DIR]:
+                  if not os.path.exists(root_dir): continue
+                  for fname in os.listdir(root_dir):
+                      if not fname.endswith('.xml'): continue
+                      fpath = os.path.join(root_dir, fname)
+                      try:
+                          tree = ET.parse(fpath)
+                          root = tree.getroot()
+                          # Add missing namespace if not present
+                          if 'xmlns:android' not in root.attrib:
+                              root.set('xmlns:android', 'http://schemas.android.com/apk/res/android')
+                              tree.write(fpath, encoding='utf-8', xml_declaration=True)
+                              log(f"Added namespace to {fpath}")
+                              fixed += 1
+                      except ET.ParseError as e:
+                          log(f"Malformed XML {fpath}: {e}. Recreating default.")
+                          # Backup and replace with default based on filename
+                          os.rename(fpath, fpath + ".bad")
+                          if 'colors' in fname:
+                              write_file(fpath, '''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <color name="colorPrimary">#6200EE</color>\n</resources>''')
+                          elif 'strings' in fname:
+                              write_file(fpath, '''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <string name="app_name">System Pro</string>\n</resources>''')
+                          elif 'styles' in fname:
+                              write_file(fpath, '''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar"/>\n</resources>''')
+                          elif 'drawable' in root_dir or fname.startswith('button') or fname.startswith('edittext'):
+                              write_file(fpath, '''<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#FFFFFF"/>\n</shape>''')
+                          else:
+                              write_file(fpath, '''<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android"/>\n''')
+                          fixed += 1
+              return fixed
 
           # Fix gradle
           def fix_gradle():
@@ -245,6 +279,8 @@ jobs:
                       if f.endswith('.xml') and fix_xml(os.path.join(RES_LAYOUT_DIR,f)): fixes+=1
               if fix_manifest(): fixes+=1
               if gen_res(): fixes+=1
+              # Critical: fix malformed XML resources (namespace, parse errors)
+              fixes += validate_and_fix_xml_files()
               if fix_gradle(): fixes+=1
               print(f"StaticFixer applied {fixes} fixes.")
           if __name__=="__main__": main()
@@ -258,10 +294,10 @@ jobs:
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           fi
           if [ ! -f app/src/main/res/values/styles.xml ]; then
-            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
           fi
           if [ ! -f app/src/main/res/values/colors.xml ]; then
-            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
           fi
           if [ ! -f app/src/main/AndroidManifest.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
@@ -310,7 +346,7 @@ jobs:
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      # ========== AI Agent Fallback (if build failed and GROQ_API_KEY exists) ==========
+      # ========== AI Agent Fallback (only if GROQ_API_KEY secret exists) ==========
       - name: 🤖 AI Agent Fallback
         if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
         env:
@@ -319,7 +355,6 @@ jobs:
           echo "🔴 First build failed. Calling AI Agent (Groq) once..."
           ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
           
-          # Collect relevant files
           echo "Project files:" > /tmp/file_list
           find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) | head -15 | while read f; do
             echo "=== $f ===" >> /tmp/file_list
@@ -328,10 +363,8 @@ jobs:
           done
           FILES_CONTENT=$(cat /tmp/file_list)
           
-          # Prepare prompt
           PROMPT="Build error log: $ERROR_LOG\n\nCurrent files:\n$FILES_CONTENT\n\nFix the build error by returning a JSON array of objects with 'path' and 'content'. Only return the JSON array, no other text."
           
-          # Call Groq API
           RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
             -H "Authorization: Bearer $GROQ_API_KEY" \
             -H "Content-Type: application/json" \
@@ -343,11 +376,9 @@ jobs:
             }")
           
           echo "$RESPONSE" > ai_response.json
-          # Extract JSON array using python
           python3 << 'PYTHON'
           import json, re, os
           resp = open('ai_response.json').read()
-          # Find JSON array in response
           match = re.search(r'\[\s*\{.*?\}\s*\]', resp, re.DOTALL)
           if match:
               try:
@@ -367,14 +398,14 @@ jobs:
               print("No JSON array found in AI response")
           PYTHON
 
-      # ========== Second Build Attempt (only if AI fix was applied) ==========
+      # ========== Second Build Attempt (if AI fix was applied) ==========
       - name: Build Asset APK (Attempt 2 - after AI)
         if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
         run: |
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      # ========== Upload Artifact ==========
+      # ========== Upload Artifact (Always) ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
