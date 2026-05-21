@@ -18,67 +18,44 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Base Payload Decode
+      - name: Setup Workspace
         run: |
           mkdir -p output_report
-          rm -rf app/src/main/java app/src/main/res app/build
-          
-          RAW_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
-          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
-          
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p app/src/main/res/layout
+          # ضروری فولڈرز بنائیں اگر موجود نہ ہوں
+          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/values
           
-          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip || true
-          if [ -s app_payload.zip ]; then
-            unzip -o app_payload.zip -d extracted_payload/ || true
-          fi
+          # پے لوڈ کو ڈیکوڈ کریں
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
+          unzip -o app_payload.zip -d extracted_payload/ || true
 
-      - name: Copy Resources and Icons
+      - name: Place Resources
         run: |
-          # Copy XML resources
-          if [ -d extracted_payload ]; then
-            cp -f extracted_payload/*.xml app/src/main/res/layout/ 2>/dev/null || true
-            cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml 2>/dev/null || true
-          fi
-          
-          # Handle Icons properly for all densities
-          mkdir -p app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          # آئیکن کو یقینی بنائیں کہ وہ صحیح جگہ پر ہے
           if [ -f extracted_payload/app_icon.png ]; then
-            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            # اگر آئیکن نہیں ہے تو ایک ڈمی آئیکن بنائیں تاکہ بلڈ فیل نہ ہو
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-      - name: Prepare Java Sources
+      - name: Create Essential Files
         run: |
-          if [ -d extracted_payload ]; then
-            find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
-          fi
+          # strings.xml بنائیں تاکہ ریسورس لنکنگ فیل نہ ہو
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources>
+              <string name="app_name">SystemPro</string>
+          </resources>
+          EOF
 
-      - name: Generate AndroidManifest
-        run: |
+          # Manifest بنائیں
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:tools="http://schemas.android.com/tools">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ProtectedPermissions" />
-              
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="SystemPro"
+                  android:label="@string/app_name"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -90,19 +67,11 @@ jobs:
           </manifest>
           EOF
 
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
       - name: Build APK
         run: |
-          gradle assembleDebug --no-daemon
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
-          else
-            exit 1
-          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
