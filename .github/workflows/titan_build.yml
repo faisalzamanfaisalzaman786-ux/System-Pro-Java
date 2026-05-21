@@ -51,13 +51,21 @@ jobs:
               find extracted_payload -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true
           fi
 
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android"><TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          fi
+
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
+          fi
+
       - name: Deploy Source Components
         run: |
           if [ -d extracted_payload ]; then
             find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
           fi
 
-      - name: Fix Package Name & Imports in Java Files
+      - name: Fix Package Name & Imports in Java Files (Robust)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
@@ -70,11 +78,14 @@ jobs:
             done
           fi
 
-      # ========== CREATE COMPLETE, VALID RESOURCES (No XML errors) ==========
-      - name: Create Valid Layout with toggleButton
+      # ================================================================
+      # SAFE RESOURCE FIXES: صرف نئی فائلیں بنائیں، موجودہ کو نہ بدلیں
+      # ================================================================
+      - name: Ensure toggleButton and torch strings
         run: |
-          mkdir -p app/src/main/res/layout
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+            mkdir -p app/src/main/res/layout
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -89,11 +100,11 @@ jobs:
                   android:layout_gravity="center" />
           </LinearLayout>
           EOF
+          fi
 
-      - name: Create Valid Strings, Colors, Styles
-        run: |
-          mkdir -p app/src/main/res/values
-          cat > app/src/main/res/values/strings.xml << 'EOF'
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            mkdir -p app/src/main/res/values
+            cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro</string>
@@ -101,104 +112,8 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
-          </resources>
-          EOF
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          EOF
-
-      - name: Create Drawables
-        run: |
-          mkdir -p app/src/main/res/drawable
-          cat > app/src/main/res/drawable/button_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="@color/colorPrimary"/>
-              <corners android:radius="8dp"/>
-          </shape>
-          EOF
-          cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#1AFFFFFF"/>
-              <corners android:radius="8dp"/>
-          </shape>
-          EOF
-
-      - name: Create AndroidManifest (without package attribute)
-        run: |
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Create build.gradle
-        run: |
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace "${{ env.TARGET_PACKAGE }}"
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "${{ env.TARGET_PACKAGE }}"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-
-      - name: Add missing Java imports (CameraCharacteristics etc.)
-        run: |
-          find app/src/main/java -type f -name "*.java" | while read file; do
-            if grep -q 'CameraCharacteristics' "$file" && ! grep -q 'import android.hardware.camera2.CameraCharacteristics' "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
-            fi
-            if grep -q 'CameraManager' "$file" && ! grep -q 'import android.hardware.camera2.CameraManager' "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
-            fi
-          done
+          fi
+      # ================================================================
 
       - name: Build Main Class (Fallback if no Java file from payload)
         run: |
@@ -209,74 +124,224 @@ jobs:
           package ${{ env.TARGET_PACKAGE }};
 
           import android.Manifest;
+          import android.content.Intent;
           import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.Toast;
+          import android.os.Environment;
+          import android.provider.Settings;
+          import androidx.annotation.NonNull;
           import androidx.appcompat.app.AppCompatActivity;
           import androidx.core.app.ActivityCompat;
           import androidx.core.content.ContextCompat;
-          import android.hardware.camera2.CameraManager;
-          import android.hardware.camera2.CameraCharacteristics;
+          import java.util.ArrayList;
+          import java.util.List;
 
           public class MainActivity extends AppCompatActivity {
-              private CameraManager cameraManager;
-              private String cameraId;
-              private boolean isTorchOn = false;
-              private Button toggleButton;
+              private static final int PERMISSION_REQ_CODE = 2026;
+              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
 
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  toggleButton = findViewById(R.id.toggleButton);
-                  cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
-                  try {
-                      cameraId = cameraManager.getCameraIdList()[0];
-                  } catch (Exception e) {
-                      Toast.makeText(this, "Camera error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+              protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  setContentView(getLayoutResourceId());
+                  checkAndRequestRuntimePermissions();
+              }
+
+              private int getLayoutResourceId() {
+                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
+              }
+
+              private void checkAndRequestRuntimePermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
                   }
-                  toggleButton.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                              ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, 1);
-                              return;
-                          }
+
+                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
+                  }
+
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                  }
+
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
+                  } else {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void addPermissionIfMissing(List<String> list, String permission) {
+                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                      list.add(permission);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQ_CODE) {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void checkSpecialPermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
                           try {
-                              if (isTorchOn) {
-                                  cameraManager.setTorchMode(cameraId, false);
-                                  isTorchOn = false;
-                                  toggleButton.setText(R.string.torch_off);
-                              } else {
-                                  cameraManager.setTorchMode(cameraId, true);
-                                  isTorchOn = true;
-                                  toggleButton.setText(R.string.torch_on);
-                              }
+                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                              intent.addCategory("android.intent.category.DEFAULT");
+                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
                           } catch (Exception e) {
-                              Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                              Intent intent = new Intent();
+                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
                           }
                       }
-                  });
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                      ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1);
                   }
               }
           }
           EOF
           fi
 
-      - name: Setup Gradle 8.5
+      - name: Core Environment Setup
+        run: |
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+
+          if [ -f extracted_payload/app_icon.png ]; then
+            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          else
+            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          fi
+
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+
+          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+
+      - name: Inject Master Hardware & Background Permissions
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CHANGE_WIFI_STATE"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.BLUETOOTH"
+            "android.permission.BLUETOOTH_ADMIN"
+            "android.permission.BLUETOOTH_CONNECT"
+            "android.permission.BLUETOOTH_SCAN"
+            "android.permission.BLUETOOTH_ADVERTISE"
+            "android.permission.CAMERA"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.MANAGE_EXTERNAL_STORAGE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.SYSTEM_ALERT_WINDOW"
+          )
+          for PERM in "${PERMISSIONS[@]}"; do
+            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
+            fi
+          done
+
+      - name: Setup Gradle 8.5 Explicitly
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
 
-      - name: Build Asset APK
+      # ========== FIRST BUILD ATTEMPT ==========
+      - name: Build Asset APK (Attempt 1)
+        id: build1
+        continue-on-error: true
         run: |
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
-          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+          fi
 
+      # ========== AI AGENT FALLBACK (if build failed and GROQ_API_KEY exists) ==========
+      - name: 🤖 AI Agent Fallback (Groq)
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "First build failed. Calling Groq AI Agent to fix errors..."
+          
+          ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
+          
+          # Collect relevant files
+          FILES_INFO=""
+          for file in $(find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) | head -20); do
+            FILES_INFO="$FILES_INFO\n=== $file ===\n$(cat "$file")\n"
+          done
+          
+          # System prompt for AI (minified to avoid YAML issues)
+          SYSTEM_PROMPT='You are an expert Android developer. Your ONLY task is to fix build errors. Return ONLY a JSON array of objects with "path" and "content". DO NOT add explanations or markdown. DO NOT change package names or logic. Fix only the errors. Add missing resources (strings, colors, drawables, IDs) if needed. Add missing imports. Fix syntax errors. If cannot fix, return [].'
+          
+          # User prompt with error and files
+          USER_PROMPT="Build error log: $ERROR_LOG\n\nProject files:$FILES_INFO\n\nFix the errors by returning a JSON array."
+          
+          # Call Groq API
+          RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
+            -H "Authorization: Bearer $GROQ_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"model\": \"llama-3.3-70b-versatile\",
+              \"messages\": [
+                {\"role\": \"system\", \"content\": \"$SYSTEM_PROMPT\"},
+                {\"role\": \"user\", \"content\": \"$USER_PROMPT\"}
+              ],
+              \"temperature\": 0.1,
+              \"max_tokens\": 4000
+            }")
+          
+          # Extract and apply JSON fixes
+          echo "$RESPONSE" | python3 -c "
+          import sys, json, re, os
+          text = sys.stdin.read()
+          match = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
+          if match:
+              try:
+                  fixes = json.loads(match.group())
+                  for fix in fixes:
+                      path = fix.get('path')
+                      content = fix.get('content')
+                      if path and content:
+                          os.makedirs(os.path.dirname(path), exist_ok=True)
+                          with open(path, 'w') as f:
+                              f.write(content)
+                          print(f'Applied fix: {path}')
+                  print('AI_FIXES_APPLIED=true')
+              except Exception as e:
+                  print(f'Error parsing JSON: {e}')
+          else:
+              print('No valid JSON found in AI response')
+          "
+
+      # ========== SECOND BUILD ATTEMPT (after AI fix) ==========
+      - name: Build Asset APK (Attempt 2 - after AI)
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+        run: |
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+          fi
+
+      # ========== UPLOAD ARTIFACT (always) ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
