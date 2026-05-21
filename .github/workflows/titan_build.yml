@@ -76,7 +76,7 @@ jobs:
           done
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      # ========== 3. Generate fresh AndroidManifest ==========
+      # ========== 3. Generate fresh AndroidManifest (without package attribute) ==========
       - name: Generate fresh AndroidManifest
         run: |
           cat > app/src/main/AndroidManifest.xml << EOF
@@ -115,7 +115,7 @@ jobs:
             echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
           fi
 
-      # ========== 5. Static Fixer for Java and Gradle ==========
+      # ========== 5. Static Fixer for Java and Gradle (with fresh gradle write) ==========
       - name: Static Fixer for Java and Gradle
         run: |
           cat > static_fixer.py << 'EOF'
@@ -212,49 +212,40 @@ jobs:
               return False
 
           def fix_gradle():
-              if not os.path.exists(GRADLE_BUILD):
-                  g = f'''plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{TARGET_PACKAGE}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{TARGET_PACKAGE}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }}
-              compileOptions {{
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }}'''
-                  write_file(GRADLE_BUILD, g)
-                  log("Created default build.gradle")
-                  return True
-              c = read_file(GRADLE_BUILD); orig=c
-              if 'namespace' not in c:
-                  c = c.replace('android {', f'android {{\n    namespace "{TARGET_PACKAGE}"')
-                  log("Added namespace to gradle")
-              if 'minSdk' not in c:
-                  c = c.replace('defaultConfig {', 'defaultConfig {\n        minSdk 24')
-              if 'targetSdk' not in c:
-                  c = c.replace('defaultConfig {', 'defaultConfig {\n        targetSdk 34')
-              if 'compileSdk' not in c:
-                  c = c.replace('android {', 'android {\n    compileSdk 34')
-              if 'compileOptions' not in c:
-                  c = c.replace('defaultConfig {', 'defaultConfig {\n        targetSdk 34\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }')
-                  log("Added compileOptions to gradle")
-              if 'androidx.appcompat:appcompat' not in c:
-                  c = c.replace('dependencies {', 'dependencies {\n    implementation \'androidx.appcompat:appcompat:1.6.1\'')
-              if c != orig:
-                  write_file(GRADLE_BUILD, c)
-                  return True
-              return False
+              # Always write fresh build.gradle to avoid syntax errors
+              g = f'''plugins {{
+    id 'com.android.application'
+}}
+
+android {{
+    namespace '{TARGET_PACKAGE}'
+    compileSdk 34
+
+    defaultConfig {{
+        applicationId '{TARGET_PACKAGE}'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }}
+
+    compileOptions {{
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }}
+}}
+
+dependencies {{
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+}}
+'''
+              # Backup old if exists
+              if os.path.exists(GRADLE_BUILD):
+                  os.rename(GRADLE_BUILD, GRADLE_BUILD + ".old")
+              write_file(GRADLE_BUILD, g)
+              log("Created fresh build.gradle")
+              return True
 
           def main():
               log("=== Static Fixer Started ===")
