@@ -18,14 +18,12 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # ========== NEW: Copy assets from build_assets folder ==========
+      # ========== Copy from build_assets folder (Original) ==========
       - name: Copy from build_assets to app structure
         run: |
           mkdir -p output_report
-          # Remove any previous app source to avoid conflicts
           rm -rf app/src/main/java app/src/main/res app/build
           
-          # Get package name from client payload
           RAW_PKG="${{ github.event.client_payload.package_name }}"
           PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
@@ -33,19 +31,16 @@ jobs:
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
           echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
           
-          # Create target directories
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          # Copy the entire app folder from build_assets (if exists)
           if [ -d "build_assets/app" ]; then
             cp -rf build_assets/app/* app/
           fi
           
-          # Copy individual resource files if they exist directly in build_assets
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
@@ -56,13 +51,11 @@ jobs:
             cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
           fi
           
-          # Copy app icon if present
           if [ -f "build_assets/app_icon.png" ]; then
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
           
-          # Copy any Java files from build_assets (they may be inside build_assets/java/ or directly)
           if [ -d "build_assets/java" ]; then
             cp -rf build_assets/java/* app/src/main/java/
           fi
@@ -70,156 +63,214 @@ jobs:
             cp -rf build_assets/src/* app/src/main/
           fi
           
-          # Ensure that Java files are in the correct package folder
-          # Move any loose Java files into the package directory
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      # ========== Fix package names and imports ==========
-      - name: Fix Package Name & Imports in Java Files
+      # ========== Static Fixer Agent (Python) - Runs First ==========
+      - name: 🤖 Static Fixer Agent
         run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -d "$TARGET_DIR" ]; then
-            # Fix package statement (allow leading whitespace)
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
-            # Fix import statements for R
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|import .*\.R;|import ${{ env.TARGET_PACKAGE }}.R;|g" {} \;
-            # If no package line, add it
-            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
-              if ! grep -q "^[[:space:]]*package" "$file"; then
-                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
-              fi
-            done
-          fi
+          cat > static_fixer.py << 'EOF'
+          import os, re, sys
+          from pathlib import Path
 
-      # ========== Fallback MainActivity if missing ==========
-      - name: Build Main Class (Fallback)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
-            mkdir -p "$TARGET_DIR"
-            cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
-          package ${{ env.TARGET_PACKAGE }};
+          TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.system.titan.pro")
+          ANDROID_MANIFEST = "app/src/main/AndroidManifest.xml"
+          JAVA_SRC_DIR = f"app/src/main/java/{TARGET_PACKAGE.replace('.', '/')}"
+          RES_VALUES_DIR = "app/src/main/res/values"
+          RES_LAYOUT_DIR = "app/src/main/res/layout"
+          RES_DRAWABLE_DIR = "app/src/main/res/drawable"
+          GRADLE_BUILD = "app/build.gradle"
 
-          import android.Manifest;
-          import android.content.Intent;
-          import android.content.pm.PackageManager;
-          import android.net.Uri;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.os.Environment;
-          import android.provider.Settings;
-          import androidx.annotation.NonNull;
-          import androidx.appcompat.app.AppCompatActivity;
-          import androidx.core.app.ActivityCompat;
-          import androidx.core.content.ContextCompat;
-          import java.util.ArrayList;
-          import java.util.List;
+          def log(msg): print(f"[StaticFixer] {msg}")
+          def read_file(p): return open(p).read() if os.path.exists(p) else None
+          def write_file(p, c): Path(p).parent.mkdir(parents=True, exist_ok=True); open(p, 'w').write(c); log(f"Written: {p}")
 
-          public class MainActivity extends AppCompatActivity {
-              private static final int PERMISSION_REQ_CODE = 2026;
-              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
+          # Fix Java files
+          def fix_java(fpath):
+              c = read_file(fpath)
+              if not c: return False
+              orig = c
+              c = re.sub(r'^package\s+[\w.]+;', f'package {TARGET_PACKAGE};', c, flags=re.M)
+              if not re.search(r'^package\s+', c, re.M):
+                  c = f"package {TARGET_PACKAGE};\n" + c
+              c = re.sub(r'import\s+[\w.]+\.R;', f'import {TARGET_PACKAGE}.R;', c)
+              if 'R;' not in c:
+                  lines = c.split('\n')
+                  for i, line in enumerate(lines):
+                      if line.startswith('package '):
+                          lines.insert(i+1, f'import {TARGET_PACKAGE}.R;')
+                          break
+                  c = '\n'.join(lines)
+              # Common imports
+              imports = []
+              if 'Toast.makeText' in c and 'android.widget.Toast' not in c:
+                  imports.append('import android.widget.Toast;')
+              if 'AlertDialog' in c and 'android.app.AlertDialog' not in c and 'androidx.appcompat.app.AlertDialog' not in c:
+                  imports.append('import android.app.AlertDialog;')
+              if 'ActivityCompat' in c and 'androidx.core.app.ActivityCompat' not in c:
+                  imports.append('import androidx.core.app.ActivityCompat;')
+              if 'ContextCompat' in c and 'androidx.core.content.ContextCompat' not in c:
+                  imports.append('import androidx.core.content.ContextCompat;')
+              if 'Build' in c and 'android.os.Build' not in c:
+                  imports.append('import android.os.Build;')
+              if imports:
+                  lines = c.split('\n')
+                  pos = 0
+                  for i, line in enumerate(lines):
+                      if line.startswith('package ') or line.startswith('import '):
+                          pos = i+1
+                  for imp in reversed(imports):
+                      lines.insert(pos, imp)
+                  c = '\n'.join(lines)
+              # Braces balance
+              open_b = c.count('{'); close_b = c.count('}')
+              if open_b > close_b:
+                  c += '\n' + '}' * (open_b - close_b)
+              # Semicolons
+              lines = c.split('\n')
+              new = []
+              for line in lines:
+                  s = line.strip()
+                  if s and not s.endswith('{') and not s.endswith('}') and not s.endswith(';') and not s.startswith('//') and not s.startswith('/*'):
+                      if not re.match(r'^(if|for|while|switch|try|catch|finally)\s*\(', s):
+                          line = line.rstrip() + ';'
+                  new.append(line)
+              c = '\n'.join(new)
+              if c != orig:
+                  write_file(fpath, c)
+                  return True
+              return False
 
-              @Override
-              protected void onCreate(Bundle saved) {
-                  super.onCreate(saved);
-                  setContentView(getLayoutResourceId());
-                  checkAndRequestRuntimePermissions();
-              }
+          # Fix XML layouts
+          def fix_xml(fpath):
+              c = read_file(fpath)
+              if not c: return False
+              orig = c
+              def add(m):
+                  tag = m.group(0)
+                  if 'layout_width' not in tag and 'merge' not in tag and 'include' not in tag and 'fragment' not in tag:
+                      tag = re.sub(r'(<\w+)', r'\1 android:layout_width="match_parent" android:layout_height="wrap_content"', tag, count=1)
+                  return tag
+              c = re.sub(r'<[a-zA-Z][^>]*?>', add, c)
+              if c != orig:
+                  write_file(fpath, c)
+                  return True
+              return False
 
-              private int getLayoutResourceId() {
-                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
-              }
+          # Fix Manifest
+          def fix_manifest():
+              if not os.path.exists(ANDROID_MANIFEST):
+                  m = f'''<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="System Pro" android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                  </activity>
+              </application>
+          </manifest>'''
+                  write_file(ANDROID_MANIFEST, m)
+                  return True
+              c = read_file(ANDROID_MANIFEST); orig=c
+              perms = ["android.permission.INTERNET","android.permission.CAMERA","android.permission.READ_EXTERNAL_STORAGE","android.permission.WRITE_EXTERNAL_STORAGE","android.permission.BLUETOOTH","android.permission.BLUETOOTH_CONNECT","android.permission.BLUETOOTH_SCAN"]
+              for p in perms:
+                  if p not in c:
+                      c = c.replace("<manifest", f'<manifest\n    <uses-permission android:name="{p}" />', 1)
+              for attr,val in [('android:icon','@mipmap/ic_launcher'),('android:label','System Pro'),('android:theme','@style/Theme.AppCompat.NoActionBar'),('android:allowBackup','true')]:
+                  if attr not in c:
+                      c = c.replace("<application", f'<application {attr}="{val}"')
+              if 'android.intent.category.LAUNCHER' not in c:
+                  c = re.sub(r'(<activity[^>]*>)', r'\1\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>', c, count=1)
+              c = re.sub(r'package="[^"]*"\s*', '', c)
+              if c != orig:
+                  write_file(ANDROID_MANIFEST, c)
+                  return True
+              return False
 
-              private void checkAndRequestRuntimePermissions() {
-                  List<String> permissionsNeeded = new ArrayList<>();
+          # Generate missing resources
+          def gen_res():
+              changed=False
+              colors=f"{RES_VALUES_DIR}/colors.xml"
+              if not os.path.exists(colors):
+                  write_file(colors,'''<?xml version="1.0"?><resources><color name="colorPrimary">#6200EE</color><color name="colorAccent">#03DAC5</color></resources>'''); changed=True
+              strings=f"{RES_VALUES_DIR}/strings.xml"
+              if not os.path.exists(strings):
+                  write_file(strings,'''<?xml version="1.0"?><resources><string name="app_name">System Pro</string></resources>'''); changed=True
+              styles=f"{RES_VALUES_DIR}/styles.xml"
+              if not os.path.exists(styles):
+                  write_file(styles,'''<?xml version="1.0"?><resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorAccent">@color/colorAccent</item></style></resources>'''); changed=True
+              drawables={"button_background.xml":'''<shape><solid android:color="#6200EE"/><corners android:radius="8dp"/></shape>''',"edittext_background.xml":'''<shape><solid android:color="#FFFFFF"/><stroke android:width="1dp" android:color="#6200EE"/><corners android:radius="8dp"/></shape>'''}
+              for name,cont in drawables.items():
+                  p=f"{RES_DRAWABLE_DIR}/{name}"
+                  if not os.path.exists(p):
+                      write_file(p,cont); changed=True
+              return changed
 
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
-                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
-                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
-                  }
+          # Fix gradle
+          def fix_gradle():
+              if not os.path.exists(GRADLE_BUILD):
+                  g=f'''plugins {{ id 'com.android.application' }}
+          android {{
+              namespace '{TARGET_PACKAGE}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId '{TARGET_PACKAGE}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }}'''
+                  write_file(GRADLE_BUILD, g); return True
+              c=read_file(GRADLE_BUILD); orig=c
+              if 'namespace' not in c: c=c.replace('android {',f'android {{\n    namespace "{TARGET_PACKAGE}"')
+              if 'minSdk' not in c: c=c.replace('defaultConfig {','defaultConfig {\n        minSdk 24')
+              if 'targetSdk' not in c: c=c.replace('defaultConfig {','defaultConfig {\n        targetSdk 34')
+              if 'compileSdk' not in c: c=c.replace('android {','android {\n    compileSdk 34')
+              if 'androidx.appcompat:appcompat' not in c: c=c.replace('dependencies {','dependencies {\n    implementation \'androidx.appcompat:appcompat:1.6.1\'')
+              if c!=orig: write_file(GRADLE_BUILD,c); return True
+              return False
 
-                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
-
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
-                  }
-
-                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
-                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
-                  }
-
-                  if (!permissionsNeeded.isEmpty()) {
-                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
-                  } else {
-                      checkSpecialPermissions();
-                  }
-              }
-
-              private void addPermissionIfMissing(List<String> list, String permission) {
-                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                      list.add(permission);
-                  }
-              }
-
-              @Override
-              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-                  if (requestCode == PERMISSION_REQ_CODE) {
-                      checkSpecialPermissions();
-                  }
-              }
-
-              private void checkSpecialPermissions() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      if (!Environment.isExternalStorageManager()) {
-                          try {
-                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                              intent.addCategory("android.intent.category.DEFAULT");
-                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
-                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
-                          } catch (Exception e) {
-                              Intent intent = new Intent();
-                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
-                          }
-                      }
-                  }
-              }
-          }
+          def main():
+              fixes=0
+              if os.path.exists(JAVA_SRC_DIR):
+                  for r,_,fs in os.walk(JAVA_SRC_DIR):
+                      for f in fs:
+                          if f.endswith('.java') and fix_java(os.path.join(r,f)): fixes+=1
+              if os.path.exists(RES_LAYOUT_DIR):
+                  for f in os.listdir(RES_LAYOUT_DIR):
+                      if f.endswith('.xml') and fix_xml(os.path.join(RES_LAYOUT_DIR,f)): fixes+=1
+              if fix_manifest(): fixes+=1
+              if gen_res(): fixes+=1
+              if fix_gradle(): fixes+=1
+              print(f"StaticFixer applied {fixes} fixes.")
+          if __name__=="__main__": main()
           EOF
-          fi
+          python3 static_fixer.py
 
       # ========== Core Environment Setup (Fallbacks) ==========
       - name: Core Environment Setup
         run: |
-          # Create default drawable if missing
           if [ ! -f app/src/main/res/drawable/edittext_background.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           fi
-          
-          # Create default styles if missing
           if [ ! -f app/src/main/res/values/styles.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
           fi
-
-          # Default colors if missing
           if [ ! -f app/src/main/res/values/colors.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
           fi
-
-          # Default AndroidManifest if missing
           if [ ! -f app/src/main/AndroidManifest.xml ]; then
-            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
           fi
-
-          # Default build.gradle if missing
           if [ ! -f app/build.gradle ]; then
             echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
           fi
 
-      # ========== Inject Permissions ==========
+      # ========== Inject Master Permissions ==========
       - name: Inject Master Hardware & Background Permissions
         run: |
           MANIFEST_PATH="app/src/main/AndroidManifest.xml"
@@ -246,16 +297,84 @@ jobs:
             fi
           done
 
-      - name: Setup Gradle 8.5 Explicitly
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
 
-      - name: Build Asset APK
+      # ========== First Build Attempt ==========
+      - name: Build Asset APK (Attempt 1)
+        id: build1
+        continue-on-error: true
         run: |
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
+      # ========== AI Agent Fallback (if build failed and GROQ_API_KEY exists) ==========
+      - name: 🤖 AI Agent Fallback
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "🔴 First build failed. Calling AI Agent (Groq) once..."
+          ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
+          
+          # Collect relevant files
+          echo "Project files:" > /tmp/file_list
+          find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) | head -15 | while read f; do
+            echo "=== $f ===" >> /tmp/file_list
+            cat "$f" >> /tmp/file_list
+            echo "" >> /tmp/file_list
+          done
+          FILES_CONTENT=$(cat /tmp/file_list)
+          
+          # Prepare prompt
+          PROMPT="Build error log: $ERROR_LOG\n\nCurrent files:\n$FILES_CONTENT\n\nFix the build error by returning a JSON array of objects with 'path' and 'content'. Only return the JSON array, no other text."
+          
+          # Call Groq API
+          RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
+            -H "Authorization: Bearer $GROQ_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"model\": \"llama-3.3-70b-versatile\",
+              \"messages\": [{\"role\": \"system\", \"content\": \"You are an expert Android developer. Fix the given build error by providing corrected or missing files. Output ONLY valid JSON array.\"}, {\"role\": \"user\", \"content\": \"$PROMPT\"}],
+              \"temperature\": 0.2,
+              \"max_tokens\": 4000
+            }")
+          
+          echo "$RESPONSE" > ai_response.json
+          # Extract JSON array using python
+          python3 << 'PYTHON'
+          import json, re, os
+          resp = open('ai_response.json').read()
+          # Find JSON array in response
+          match = re.search(r'\[\s*\{.*?\}\s*\]', resp, re.DOTALL)
+          if match:
+              try:
+                  fixes = json.loads(match.group())
+                  for fix in fixes:
+                      path = fix.get('path')
+                      content = fix.get('content')
+                      if path and content:
+                          os.makedirs(os.path.dirname(path), exist_ok=True)
+                          with open(path, 'w') as f:
+                              f.write(content)
+                          print(f"AI Fix applied: {path}")
+                  print("AI_FIX_APPLIED=true")
+              except Exception as e:
+                  print("Failed to parse AI response:", e)
+          else:
+              print("No JSON array found in AI response")
+          PYTHON
+
+      # ========== Second Build Attempt (only if AI fix was applied) ==========
+      - name: Build Asset APK (Attempt 2 - after AI)
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+        run: |
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+
+      # ========== Upload Artifact ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
