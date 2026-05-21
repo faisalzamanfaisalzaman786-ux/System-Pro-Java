@@ -1,3 +1,5 @@
+package com.system.pro;
+
 import android.Manifest;
 import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
@@ -8,80 +10,84 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.system.pro.R;
 
 public class MainActivity extends AppCompatActivity {
+
     private CameraManager cameraManager;
     private String cameraId;
-    private boolean isTorchOn = false;
-    private boolean isSOSModeOn = false;
-    private long lastClickTime = 0;
     private Button torchButton;
+    private boolean isTorchOn = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         torchButton = findViewById(R.id.torch_button);
-        cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
-        try {
-            cameraId = cameraManager.getCameraIdList()[0];
-        } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
         torchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                long currentTime = System.currentTimeMillis();
-                if (currentTime - lastClickTime < 500) {
-                    if (!isSOSModeOn) {
-                        isSOSModeOn = true;
-                        Toast.makeText(MainActivity.this, "SOS Mode On", Toast.LENGTH_SHORT).show();
-                    } else {
-                        isSOSModeOn = false;
-                        Toast.makeText(MainActivity.this, "SOS Mode Off", Toast.LENGTH_SHORT).show();
-                    }
+                if (isTorchOn) {
+                    turnOffTorch();
                 } else {
-                    if (!isTorchOn) {
-                        turnTorchOn();
-                    } else {
-                        turnTorchOff();
-                    }
+                    turnOnTorch();
                 }
-                lastClickTime = currentTime;
             }
         });
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1);
+
+        cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, 1);
         }
     }
 
-    private void turnTorchOn() {
+    private void turnOnTorch() {
         try {
+            cameraId = getCameraId();
             cameraManager.setTorchMode(cameraId, true);
             isTorchOn = true;
-            Toast.makeText(this, "Torch On", Toast.LENGTH_SHORT).show();
+            torchButton.setBackgroundResource(R.drawable.button_background_pressed);
+            Toast.makeText(this, "Torch is on", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error turning on torch", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void turnTorchOff() {
+    private void turnOffTorch() {
         try {
+            cameraId = getCameraId();
             cameraManager.setTorchMode(cameraId, false);
             isTorchOn = false;
-            Toast.makeText(this, "Torch Off", Toast.LENGTH_SHORT).show();
+            torchButton.setBackgroundResource(R.drawable.button_background);
+            Toast.makeText(this, "Torch is off", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error turning off torch", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private String getCameraId() {
+        try {
+            for (String id : cameraManager.getCameraIdList()) {
+                if (cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_UNIT) != null) {
+                    return id;
+                }
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Error getting camera id", Toast.LENGTH_SHORT).show();
+        }
+        return null;
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         super.onDestroy();
         if (isTorchOn) {
-            turnTorchOff();
+            turnOffTorch();
         }
     }
 }
