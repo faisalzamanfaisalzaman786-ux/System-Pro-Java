@@ -18,7 +18,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # ========== 1. Copy from build_assets (original) ==========
+      # ========== 1. Copy from build_assets ==========
       - name: Copy from build_assets to app structure
         run: |
           mkdir -p output_report
@@ -47,7 +47,7 @@ jobs:
           if [ -f "build_assets/colors.xml" ]; then
             cp -f build_assets/colors.xml app/src/main/res/values/colors.xml
           fi
-          # We will NOT copy AndroidManifest from build_assets - we generate fresh
+          # We will NOT copy AndroidManifest - we generate fresh
           # if [ -f "build_assets/AndroidManifest.xml" ]; then
           #   cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
           # fi
@@ -66,10 +66,10 @@ jobs:
           
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      # ========== 2. Generate a fresh, correct AndroidManifest.xml ==========
+      # ========== 2. Generate fresh, correct AndroidManifest.xml ==========
       - name: Generate fresh AndroidManifest.xml
         run: |
-          echo "Generating new AndroidManifest.xml (ignoring any existing one)"
+          echo "Generating new AndroidManifest.xml (ignoring any existing)"
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -136,7 +136,7 @@ jobs:
             echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
           fi
 
-      # ========== 4. Enhanced Static Fixer (Python) ==========
+      # ========== 4. Enhanced Static Fixer (with fixed semicolon logic) ==========
       - name: 🤖 Enhanced Static Fixer Agent
         run: |
           cat > static_fixer.py << 'EOF'
@@ -162,15 +162,17 @@ jobs:
           def read_file(p): return open(p).read() if os.path.exists(p) else None
           def write_file(p, c): Path(p).parent.mkdir(parents=True, exist_ok=True); open(p, 'w').write(c); log(f"Written: {p}")
 
-          # Fix Java files
+          # Fix Java files - with CORRECT semicolon logic (no semicolon after annotations)
           def fix_java(fpath):
               c = read_file(fpath)
               if not c: return False
               orig = c
+              # Fix package
               c = re.sub(r'^package\s+[\w.]+;', f'package {TARGET_PACKAGE};', c, flags=re.M)
               if not re.search(r'^package\s+', c, re.M):
                   c = f"package {TARGET_PACKAGE};\n" + c
                   log(f"Added package to {fpath}")
+              # Fix import R
               c = re.sub(r'import\s+[\w.]+\.R;', f'import {TARGET_PACKAGE}.R;', c)
               if 'R;' not in c:
                   lines = c.split('\n')
@@ -209,22 +211,40 @@ jobs:
               if open_b > close_b:
                   c += '\n' + '}' * (open_b - close_b)
                   log(f"Fixed braces in {fpath}")
-              # Semicolons
+              
+              # ===== FIXED SEMICOLON LOGIC =====
               lines = c.split('\n')
-              new = []
+              new_lines = []
               for line in lines:
-                  s = line.strip()
-                  if s and not s.endswith('{') and not s.endswith('}') and not s.endswith(';') and not s.startswith('//') and not s.startswith('/*'):
-                      if not re.match(r'^(if|for|while|switch|try|catch|finally)\s*\(', s):
-                          line = line.rstrip() + ';'
-                  new.append(line)
-              c = '\n'.join(new)
+                  stripped = line.strip()
+                  # Skip adding semicolon if:
+                  # - line is empty
+                  # - starts with @ (annotation)
+                  # - starts with // or /* or * (comment)
+                  # - ends with { or }
+                  # - already ends with ;
+                  # - is a control structure (if, for, while, etc.)
+                  if (stripped and 
+                      not stripped.startswith('@') and 
+                      not stripped.startswith('//') and 
+                      not stripped.startswith('/*') and 
+                      not stripped.startswith('*') and
+                      not stripped.endswith('{') and 
+                      not stripped.endswith('}') and 
+                      not stripped.endswith(';')):
+                      # Also skip lines that are just annotations
+                      if not re.match(r'^@\w+(\(.*\))?$', stripped):
+                          if not re.match(r'^(if|for|while|switch|try|catch|finally)\s*\(', stripped):
+                              line = line.rstrip() + ';'
+                  new_lines.append(line)
+              c = '\n'.join(new_lines)
+              
               if c != orig:
                   write_file(fpath, c)
                   return True
               return False
 
-          # Fix XML layouts (add width/height)
+          # Fix XML layouts (add missing width/height)
           def fix_xml(fpath):
               c = read_file(fpath)
               if not c: return False
@@ -241,7 +261,7 @@ jobs:
                   return True
               return False
 
-          # Generate missing resources (with namespace)
+          # Generate missing resources
           def gen_res():
               changed=False
               colors = f"{RES_VALUES_DIR}/colors.xml"
@@ -356,15 +376,12 @@ jobs:
       # ========== 5. Core Environment Setup (additional fallbacks) ==========
       - name: Core Environment Setup
         run: |
-          # Create default drawable if missing
           if [ ! -f app/src/main/res/drawable/edittext_background.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           fi
-          # Ensure styles.xml exists
           if [ ! -f app/src/main/res/values/styles.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
           fi
-          # Ensure colors.xml exists
           if [ ! -f app/src/main/res/values/colors.xml ]; then
             echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:android="http://schemas.android.com/apk/res/android">\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
           fi
@@ -401,7 +418,7 @@ jobs:
             echo "APK size is $SIZE bytes - OK"
           fi
 
-      # ========== 8. Upload Artifact ==========
+      # ========== 8. Upload Artifact (Always) ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
