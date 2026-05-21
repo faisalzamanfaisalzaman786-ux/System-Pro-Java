@@ -66,6 +66,24 @@ jobs:
           
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
+      # ========== 1b. Consolidate Java files into correct package ==========
+      - name: Consolidate Java files into correct package
+        run: |
+          echo "Moving any stray Java files from wrong packages to ${{ env.TARGET_PATH }}"
+          # Find all Java files under app/src/main/java (excluding the target package)
+          find app/src/main/java -type f -name "*.java" | while read f; do
+            # Check if it's already under correct package
+            if [[ "$f" != *"/${{ env.TARGET_PATH }}/"* ]]; then
+              echo "Moving $f to correct package"
+              # Get base filename
+              filename=$(basename "$f")
+              # Move to target package directory
+              mv "$f" "app/src/main/java/${{ env.TARGET_PATH }}/$filename"
+            fi
+          done
+          # Remove any empty directories left behind
+          find app/src/main/java -type d -empty -delete 2>/dev/null || true
+
       # ========== 2. Generate fresh, correct AndroidManifest.xml ==========
       - name: Generate fresh AndroidManifest.xml
         run: |
@@ -131,12 +149,11 @@ jobs:
           find app/src/main/res -type d -name "assets" -exec rm -rf {} + 2>/dev/null || true
           find app/src/main/res -maxdepth 1 -type f -name "*.xml" -delete 2>/dev/null || true
           mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable
-          # Ensure strings.xml exists
           if [ ! -f app/src/main/res/values/strings.xml ]; then
             echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
           fi
 
-      # ========== 4. Enhanced Static Fixer (with fixed semicolon logic) ==========
+      # ========== 4. Enhanced Static Fixer (with fixed semicolon + CameraCharacteristics import) ==========
       - name: 🤖 Enhanced Static Fixer Agent
         run: |
           cat > static_fixer.py << 'EOF'
@@ -162,7 +179,7 @@ jobs:
           def read_file(p): return open(p).read() if os.path.exists(p) else None
           def write_file(p, c): Path(p).parent.mkdir(parents=True, exist_ok=True); open(p, 'w').write(c); log(f"Written: {p}")
 
-          # Fix Java files - with CORRECT semicolon logic (no semicolon after annotations)
+          # Fix Java files - with CORRECT semicolon logic and added CameraCharacteristics
           def fix_java(fpath):
               c = read_file(fpath)
               if not c: return False
@@ -196,6 +213,9 @@ jobs:
                   imports.append('import android.os.Build;')
               if 'CameraManager' in c and 'android.hardware.camera2.CameraManager' not in c:
                   imports.append('import android.hardware.camera2.CameraManager;')
+              # NEW: Check for CameraCharacteristics
+              if 'CameraCharacteristics' in c and 'android.hardware.camera2.CameraCharacteristics' not in c:
+                  imports.append('import android.hardware.camera2.CameraCharacteristics;')
               if imports:
                   lines = c.split('\n')
                   pos = 0
@@ -212,18 +232,11 @@ jobs:
                   c += '\n' + '}' * (open_b - close_b)
                   log(f"Fixed braces in {fpath}")
               
-              # ===== FIXED SEMICOLON LOGIC =====
+              # Semicolon logic - skip annotations and control structures
               lines = c.split('\n')
               new_lines = []
               for line in lines:
                   stripped = line.strip()
-                  # Skip adding semicolon if:
-                  # - line is empty
-                  # - starts with @ (annotation)
-                  # - starts with // or /* or * (comment)
-                  # - ends with { or }
-                  # - already ends with ;
-                  # - is a control structure (if, for, while, etc.)
                   if (stripped and 
                       not stripped.startswith('@') and 
                       not stripped.startswith('//') and 
@@ -232,7 +245,6 @@ jobs:
                       not stripped.endswith('{') and 
                       not stripped.endswith('}') and 
                       not stripped.endswith(';')):
-                      # Also skip lines that are just annotations
                       if not re.match(r'^@\w+(\(.*\))?$', stripped):
                           if not re.match(r'^(if|for|while|switch|try|catch|finally)\s*\(', stripped):
                               line = line.rstrip() + ';'
@@ -418,7 +430,7 @@ jobs:
             echo "APK size is $SIZE bytes - OK"
           fi
 
-      # ========== 8. Upload Artifact (Always) ==========
+      # ========== 8. Upload Artifact ==========
       - name: Upload Artifact (Always)
         uses: actions/upload-artifact@v4
         if: always()
