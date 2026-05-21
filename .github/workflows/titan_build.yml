@@ -75,7 +75,7 @@ jobs:
 
       - name: Generate fresh AndroidManifest
         run: |
-          cat > app/src/main/AndroidManifest.xml << EOF
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -110,9 +110,9 @@ jobs:
             echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
           fi
 
-      - name: Static Fixer for Java and Gradle
+      - name: Write Static Fixer script
         run: |
-          python3 - << 'PYEOF'
+          cat > static_fixer.py << 'EOF'
           import os, re, sys
           from pathlib import Path
           from datetime import datetime
@@ -252,7 +252,10 @@ dependencies {{
               log(f"Total fixes applied: {fixes}")
               log("=== Static Fixer Finished ===")
           if __name__ == "__main__": main()
-          PYEOF
+          EOF
+
+      - name: Run Static Fixer
+        run: python3 static_fixer.py
 
       - name: Core Environment Setup
         run: |
