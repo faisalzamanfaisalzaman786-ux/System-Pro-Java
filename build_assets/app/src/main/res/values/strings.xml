@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Torch App</string>
-    <string name="torch_on">TURN ON</string>
-    <string name="torch_off">TURN OFF</string>
 </resources>
