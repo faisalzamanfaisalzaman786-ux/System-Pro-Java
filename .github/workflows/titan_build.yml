@@ -10,23 +10,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Infrastructure
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Cleanup & Setup Paths
         run: |
           rm -rf app/src/main/java/com/system/pro/*
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
 
-      - name: Write Gradle Files
+      - name: Generate Configs
         run: |
           echo "include ':app'" > settings.gradle
-          
-          # درست روٹ بلڈ گریڈل
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }" > build.gradle
-          
-          # ایپ بلڈ گریڈل
+          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -41,7 +40,34 @@ jobs:
 
       - name: Write Java Code
         run: |
-          printf "package com.system.pro;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\nimport com.system.pro.databinding.ActivityMainBinding;\nimport android.hardware.camera2.CameraManager;\n\npublic class MainActivity extends AppCompatActivity {\n    private ActivityMainBinding binding;\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        binding = ActivityMainBinding.inflate(getLayoutInflater());\n        setContentView(binding.getRoot());\n        binding.torchButton.setOnClickListener(v -> toggleTorch());\n    }\n    private void toggleTorch() {\n        try {\n            CameraManager m = (CameraManager) getSystemService(CAMERA_SERVICE);\n            m.setTorchMode(m.getCameraIdList()[0], true);\n        } catch (Exception e) {}\n    }\n}" > app/src/main/java/com/system/pro/MainActivity.java
+          cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
+          package com.system.pro;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          import com.system.pro.databinding.ActivityMainBinding;
+          import android.hardware.camera2.CameraManager;
+          import android.widget.Toast;
+
+          public class MainActivity extends AppCompatActivity {
+              private ActivityMainBinding binding;
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  binding = ActivityMainBinding.inflate(getLayoutInflater());
+                  setContentView(binding.getRoot());
+                  binding.torchButton.setOnClickListener(v -> toggleTorch());
+              }
+              private void toggleTorch() {
+                  try {
+                      CameraManager m = (CameraManager) getSystemService(CAMERA_SERVICE);
+                      String[] ids = m.getCameraIdList();
+                      if (ids.length > 0) m.setTorchMode(ids[0], true);
+                  } catch (Exception e) {
+                      Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
+                  }
+              }
+          }
+          EOF
 
       - name: Write Layout
         run: |
@@ -57,11 +83,10 @@ jobs:
                   android:layout_centerInParent="true"/>
           </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-      - name: Build with Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-          arguments: assembleDebug
+      - name: Build
+        run: |
+          chmod +x gradlew || true
+          ./gradlew assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
