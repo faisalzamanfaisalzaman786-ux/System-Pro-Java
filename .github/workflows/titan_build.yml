@@ -8,60 +8,42 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Setup Java 17
         uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
+        with: { java-version: '17', distribution: 'zulu' }
 
-      - name: Setup Gradle 8.5
+      - name: Generate Configs and Manifest
         run: |
-          mkdir -p gradle/wrapper
+          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          chmod +x gradlew || true
+          
+          # settings.gradle
+          echo "include ':app'" > settings.gradle
+          
+          # build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
+          plugins { id 'com.android.application' }
+          android { namespace 'com.system.pro'; compileSdk 34; buildFeatures { viewBinding true }; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }" > app/build.gradle
 
-      - name: Write Enterprise Configuration
-        run: |
-          # 1. settings.gradle میں ریپوزٹریز کا ہونا لازمی ہے
-          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          include ':app'" > settings.gradle
-          
-          # 2. Root build.gradle
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }" > build.gradle
-          
-          # 3. App build.gradle
-          mkdir -p app
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              buildFeatures { viewBinding true }
-              defaultConfig { 
-                  applicationId 'com.system.pro'
-                  minSdk 24
-                  targetSdk 34 
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }" > app/build.gradle
+          # Self-Healing Manifest Generator
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: Generate Source Code
+      - name: Write Code and Layout
         run: |
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          
           cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.os.Bundle;
@@ -78,22 +60,19 @@ jobs:
                   binding.torchButton.setOnClickListener(v -> {
                       try {
                           CameraManager m = (CameraManager) getSystemService(CAMERA_SERVICE);
-                          String id = m.getCameraIdList()[0];
-                          m.setTorchMode(id, true);
+                          m.setTorchMode(m.getCameraIdList()[0], true);
                       } catch (Exception e) {}
                   });
               }
           }
           EOF
-
           echo '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><Button android:id="@+id/torchButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Toggle Torch" android:layout_centerInParent="true"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-      - name: Titan Build Execution
+      - name: Attempt Build with Auto-Retry
         run: |
-          ./gradlew assembleDebug --no-daemon
+          chmod +x gradlew || true
+          # اگر پہلی بار فیل ہوا تو یہ 2 بار خود ری ٹرائی کرے گا
+          ./gradlew assembleDebug --no-daemon || ./gradlew assembleDebug --no-daemon || ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Titan-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: System-Pro-Titan-APK, path: app/build/outputs/apk/debug/app-debug.apk }
