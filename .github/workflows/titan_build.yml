@@ -77,66 +77,8 @@ jobs:
           EOF
           fi
 
-      # ========== BASE64 ENCODED JAVA FIXER (no heredoc issues) ==========
-      - name: Write and run Java fixer (base64)
-        run: |
-          cat > fix_java.py.b64 << 'B64'
-          aW1wb3J0IG9zLCByZSwgc3lzCgp0YXJnZXRfcGtnID0gb3MuZW52aXJvbi5nZXQoJ1RBUkdF
-          VF9QQUNLQUdFJywgJ2NvbS5zeXN0ZW0udGl0YW4ucHJvJykKamF2YV9kaXIgPSBmJ2FwcC9z
-          cmMvbWFpbi9qYXZhL3t0YXJnZXRfcGtnLnJlcGxhY2UoIi4iLCAiLyIpfScKCmlmIG5vdCBv
-          cy5wYXRoLmV4aXN0cyhqYXZhX2Rpcik6CiAgICBwcmludChmIkphdmEgZGlyIG5vdCBmb3Vu
-          ZDoge2phdmFfZGlyfScpCiAgICBzeXMuZXhpdCgwKQoKZm9yIHJvb3QsIGRpcnMsIGZpbGVz
-          IGluIG9zLndhbGsgamF2YV9kaXIpOgogICAgZm9yIGYgaW4gZmlsZXM6CiAgICAgICAgaWYg
-          bm90IGYuZW5kc3dpdGgoJy5qYXZhJyk6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAg
-          cGF0aCA9IG9zLnBhdGguam9pbihyb290LCBmKQogICAgICAgIHdpdGggb3BlbihwYXRoLCAn
-          cicpIGFzIGZpbGVfb2JqOgogICAgICAgICAgICBjb250ZW50ID0gZmlsZV9vYmoucmVhZCgp
-          CgogICAgICAgIG9yaWdpbmFsID0gY29udGVudAoKICAgICAgICAjIDEuIEZpeCBwYWNrYWdl
-          IGxpbmUKICAgICAgICBjb250ZW50ID0gcmUuc3ViKHInXnBhY2thZ2VccytbXHcuXSs7Jywg
-          ZidwYWNrYWdlIHt0YXJnZXRfcGtnfTsnLCBjb250ZW50LCBmbGFncz1yZS5NKQogICAgICAg
-          aWYgbm90IHJlLnNlYXJjaChyJ15wYWNrYWdlXHMrJywgY29udGVudCwgcmUuTSk6CiAgICAg
-          ICAgICAgIGNvbnRlbnQgPSBmJ3BhY2thZ2Uge3RhcmdldF9wa2d9O1xuJyArIGNvbnRlbnQK
-          CiAgICAgICAgIyAyLiBGaXggaW1wb3J0IFIuCiAgICAgICAgY29udGVudCA9IHJlLnN1Yihy
-          J2ltcG9ydFxzK1tcdy5dK1wuUjsnLCBmJ2ltcG9ydCB7dGFyZ2V0X3BrZ30uUjsnLCBjb250
-          ZW50KQoKICAgICAgICAjIDMuIEFkZCBtaXNzaW5nIGltcG9ydHMgKENhbWVyYU1hbmFnZXIs
-          IENhbWVyYUNoYXJhY3RlcmlzdGljcywgVG9hc3QpCiAgICAgICAgaW1wb3J0c190b19hZGQg
-          PSBbXQogICAgICAgIGlmICdDYW1lcmFNYW5hZ2VyJyBpbiBjb250ZW50IGFuZCAnYW5kcm9p
-          ZC5oYXJkd2FyZS5jYW1lcmEyLkNhbWVyYU1hbmFnZXInIG5vdCBpbiBjb250ZW50OgogICAg
-          ICAgICAgICBpbXBvcnRzX3RvX2FkZC5hcHBlbmQoJ2ltcG9ydCBhbmRyb2lkLmhhcmR3YXJl
-          LmNhbWVyYTIuQ2FtZXJhTWFuYWdlcjsnKQogICAgICAgIGlmICdDYW1lcmFDaGFyYWN0ZXJp
-          c3RpY3MnIGluIGNvbnRlbnQgYW5kICdhbmRyb2lkLmhhcmR3YXJlLmNhbWVyYTIuQ2FtZXJh
-          Q2hhcmFjdGVyaXN0aWNzJyBub3QgaW4gY29udGVudDoKICAgICAgICAgICAgaW1wb3J0c190
-          b19hZGQuYXBwZW5kKCdpbXBvcnQgYW5kcm9pZC5oYXJkd2FyZS5jYW1lcmEyLkNhbWVyYUNo
-          YXJhY3RlcmlzdGljczsnKQogICAgICAgIGlmICdUb2FzdCcgaW4gY29udGVudCBhbmQgJ2Fu
-          ZHJvaWQud2lkZ2V0LlRvYXN0JyBub3QgaW4gY29udGVudDoKICAgICAgICAgICAgaW1wb3J0
-          c190b19hZGQuYXBwZW5kKCdpbXBvcnQgYW5kcm9pZC53aWRnZXQuVG9hc3Q7JykKICAgICAg
-          ICBpZiBpbXBvcnRzX3RvX2FkZDoKICAgICAgICAgICAgbGluZXMgPSBjb250ZW50LnNwbGl0
-          KCdcbicpCiAgICAgICAgICAgIGluc2VydF9wb3MgPSAwCiAgICAgICAgICAgIGZvciBpLCBs
-          aW5lIGluIGVudW1lcmF0ZShsaW5lcyk6CiAgICAgICAgICAgICAgICBpZiBsaW5lLnN0cmlw
-          KCkuc3RhcnRzd2l0aCgncGFja2FnZScpOgogICAgICAgICAgICAgICAgICAgIGluc2VydF9w
-          b3MgPSBpKzEKICAgICAgICAgICAgICAgICAgICBicmVhawogICAgICAgICAgICBmb3IgaW1w
-          IGluIHJldmVyc2VkKGltcG9ydHNfdG9fYWRkKToKICAgICAgICAgICAgICAgIGxpbmVzLmlu
-          c2VydChpbnNlcnRfcG9zLCBpbXApCiAgICAgICAgICAgIGNvbnRlbnQgPSAnXG4nLmpvaW4o
-          bGluZXMpCgogICAgICAgICMgNC4gRml4IG1pc3Npbmcgc2VtaWNvbG9ucwogICAgICAgIGxp
-          bmVzID0gY29udGVudC5zcGxpdCgnXG4nKQogICAgICAgIG5ld19saW5lcyA9IFtdCiAgICAg
-          ICAgZm9yIGxpbmUgaW4gbGluZXM6CiAgICAgICAgICAgIHN0cmlwcGVkID0gbGluZS5yc3Ry
-          aXAoKQogICAgICAgICAgICBpZiBzdHJpcHBlZCBhbmQgbm90IHN0cmlwcGVkLmVuZHN3aXRo
-          KCc7JykgYW5kIG5vdCBzdHJpcHBlZC5lbmRzd2l0aCgneycpIGFuZCBub3Qgc3RyaXBwZWQu
-          ZW5kc3dpdGgoJ30nKSBhbmQgbm90IHN0cmlwcGVkLnN0YXJ0c3dpdGgoJ2ltcG9ydCAnKSBh
-          bmQgbm90IHN0cmlwcGVkLnN0YXJ0c3dpdGgncGFja2FnZSAnKSBhbmQgbm90IHN0cmlwcGVk
-          LnN0YXJ0c3dpdGgoJ0AnKToKICAgICAgICAgICAgICAgIGlmIG5vdCByZS5tYXRjaChyJ15c
-          cyooaWZ8Zm9yfHdoaWxlfHN3aXRjaHx0cnl8Y2F0Y2h8ZmluYWxseXxlbHNlKVxzKignLCBz
-          dHJpcHBlZCk6CiAgICAgICAgICAgICAgICAgICAgIyBhZGQgc2VtaWNvbG9uCiAgICAgICAg
-          ZW5kCgkJCQlpZiBub3Qgc3RyaXBwZWQuZW5kc3dpdGgoJzsnKToKICAgICAgICAgICAgICAg
-          IAkJc3RyaXBwZWQgKz0gJzsnCiAgICAgICAgICAgIG5ld19saW5lcy5hcHBlbmQoc3RyaXBw
-          ZWQpCiAgICAgICAgY29udGVudCA9ICdcbicuam9pbihuZXdfbGluZXMpCgogICAgICAgICMg
-          NS4gU3BlY2lhbCBmaXggZm9yICR9IC0+IH07CiAgICAgICAgY29udGVudCA9IHJlLnN1Yihy
-          J1x9XCknLCAnfSk7JywgY29udGVudCkKCiAgICAgICAgaWYgY29udGVudCAhPSBvcmlnaW5h
-          bDoKICAgICAgICAgICAgd2l0aCBvcGVuKHBhdGgsICd3JykgYXMgZmlsZV9vYmo6CiAgICAg
-          ICAgICAgICAgICBmaWxlX29iai53cml0ZShjb250ZW50KQogICAgICAgICAgICBwcmludChm
-          J0ZpeGVkOiB7cGF0aH0nKQo=
-          B64
-          base64 -d fix_java.py.b64 > fix_java.py
-          python3 fix_java.py
+      - name: Run static fixer (separate Python file)
+        run: python3 static_fixer.py
 
       - name: Build Main Class (Fallback if no Java file from payload)
         run: |
