@@ -13,25 +13,21 @@ jobs:
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'zulu' }
 
-      - name: Setup Gradle Environment
+      - name: Setup Environment
         run: |
-          # پرانی فائلز ہٹانا
+          # پرانی فائلیں ہٹانا
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
+          mkdir -p app/src/main/java/com/system/pro app/src/main/res/layout
           
-          # معیاری gradlew اسکرپٹ لکھنا
-          echo '#!/bin/sh
-          DIR=$(dirname "$0")
-          exec java -jar "$DIR/gradle/wrapper/gradle-wrapper.jar" "$@"' > gradlew
-          chmod +x gradlew
-          
-          # ریپر پراپرٹیز سیٹ کرنا
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          
-          # مستند ریپر جار ڈاؤن لوڈ کرنا
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/master/subprojects/wrapper/src/main/resources/org/gradle/wrapper/gradle-wrapper.jar
+          # Gradle 8.5 انسٹال کرنا تاکہ ہمیں wrapper کی ضرورت نہ پڑے
+          wget https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q gradle-8.5-bin.zip
+          export GRADLE_HOME=$PWD/gradle-8.5
+          export PATH=$GRADLE_HOME/bin:$PATH
+          echo "GRADLE_HOME=$GRADLE_HOME" >> $GITHUB_ENV
+          echo "$GRADLE_HOME/bin" >> $GITHUB_PATH
 
-      - name: Write Project Files
+      - name: Write Project Configuration
         run: |
           echo "include ':app'" > settings.gradle
           echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
@@ -39,22 +35,18 @@ jobs:
           android { namespace 'com.system.pro'; compileSdk 34; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }" > app/build.gradle
 
-      - name: Write Source
+      - name: Create Manifest and MainActivity
         run: |
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+          <application android:allowBackup="true" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+          <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+          </application></manifest>' > app/src/main/AndroidManifest.xml
           
           mkdir -p app/src/main/java/com/system/pro
           printf "package com.system.pro;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {}" > app/src/main/java/com/system/pro/MainActivity.java
 
       - name: Final Build
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with: { name: System-Pro-Titan-APK, path: app/build/outputs/apk/debug/app-debug.apk }
