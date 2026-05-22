@@ -36,34 +36,40 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          # Copy Java files (only from build_assets)
+          # Copy Java files
           if [ -d "build_assets/app/src/main/java" ]; then
             cp -rf build_assets/app/src/main/java/* app/src/main/java/
           fi
           if [ -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
             cp -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" "app/src/main/java/$PKG_PATH/MainActivity.java"
           fi
-          # Also check root build_assets for any .java
           find build_assets -maxdepth 2 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           
-          # Copy AndroidManifest if provided (otherwise we create later)
+          # Copy XML layout if provided
+          if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
+            mkdir -p app/src/main/res/layout
+            cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/activity_main.xml
+          fi
+          
+          # Copy AndroidManifest if provided
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml.user
           fi
           
-          # Copy icon if present
+          # Copy icon
           if [ -f "build_assets/app_icon.png" ]; then
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      - name: Run static fixer (Python script)
+      - name: Run static fixer
         run: python3 static_fixer.py
 
-      - name: Create default resources (fixed, reliable)
+      - name: Create default resources (fallback)
         run: |
-          # Layout with toggleButton
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          # Layout if not provided
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -77,8 +83,9 @@ jobs:
                   android:text="Toggle Torch" />
           </LinearLayout>
           EOF
+          fi
           
-          # Strings with torch labels
+          # Strings
           cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -108,7 +115,7 @@ jobs:
           </resources>
           EOF
           
-          # Button background drawable
+          # Button background
           mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -118,13 +125,13 @@ jobs:
           </shape>
           EOF
           
-          # Default icon if not provided
+          # Default icon
           if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      - name: Build AndroidManifest (clean, no package attribute)
+      - name: Build AndroidManifest
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
