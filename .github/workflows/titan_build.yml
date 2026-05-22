@@ -26,25 +26,21 @@ jobs:
           mkdir -p output_report
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
           unzip -o app_payload.zip -d extracted_payload/ || true
-          
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           [ -d extracted_payload ] && cp -f extracted_payload/*.java "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
           [ -d extracted_payload ] && cp -f extracted_payload/*.xml app/src/main/res/layout/ 2>/dev/null || true
 
       - name: Run Static AI Fixer (Safe Mode)
-        run: |
-          python3 static_fixer.py
+        run: python3 static_fixer.py
 
       - name: Build and Error Capture
         id: build_step
         run: |
           chmod +x gradlew
-          # --debug موڈ استعمال کیا ہے تاکہ تفصیلی لاگز ملیں
           if ! ./gradlew assembleDebug --debug > build_log.txt 2>&1; then
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
           fi
-          # چیک کریں کہ APK فائل کہاں بنی ہے
           echo "Checking for APK files..." >> build_log.txt
           find app/build/outputs/apk/ -name "*.apk" >> build_log.txt
 
@@ -58,8 +54,8 @@ jobs:
                -d "{
                  \"model\": \"llama-3.3-70b-versatile\",
                  \"messages\": [
-                   {\"role\": \"system\", \"content\": \"You are an expert Android Build Engineer. Fix Gradle errors, dependency conflicts, and syntax issues. Provide only concrete solutions or code snippets.\"},
-                   {\"role\": \"user\", \"content\": \"The Android build failed. Here is the gradle error log: $ERR_SNIPPET. Please analyze and provide the exact fix.\"}
+                   {\"role\": \"system\", \"content\": \"You are an expert Android Build Engineer. Fix Gradle errors, dependency conflicts, and syntax issues.\"},
+                   {\"role\": \"user\", \"content\": \"The build failed. Gradle log: $ERR_SNIPPET\"}
                  ]
                }" > ai_fix_suggestion.json
 
@@ -73,4 +69,3 @@ jobs:
             output_report/fixer_log.txt
             build_log.txt
             ai_fix_suggestion.json
-          if-no-files-found: warn
