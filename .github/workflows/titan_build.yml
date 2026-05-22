@@ -37,40 +37,29 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          # Copy whole app folder if exists
+          # Copy from build_assets
           if [ -d "build_assets/app" ]; then
             cp -rf build_assets/app/* app/
           fi
-          
-          # Copy individual files if they exist at root of build_assets
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
           if [ -f "build_assets/colors.xml" ]; then
             cp -f build_assets/colors.xml app/src/main/res/values/colors.xml
           fi
-          if [ -f "build_assets/AndroidManifest.xml" ]; then
-            # We will later generate fresh manifest, but keep for reference
-            cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml.orig || true
-          fi
-          
-          # Copy app icon
           if [ -f "build_assets/app_icon.png" ]; then
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
-          
-          # Copy Java files from build_assets/java or directly from root
           if [ -d "build_assets/java" ]; then
             cp -rf build_assets/java/* app/src/main/java/
           fi
           if [ -d "build_assets/src" ]; then
             cp -rf build_assets/src/* app/src/main/
           fi
-          # Any loose .java files in build_assets root
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      # ========== RESOURCE FALLBACK (if user didn't provide) ==========
+      # ========== RESOURCE FALLBACK (only if missing) ==========
       - name: Force Custom Resources Integration (fallback)
         run: |
           if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
@@ -80,7 +69,6 @@ jobs:
               echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
           fi
 
-      # ========== FIX JAVA PACKAGE & IMPORTS ==========
       - name: Fix Package Name & Imports in Java Files (Robust)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
@@ -94,27 +82,6 @@ jobs:
             done
           fi
 
-      # ========== OPTIONAL XML AUTO-REPAIR (uncomment if needed) ==========
-      # - name: Auto-Repair XML Resources
-      #   run: |
-      #     python3 -c "
-      #     import os, re, xml.etree.ElementTree as ET
-      #     for root, dirs, files in os.walk('app/src/main/res'):
-      #         for f in files:
-      #             if f.endswith('.xml'):
-      #                 path = os.path.join(root, f)
-      #                 try:
-      #                     with open(path, 'r') as fp: content = fp.read()
-      #                     # Fix missing namespace
-      #                     if 'xmlns:android' not in content and '<manifest' not in content and '<resources' not in content:
-      #                         content = re.sub(r'(<\w+)', r'\1 xmlns:android=\"http://schemas.android.com/apk/res/android\"', content, count=1)
-      #                     # Try parse
-      #                     ET.fromstring(content)
-      #                     with open(path, 'w') as fp: fp.write(content)
-      #                 except: pass
-      #     "
-
-      # ========== FALLBACK MAIN ACTIVITY ==========
       - name: Build Main Class (Fallback if no Java file from payload)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
@@ -209,20 +176,17 @@ jobs:
           EOF
           fi
 
-      # ========== CORE ENVIRONMENT SETUP (drawables, styles, icon, manifest, gradle) ==========
       - name: Core Environment Setup
         run: |
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
           
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
 
-          # Icon: from build_assets/app_icon.png (already copied earlier) or fallback
           if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-          # Fresh AndroidManifest (without package attribute to avoid warning)
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -238,7 +202,6 @@ jobs:
           </manifest>
           EOF
 
-          # build.gradle
           cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application'
@@ -260,7 +223,6 @@ jobs:
           }
           EOF
 
-      # ========== INJECT MASTER PERMISSIONS ==========
       - name: Inject Master Hardware & Background Permissions
         run: |
           MANIFEST_PATH="app/src/main/AndroidManifest.xml"
