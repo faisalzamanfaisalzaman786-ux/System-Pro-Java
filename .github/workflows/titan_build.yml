@@ -64,14 +64,17 @@ jobs:
 
       - name: Create UI Layout and Styles
         run: |
-          echo '<resources>
+          cat << 'EOF' > app/src/main/res/values/styles.xml
+          <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#FF0000</item>
                   <item name="android:windowBackground">#121212</item>
               </style>
-          </resources>' > app/src/main/res/values/styles.xml
+          </resources>
+          EOF
 
-          echo '<?xml version="1.0" encoding="utf-8"?>
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:app="http://schemas.android.com/apk/res-auto"
               android:layout_width="match_parent"
@@ -87,7 +90,8 @@ jobs:
                   android:backgroundTint="#222222"
                   app:cornerRadius="100dp"
                   android:layout_centerInParent="true"/>
-          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          </RelativeLayout>
+          EOF
 
       - name: Setup Wrapper, Source, Master Hardware Permissions and Manifest
         run: |
@@ -96,7 +100,8 @@ jobs:
           
           echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF0000" android:pathData="M12,2L2,22h20L12,2zM12,6l6.5,13h-13L12,6z"/></vector>' > app/src/main/res/mipmap-mdpi/ic_launcher.xml
 
-          echo '<?xml version="1.0" encoding="utf-8"?>
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -132,9 +137,11 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
+          </manifest>
+          EOF
           
-          echo "package ${{ env.PACKAGE_NAME }};
+          cat << 'EOF' > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
+          package ${{ env.PACKAGE_NAME }};
           import android.Manifest;
           import android.content.Context;
           import android.content.pm.PackageManager;
@@ -252,7 +259,8 @@ jobs:
                       }
                   }
               }
-          }" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
+          }
+          EOF
 
       - name: Final Build
         run: ./gradlew assembleDebug --no-daemon
