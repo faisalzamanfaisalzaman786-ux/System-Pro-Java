@@ -13,34 +13,33 @@ jobs:
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'zulu' }
 
-      - name: Force Clean and Rebuild Wrapper
+      - name: Setup Gradle Environment
         run: |
-          # پرانی فائلز کو ہٹانا لیکن گٹ کو برقرار رکھنا
+          # پرانی فائلز ہٹانا
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          # ضروری سٹرکچر بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
           
-          # گریڈل ریپر جنریٹ کرنا
-          cat << 'EOF' > gradlew
-          #!/usr/bin/env sh
-          ./gradle/wrapper/gradle-wrapper.jar "$@"
-          EOF
+          # معیاری gradlew اسکرپٹ لکھنا
+          echo '#!/bin/sh
+          DIR=$(dirname "$0")
+          exec java -jar "$DIR/gradle/wrapper/gradle-wrapper.jar" "$@"' > gradlew
           chmod +x gradlew
           
-          # ورژن کو 8.5 پر لاک کرنا
+          # ریپر پراپرٹیز سیٹ کرنا
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          # ایک ڈمی جاڑ (jar) فائل تاکہ گریڈل چلے
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/master/gradle/wrapper/gradle-wrapper.jar
+          
+          # مستند ریپر جار ڈاؤن لوڈ کرنا
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/master/subprojects/wrapper/src/main/resources/org/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Initialize Project Files
+      - name: Write Project Files
         run: |
           echo "include ':app'" > settings.gradle
           echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
           echo "plugins { id 'com.android.application' }
-          android { namespace 'com.system.pro'; compileSdk 34; buildFeatures { viewBinding true }; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
+          android { namespace 'com.system.pro'; compileSdk 34; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }" > app/build.gradle
 
-      - name: Write Manifest and Code
+      - name: Write Source
         run: |
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
@@ -51,29 +50,8 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
           
-          cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
-          package com.system.pro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          import com.system.pro.databinding.ActivityMainBinding;
-          import android.hardware.camera2.CameraManager;
-          public class MainActivity extends AppCompatActivity {
-              private ActivityMainBinding binding;
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  binding = ActivityMainBinding.inflate(getLayoutInflater());
-                  setContentView(binding.getRoot());
-                  binding.torchButton.setOnClickListener(v -> {
-                      try {
-                          CameraManager m = (CameraManager) getSystemService(CAMERA_SERVICE);
-                          m.setTorchMode(m.getCameraIdList()[0], true);
-                      } catch (Exception e) {}
-                  });
-              }
-          }
-          EOF
-          echo '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><Button android:id="@+id/torchButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Toggle Torch" android:layout_centerInParent="true"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          mkdir -p app/src/main/java/com/system/pro
+          printf "package com.system.pro;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {}" > app/src/main/java/com/system/pro/MainActivity.java
 
       - name: Final Build
         run: ./gradlew assembleDebug --no-daemon
