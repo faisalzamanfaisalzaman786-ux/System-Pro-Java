@@ -70,28 +70,14 @@ jobs:
             echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF0000" android:pathData="M12,2L2,22h20L12,2zM12,6l6.5,13h-13L12,6z"/></vector>' > app/src/main/res/mipmap-mdpi/ic_launcher.xml
           fi
 
-      - name: Dynamic UI and Code Injection Engine
+      - name: Dynamic UI Injection Engine
         run: |
-          cat << 'EOF' > app/src/main/res/values/styles.xml
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#FF0000</item>
-                  <item name="android:windowBackground">#121212</item>
-              </style>
-          </resources>
-          EOF
-
+          echo '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">#FF0000</item><item name="android:windowBackground">#121212</item></style></resources>' > app/src/main/res/values/styles.xml
+          
           if [ ! -z "${{ github.event.client_payload.layout_xml }}" ]; then
             echo "${{ github.event.client_payload.layout_xml }}" > app/src/main/res/layout/activity_main.xml
           else
-            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-<?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#121212">
-</RelativeLayout>
-EOF
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
           fi
 
       - name: Setup Wrapper, Master Hardware Permissions and Manifest
@@ -99,62 +85,12 @@ EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              
-              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-              
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              
-              <uses-permission android:name="android.permission.BODY_SENSORS" />
-              <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-feature android:name="android.hardware.camera.flash" android:required="false" />\n<uses-feature android:name="android.hardware.camera" android:required="false" />\n<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.BODY_SENSORS" />\n<uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />\n<application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro">\n<activity android:name="${{ env.PACKAGE_NAME }}.MainActivity" android:exported="true">\n<intent-filter>\n<action android:name="android.intent.action.MAIN" />\n<category android:name="android.intent.category.LAUNCHER" />\n</intent-filter>\n</activity>\n</application>\n</manifest>' > app/src/main/AndroidManifest.xml
 
-              <application 
-                  android:allowBackup="true" 
-                  android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity android:name="${{ env.PACKAGE_NAME }}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          
           if [ ! -z "${{ github.event.client_payload.main_activity_java }}" ]; then
             echo "${{ github.event.client_payload.main_activity_java }}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
           else
-            cat << 'EOF' > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
-package ${{ env.PACKAGE_NAME }};
-import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-    }
-}
-EOF
+            echo -e "package ${{ env.PACKAGE_NAME }};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n@Override\nprotected void onCreate(Bundle savedInstanceState) {\nsuper.onCreate(savedInstanceState);\nsetContentView(R.layout.activity_main);\n}\n}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
           fi
 
       - name: Final Build
