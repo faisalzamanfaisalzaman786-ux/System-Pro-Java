@@ -24,36 +24,33 @@ jobs:
       - name: Prepare Workspace & Decode Payload
         run: |
           mkdir -p output_report
-          # پے لوڈ کو ڈیکوڈ کریں
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
           unzip -o app_payload.zip -d extracted_payload/ || true
           
-          # پاتھ کو بایش (bash) کے ذریعے سیٹ کریں
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
-          
-          # مین فائلز کو صحیح جگہ پر کاپی کریں
           mkdir -p "app/src/main/java/$PKG_PATH"
           [ -d extracted_payload ] && cp -f extracted_payload/*.java "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
           [ -d extracted_payload ] && cp -f extracted_payload/*.xml app/src/main/res/layout/ 2>/dev/null || true
 
       - name: Run Static AI Fixer (Safe Mode)
         run: |
-          # آپ کا اپ ڈیٹ کردہ پائتھن اسکرپٹ یہاں چلے گا
           python3 static_fixer.py
 
       - name: Build and Error Capture
         id: build_step
         run: |
           chmod +x gradlew
-          # بلڈ کو رن کریں اور ایررز کو build_log.txt میں سیو کریں
-          if ! ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1; then
+          # --debug موڈ استعمال کیا ہے تاکہ تفصیلی لاگز ملیں
+          if ! ./gradlew assembleDebug --debug > build_log.txt 2>&1; then
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
           fi
+          # چیک کریں کہ APK فائل کہاں بنی ہے
+          echo "Checking for APK files..." >> build_log.txt
+          find app/build/outputs/apk/ -name "*.apk" >> build_log.txt
 
       - name: AI Auto-Fixer (Groq Integration)
         if: env.BUILD_FAILED == 'true'
         run: |
-          echo "Analyzing failures with Groq AI Engineer..."
           ERR_SNIPPET=$(tail -n 100 build_log.txt)
           curl -X POST "https://api.groq.com/openai/v1/chat/completions" \
                -H "Authorization: Bearer $GROQ_API_KEY" \
