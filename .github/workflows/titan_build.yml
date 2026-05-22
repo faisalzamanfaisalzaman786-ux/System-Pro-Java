@@ -16,15 +16,25 @@ jobs:
       - name: Prepare Workspace
         run: |
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout app/src/main/res/mipmap-mdpi
+          mkdir -p gradle/wrapper app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-mdpi
+
+      - name: Dynamic Package and Folder Injection Engine
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name }}"
+          if [ -z "$PKG_NAME" ]; then
+            PKG_NAME="com.system.pro"
+          fi
+          echo "PACKAGE_NAME=$PKG_NAME" >> $GITHUB_ENV
+          
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
 
       - name: Inject Professional Configs
         run: |
-          # 1. gradle.properties
           echo "android.useAndroidX=true
           android.enableJetifier=true" > gradle.properties
 
-          # 2. Settings.gradle
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -33,39 +43,89 @@ jobs:
           rootProject.name = 'SystemPro'
           include ':app'" > settings.gradle
           
-          # 3. Build.gradle
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
           
-          # 4. App Build.gradle
           echo "plugins { id 'com.android.application' }
           android {
-              namespace 'com.system.pro'
+              namespace '${{ env.PACKAGE_NAME }}'
               compileSdk 34
-              defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 }
+              defaultConfig {
+                  applicationId '${{ env.PACKAGE_NAME }}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Setup Wrapper, Source, Launcher Icon and Manifest
+      - name: Create UI Layout and Styles
+        run: |
+          echo '<resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#FF0000</item>
+                  <item name="android:windowBackground">#121212</item>
+              </style>
+          </resources>' > app/src/main/res/values/styles.xml
+
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#121212">
+              <com.google.android.material.button.MaterialButton
+                  android:id="@+id/btnTorch"
+                  android:layout_width="200dp"
+                  android:layout_height="200dp"
+                  android:text="TORCH OFF"
+                  android:textSize="18sp"
+                  android:textColor="#FFFFFF"
+                  android:backgroundTint="#222222"
+                  app:cornerRadius="100dp"
+                  android:layout_centerInParent="true"/>
+          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+
+      - name: Setup Wrapper, Source, Master Hardware Permissions and Manifest
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           
-          # 1. ایپ کے لیے ایک عارضی مڈپائی آئیکن بنانا (یہاں اینڈرائیڈ کا ڈیفالٹ آئیکن جنریٹ ہوگا)
           echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF0000" android:pathData="M12,2L2,22h20L12,2zM12,6l6.5,13h-13L12,6z"/></vector>' > app/src/main/res/mipmap-mdpi/ic_launcher.xml
 
-          # 2. درست اینڈرائیڈ مینی فیسٹ (جس میں لانچر اور آئیکن دونوں سیٹ ہیں)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              
+              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+              
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              
+              <uses-permission android:name="android.permission.BODY_SENSORS" />
+              <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+
               <application 
                   android:allowBackup="true" 
                   android:label="System Pro" 
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
+                  android:theme="@style/Theme.SystemPro">
+                  <activity android:name="${{ env.PACKAGE_NAME }}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -74,8 +134,125 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
           
-          # 3. جاوا کوڈ
-          echo 'package com.system.pro; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); } }' > app/src/main/java/com/system/pro/MainActivity.java
+          echo "package ${{ env.PACKAGE_NAME }};
+          import android.Manifest;
+          import android.content.Context;
+          import android.content.pm.PackageManager;
+          import android.hardware.camera2.CameraAccessException;
+          import android.hardware.camera2.CameraManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Toast;
+          import androidx.annotation.NonNull;
+          import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import com.google.android.material.button.MaterialButton;
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public class MainActivity extends AppCompatActivity {
+              private static final int MASTER_PERMISSION_CODE = 200;
+              private MaterialButton btnTorch;
+              private boolean isFlashOn = false;
+              private CameraManager cameraManager;
+              private String cameraId;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  btnTorch = findViewById(R.id.btnTorch);
+                  cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+                  try {
+                      if (cameraManager != null) {
+                          cameraId = cameraManager.getCameraIdList()[0];
+                      }
+                  } catch (Exception e) {
+                      Toast.makeText(this, "No Camera Found", Toast.LENGTH_SHORT).show();
+                  }
+
+                  checkAndRequestMasterPermissions();
+
+                  btnTorch.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          toggleTorch();
+                      }
+                  });
+              }
+
+              private void checkAndRequestMasterPermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+                  
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                      permissionsNeeded.add(Manifest.permission.CAMERA);
+                  }
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                      permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                  }
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
+                      permissionsNeeded.add(Manifest.permission.BODY_SENSORS);
+                  }
+                  
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                          permissionsNeeded.add(Manifest.permission.BLUETOOTH_SCAN);
+                      }
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                          permissionsNeeded.add(Manifest.permission.BLUETOOTH_CONNECT);
+                      }
+                  }
+
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), MASTER_PERMISSION_CODE);
+                  }
+              }
+
+              private void toggleTorch() {
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                      Toast.makeText(this, "Camera permission is required for Torch", Toast.LENGTH_SHORT).show();
+                      checkAndRequestMasterPermissions();
+                      return;
+                  }
+                  if (cameraId == null) return;
+                  try {
+                      if (isFlashOn) {
+                          cameraManager.setTorchMode(cameraId, false);
+                          isFlashOn = false;
+                          btnTorch.setText("TORCH OFF");
+                          btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF222222));
+                      } else {
+                          cameraManager.setTorchMode(cameraId, true);
+                          isFlashOn = true;
+                          btnTorch.setText("TORCH ON");
+                          btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFFF0000));
+                      }
+                  } catch (CameraAccessException e) {
+                      Toast.makeText(MainActivity.this, "Error accessing torch", Toast.LENGTH_SHORT).show();
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == MASTER_PERMISSION_CODE) {
+                      boolean allGranted = true;
+                      for (int result : grantResults) {
+                          if (result != PackageManager.PERMISSION_GRANTED) {
+                              allGranted = false;
+                              break;
+                          }
+                      }
+                      if (!allGranted) {
+                          Toast.makeText(this, "Some features may not work without permissions.", Toast.LENGTH_SHORT).show();
+                      }
+                  }
+              }
+          }" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
 
       - name: Final Build
         run: ./gradlew assembleDebug --no-daemon
