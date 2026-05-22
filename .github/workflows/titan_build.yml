@@ -18,7 +18,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Copy from build_assets to app structure
+      - name: Copy Java and Manifest from build_assets
         run: |
           mkdir -p output_report
           rm -rf app/src/main/java app/src/main/res app/build
@@ -36,173 +36,50 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          if [ -d "build_assets/app" ]; then
-            cp -rf build_assets/app/* app/
+          # Copy Java files (only from build_assets)
+          if [ -d "build_assets/app/src/main/java" ]; then
+            cp -rf build_assets/app/src/main/java/* app/src/main/java/
           fi
-          if [ -f "build_assets/activity_main.xml" ]; then
-            cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
+          if [ -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+            cp -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" "app/src/main/java/$PKG_PATH/MainActivity.java"
           fi
-          if [ -f "build_assets/colors.xml" ]; then
-            cp -f build_assets/colors.xml app/src/main/res/values/colors.xml
+          # Also check root build_assets for any .java
+          find build_assets -maxdepth 2 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
+          
+          # Copy AndroidManifest if provided (otherwise we create later)
+          if [ -f "build_assets/AndroidManifest.xml" ]; then
+            cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml.user
           fi
+          
+          # Copy icon if present
           if [ -f "build_assets/app_icon.png" ]; then
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
-          if [ -d "build_assets/java" ]; then
-            cp -rf build_assets/java/* app/src/main/java/
-          fi
-          if [ -d "build_assets/src" ]; then
-            cp -rf build_assets/src/* app/src/main/
-          fi
-          find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      - name: Force Custom Resources Integration (fallback)
+      - name: Run static fixer (Python script)
+        run: python3 static_fixer.py
+
+      - name: Create default resources (fixed, reliable)
         run: |
-          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-              cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          # Layout with toggleButton
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android">
-              <TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/>
-          </RelativeLayout>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center">
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle Torch" />
+          </LinearLayout>
           EOF
-          fi
-          if [ ! -f app/src/main/res/values/colors.xml ]; then
-              cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#02040c</color>
-              <color name="colorAccent">#00ffcc</color>
-          </resources>
-          EOF
-          fi
-
-      # ========== FIX JAVA FILES WITH SED (DIRECT, NO PYTHON) ==========
-      - name: Fix Java files (package, imports, semicolons)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ ! -d "$TARGET_DIR" ]; then
-            echo "Target dir not found, skipping fixes"
-            exit 0
-          fi
           
-          # Fix package line (replace any package with correct one)
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/^package .*;/package ${{ env.TARGET_PACKAGE }};/g' {} \;
-          
-          # Fix import R
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g' {} \;
-          
-          # Add missing semicolons at end of lines that are field declarations (private/public/protected ...)
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
-          
-          # Add missing semicolon after super.onCreate(...) and setContentView(...)
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*\)$/\1;/' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
-          
-          # Add missing semicolon after }) (anonymous class end)
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          
-          # Add missing semicolon after variable assignments that don't end with ; { }
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/ = .*[^;{}]$/ s/$/;/' {} \;
-          
-          # Ensure CameraManager and CameraCharacteristics imports are present
-          for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
-            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
-              sed -i '/^package .*/a import android.hardware.camera2.CameraManager;' "$file"
-            fi
-            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
-              sed -i '/^package .*/a import android.hardware.camera2.CameraCharacteristics;' "$file"
-            fi
-            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
-              sed -i '/^package .*/a import android.widget.Toast;' "$file"
-            fi
-          done
-
-      - name: Build Main Class (Fallback if no Java file from payload)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
-            mkdir -p "$TARGET_DIR"
-            cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
-          package ${{ env.TARGET_PACKAGE }};
-
-          import android.Manifest;
-          import android.content.pm.PackageManager;
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.Toast;
-          import androidx.appcompat.app.AppCompatActivity;
-          import androidx.core.app.ActivityCompat;
-          import androidx.core.content.ContextCompat;
-          import android.hardware.camera2.CameraManager;
-          import android.hardware.camera2.CameraCharacteristics;
-
-          public class MainActivity extends AppCompatActivity {
-              private CameraManager cameraManager;
-              private String cameraId;
-              private boolean isTorchOn = false;
-              private Button toggleButton;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  toggleButton = findViewById(R.id.toggleButton);
-                  cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
-                  try {
-                      cameraId = cameraManager.getCameraIdList()[0];
-                  } catch (Exception e) {
-                      Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                  }
-                  toggleButton.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                              ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, 1);
-                              return;
-                          }
-                          try {
-                              if (isTorchOn) {
-                                  cameraManager.setTorchMode(cameraId, false);
-                                  isTorchOn = false;
-                                  toggleButton.setText(R.string.torch_off);
-                              } else {
-                                  cameraManager.setTorchMode(cameraId, true);
-                                  isTorchOn = true;
-                                  toggleButton.setText(R.string.torch_on);
-                              }
-                          } catch (Exception e) {
-                              Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                          }
-                      }
-                  });
-              }
-          }
-          EOF
-          fi
-
-      - name: Core Environment Setup (Resources, Manifest, Gradle)
-        run: |
-          mkdir -p app/src/main/res/drawable app/src/main/res/values
-          cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#1AFFFFFF"/>
-              <corners android:radius="8dp"/>
-          </shape>
-          EOF
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="windowNoTitle">true</item>
-                  <item name="windowActionBar">false</item>
-              </style>
-          </resources>
-          EOF
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            cat > app/src/main/res/values/strings.xml << 'EOF'
+          # Strings with torch labels
+          cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro</string>
@@ -210,22 +87,45 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
-          else
-            if ! grep -q 'torch_on' app/src/main/res/values/strings.xml; then
-              sed -i '/<\/resources>/i \    <string name="torch_on">Torch On</string>\n    <string name="torch_off">Torch Off</string>' app/src/main/res/values/strings.xml
-            fi
-          fi
+          
+          # Colors
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+          
+          # Styles
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOF
+          
+          # Button background drawable
+          mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#6200EE"/>
+              <solid android:color="@color/colorPrimary"/>
               <corners android:radius="8dp"/>
           </shape>
           EOF
+          
+          # Default icon if not provided
           if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
+
+      - name: Build AndroidManifest (clean, no package attribute)
+        run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -246,10 +146,11 @@ jobs:
               </application>
           </manifest>
           EOF
+
+      - name: Build Gradle file
+        run: |
           cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
@@ -267,10 +168,10 @@ jobs:
           }
           EOF
 
-      - name: Inject Master Permissions (add missing)
+      - name: Inject extra permissions
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
-          for perm in "android.permission.CAMERA" "android.permission.READ_EXTERNAL_STORAGE" "android.permission.WRITE_EXTERNAL_STORAGE" "android.permission.BLUETOOTH" "android.permission.BLUETOOTH_CONNECT" "android.permission.BLUETOOTH_SCAN"; do
+          for perm in "android.permission.READ_EXTERNAL_STORAGE" "android.permission.WRITE_EXTERNAL_STORAGE" "android.permission.BLUETOOTH" "android.permission.BLUETOOTH_CONNECT" "android.permission.BLUETOOTH_SCAN"; do
             if ! grep -q "$perm" "$MANIFEST"; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
             fi
@@ -291,7 +192,7 @@ jobs:
             exit 1
           fi
 
-      - name: Validate APK Size
+      - name: Validate APK size
         run: |
           SIZE=$(stat -c%s output_report/app-debug.apk 2>/dev/null || echo 0)
           if [ $SIZE -lt 50000 ]; then
@@ -301,7 +202,7 @@ jobs:
             echo "APK size OK ($SIZE bytes)" >> output_report/build_summary.txt
           fi
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
