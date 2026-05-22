@@ -57,7 +57,6 @@ jobs:
           fi
           find build_assets -maxdepth 1 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
 
-      # ========== RESOURCE FALLBACK (only if missing) ==========
       - name: Force Custom Resources Integration (fallback)
         run: |
           if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
@@ -78,74 +77,66 @@ jobs:
           EOF
           fi
 
-      # ========== ROBUST JAVA FIXER (fixes package, semicolons, imports) ==========
-      - name: Fix Java Files (Package, Semicolons, Imports)
+      - name: Write Java Fixer Script
         run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -d "$TARGET_DIR" ]; then
-            # 1. Fix package statement (any package line → target package)
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
-            # 2. Fix import R
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|import .*\.R;|import ${{ env.TARGET_PACKAGE }}.R;|g" {} \;
-            # 3. Add missing package line if absent
-            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
-              if ! grep -q "^[[:space:]]*package" "$file"; then
-                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
-              fi
-            done
-            
-            # 4. Fix missing semicolons at end of lines that are not already ending with ; { } or are comments
-            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
-              # Use python for precise semicolon insertion
-              python3 - << PYTHON_FIX
-              import re
-              path = "$file"
-              with open(path, 'r') as f:
-                  lines = f.readlines()
-              new_lines = []
-              for line in lines:
-                  stripped = line.rstrip('\n')
-                  # Skip empty lines, lines ending with { or } or ;, lines starting with //, /*, *, @
-                  if (stripped.strip() and 
-                      not stripped.strip().endswith('{') and 
-                      not stripped.strip().endswith('}') and 
-                      not stripped.strip().endswith(';') and
-                      not stripped.strip().startswith('//') and
-                      not stripped.strip().startswith('/*') and
-                      not stripped.strip().startswith('*') and
-                      not stripped.strip().startswith('@')):
-                      # Also skip if line is a control structure (if, for, while, try, catch, finally)
-                      if not re.match(r'^\s*(if|for|while|switch|try|catch|finally)\s*\(', stripped):
-                          # Add semicolon
-                          stripped += ';'
-                  new_lines.append(stripped + '\n')
-              with open(path, 'w') as f:
-                  f.writelines(new_lines)
-              print(f"Fixed semicolons in {path}")
-              # 5. Add missing imports for CameraManager, CameraCharacteristics, Toast, etc.
-              content = open(path).read()
-              imports_needed = []
-              if 'CameraManager' in content and 'import android.hardware.camera2.CameraManager' not in content:
-                  imports_needed.append('import android.hardware.camera2.CameraManager;')
-              if 'CameraCharacteristics' in content and 'import android.hardware.camera2.CameraCharacteristics' not in content:
-                  imports_needed.append('import android.hardware.camera2.CameraCharacteristics;')
-              if 'Toast' in content and 'import android.widget.Toast' not in content:
-                  imports_needed.append('import android.widget.Toast;')
-              if imports_needed:
-                  # Insert after package line
-                  lines = open(path).read().split('\n')
-                  insert_pos = 0
-                  for i, line in enumerate(lines):
-                      if line.strip().startswith('package '):
-                          insert_pos = i+1
-                          break
-                  for imp in reversed(imports_needed):
-                      lines.insert(insert_pos, imp)
-                  open(path, 'w').write('\n'.join(lines))
-                  print(f"Added imports {imports_needed} to {path}")
-              PYTHON_FIX
-            done
-          fi
+          cat > fix_java.py << 'EOF'
+          import os, re
+          import sys
+          TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.system.titan.pro")
+          JAVA_DIR = f"app/src/main/java/{TARGET_PACKAGE.replace('.', '/')}"
+          if not os.path.exists(JAVA_DIR):
+              sys.exit(0)
+          for root, dirs, files in os.walk(JAVA_DIR):
+              for file in files:
+                  if not file.endswith('.java'):
+                      continue
+                  path = os.path.join(root, file)
+                  with open(path, 'r') as f:
+                      content = f.read()
+                  # Fix package line
+                  content = re.sub(r'^package\s+[\w.]+;', f'package {TARGET_PACKAGE};', content, flags=re.M)
+                  if not re.search(r'^package\s+', content, re.M):
+                      content = f'package {TARGET_PACKAGE};\n' + content
+                  # Fix import R
+                  content = re.sub(r'import\s+[\w.]+\.R;', f'import {TARGET_PACKAGE}.R;', content)
+                  # Add missing imports if needed
+                  imports_to_add = []
+                  if 'CameraManager' in content and 'android.hardware.camera2.CameraManager' not in content:
+                      imports_to_add.append('import android.hardware.camera2.CameraManager;')
+                  if 'CameraCharacteristics' in content and 'android.hardware.camera2.CameraCharacteristics' not in content:
+                      imports_to_add.append('import android.hardware.camera2.CameraCharacteristics;')
+                  if 'Toast' in content and 'android.widget.Toast' not in content:
+                      imports_to_add.append('import android.widget.Toast;')
+                  if imports_to_add:
+                      lines = content.split('\n')
+                      insert_pos = 0
+                      for i, line in enumerate(lines):
+                          if line.strip().startswith('package '):
+                              insert_pos = i+1
+                              break
+                      for imp in reversed(imports_to_add):
+                          lines.insert(insert_pos, imp)
+                      content = '\n'.join(lines)
+                  # Fix missing semicolons (simple but careful)
+                  lines = content.split('\n')
+                  new_lines = []
+                  for line in lines:
+                      stripped = line.rstrip()
+                      if stripped and not stripped.endswith('{') and not stripped.endswith('}') and not stripped.endswith(';') and not stripped.strip().startswith('//') and not stripped.strip().startswith('/*') and not stripped.strip().startswith('@'):
+                          # Avoid adding to control statements
+                          if not re.match(r'^\s*(if|for|while|switch|try|catch|finally)\s*\(', stripped):
+                              stripped += ';'
+                      new_lines.append(stripped)
+                  content = '\n'.join(new_lines)
+                  # Write back
+                  if content != open(path).read():
+                      with open(path, 'w') as f:
+                          f.write(content)
+                      print(f"Fixed: {path}")
+          EOF
+
+      - name: Run Java Fixer
+        run: python3 fix_java.py
 
       - name: Build Main Class (Fallback if no Java file from payload)
         run: |
@@ -213,7 +204,6 @@ jobs:
 
       - name: Core Environment Setup (Resources, Manifest, Gradle)
         run: |
-          # Ensure drawable
           mkdir -p app/src/main/res/drawable app/src/main/res/values
           cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -231,9 +221,9 @@ jobs:
               </style>
           </resources>
           EOF
-          # Ensure strings with torch strings
-          if ! grep -q 'torch_on' app/src/main/res/values/strings.xml 2>/dev/null; then
-            cat >> app/src/main/res/values/strings.xml << 'EOF'
+          # Ensure strings.xml with torch strings
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro</string>
@@ -241,9 +231,11 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
+          else
+            if ! grep -q 'torch_on' app/src/main/res/values/strings.xml; then
+              sed -i '/<\/resources>/i \    <string name="torch_on">Torch On</string>\n    <string name="torch_off">Torch Off</string>' app/src/main/res/values/strings.xml
+            fi
           fi
-          # Ensure button background
-          mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
@@ -251,12 +243,10 @@ jobs:
               <corners android:radius="8dp"/>
           </shape>
           EOF
-          # Ensure icon (fallback)
           if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
             curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
-          # AndroidManifest (without package attribute)
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -277,7 +267,6 @@ jobs:
               </application>
           </manifest>
           EOF
-          # build.gradle
           cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application'
@@ -325,7 +314,7 @@ jobs:
 
       - name: Validate APK Size
         run: |
-          SIZE=$(stat -c%s output_report/app-debug.apk)
+          SIZE=$(stat -c%s output_report/app-debug.apk 2>/dev/null || echo 0)
           if [ $SIZE -lt 50000 ]; then
             echo "APK too small ($SIZE bytes)" >> output_report/build_summary.txt
             exit 1
