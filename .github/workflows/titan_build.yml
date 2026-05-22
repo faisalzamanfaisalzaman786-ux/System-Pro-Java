@@ -9,13 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Java 17
         uses: actions/setup-java@v4
-        with: { java-version: '17', distribution: 'zulu' }
+        with:
+          java-version: '17'
+          distribution: 'zulu'
 
       - name: Prepare Workspace
         run: |
-          find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
+          find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'build_assets' ! -name '.' -exec rm -rf {} +
           mkdir -p gradle/wrapper app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-mdpi
 
       - name: Dynamic Package Setup
@@ -31,7 +34,7 @@ jobs:
         run: |
           echo "android.useAndroidX=true
           android.enableJetifier=true" > gradle.properties
-
+          
           echo "pluginManagement {
               repositories {
                   google()
@@ -69,35 +72,36 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Inject Assets and UI
+      - name: Inject Assets from build_assets
         run: |
-          if [ ! -z "${{ github.event.client_payload.app_icon_b64 }}" ]; then
-            echo "${{ github.event.client_payload.app_icon_b64 }}" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
-          fi
-          
-          echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#FF0000</item><item name="android:windowBackground">#121212</item></style></resources>' > app/src/main/res/values/styles.xml
-          
-          if [ ! -z "${{ github.event.client_payload.layout_xml }}" ]; then
-            echo "${{ github.event.client_payload.layout_xml }}" > app/src/main/res/layout/activity_main.xml
-          else
-            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          if [ -d "build_assets" ]; then
+            if [ -d "build_assets/app" ]; then
+              cp -r build_assets/app/* app/
+            fi
+            if [ -f "build_assets/AndroidManifest.xml" ]; then
+              cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            fi
+            if [ -f "build_assets/app_icon.png" ]; then
+              cp build_assets/app_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            fi
           fi
 
-      - name: Setup Manifest and MainActivity
+      - name: Fallback Resources if Missing
         run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-
-          echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"${{ env.PACKAGE_NAME }}\">\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.INTERNET\" />\n<application android:allowBackup=\"true\" android:label=\"System Pro\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\">\n<activity android:name=\".MainActivity\" android:exported=\"true\">\n<intent-filter>\n<action android:name=\"android.intent.action.MAIN\" />\n<category android:name=\"android.intent.category.LAUNCHER\" />\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
-
-          if [ ! -z "${{ github.event.client_payload.main_activity_java }}" ]; then
-            echo "${{ github.event.client_payload.main_activity_java }}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
-          else
-            echo -e "package ${{ env.PACKAGE_NAME }};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n@Override\nprotected void onCreate(Bundle savedInstanceState) {\nsuper.onCreate(savedInstanceState);\nsetContentView(R.layout.activity_main);\n}\n}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
+          if [ ! -f "app/src/main/res/values/styles.xml" ]; then
+            echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#FF0000</item><item name="android:windowBackground">#121212</item></style></resources>' > app/src/main/res/values/styles.xml
+          fi
+          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+            echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"${{ env.PACKAGE_NAME }}\">\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.INTERNET\" />\n<application android:allowBackup=\"true\" android:label=\"System Pro\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\">\n<activity android:name=\".MainActivity\" android:exported=\"true\">\n<intent-filter>\n<action android:name=\"android.intent.action.MAIN\" />\n<category android:name=\"android.intent.category.LAUNCHER\" />\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
           fi
 
       - name: Final Build
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
-        with: { name: System-Pro-Titan-APK, path: app/build/outputs/apk/debug/app-debug.apk }
+        with:
+          name: System-Pro-V2-Final
+          path: app/build/outputs/apk/debug/app-debug.apk
