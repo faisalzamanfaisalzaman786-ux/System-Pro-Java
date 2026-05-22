@@ -13,36 +13,35 @@ jobs:
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'zulu' }
 
-      - name: Generate Configs and Manifest
+      - name: Force Clean Everything
         run: |
+          # پرانی تمام فائلز اور کیشے کو جڑ سے ختم کرنا
+          rm -rf * .[^.]*
+          # دوبارہ ضروری فولڈرز بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
+
+      - name: Initialize Environment
+        run: |
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          
-          # settings.gradle
           echo "include ':app'" > settings.gradle
           
-          # build.gradle
-          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
-          plugins { id 'com.android.application' }
-          android { namespace 'com.system.pro'; compileSdk 34; buildFeatures { viewBinding true }; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }" > app/build.gradle
+          # Root build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
+          
+          # App build.gradle
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              buildFeatures { viewBinding true }
+              defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }" > app/build.gradle
 
-          # Self-Healing Manifest Generator
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
-              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Write Code and Layout
+      - name: Generate Source
         run: |
           cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
@@ -67,12 +66,21 @@ jobs:
           }
           EOF
           echo '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><Button android:id="@+id/torchButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Toggle Torch" android:layout_centerInParent="true"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Attempt Build with Auto-Retry
+      - name: Titan Build Execution
         run: |
           chmod +x gradlew || true
-          # اگر پہلی بار فیل ہوا تو یہ 2 بار خود ری ٹرائی کرے گا
-          ./gradlew assembleDebug --no-daemon || ./gradlew assembleDebug --no-daemon || ./gradlew assembleDebug --no-daemon
+          # اب ہم stacktrace کے ساتھ بلڈ کریں گے تاکہ ایرر چھپ نہ سکے
+          ./gradlew assembleDebug --no-daemon --stacktrace --info
 
       - uses: actions/upload-artifact@v4
         with: { name: System-Pro-Titan-APK, path: app/build/outputs/apk/debug/app-debug.apk }
