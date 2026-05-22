@@ -8,98 +8,37 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
-
-      - name: Initialize Professional Environment
+      - name: Cleanup and Setup
         run: |
+          rm -rf app/src/main/java/com/system/pro/*
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
 
-      - name: Generate Core Project Files
+      - name: Write Gradle Files
         run: |
-          # 1. Build.gradle (Enterprise Config)
-          cat << EOF > build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-              id 'com.android.library' version '8.2.2' apply false
-          }
-          EOF
-
-          # 2. Settings.gradle (Google Standard)
-          cat << EOF > settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          include ':app'
-          EOF
-
-          # 3. App/Build.gradle (ViewBinding Enabled)
-          cat << EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          echo "include ':app'" > settings.gradle
+          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
+          echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
               compileSdk 34
               buildFeatures { viewBinding true }
-              defaultConfig {
-                  applicationId 'com.system.pro'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
+              defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 }
           }
           dependencies {
-              implementation "androidx.appcompat:appcompat:1.6.1"
-              implementation "com.google.android.material:material:1.11.0"
-          }
-          EOF
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }" > app/build.gradle
 
-      - name: Deploy MainActivity and ViewBinding Logic
+      - name: Write Java Code
         run: |
-          cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
-          package com.system.pro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          import com.system.pro.databinding.ActivityMainBinding;
-          import android.hardware.camera2.CameraManager;
-          import android.widget.Toast;
+          printf "package com.system.pro;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\nimport com.system.pro.databinding.ActivityMainBinding;\nimport android.hardware.camera2.CameraManager;\n\npublic class MainActivity extends AppCompatActivity {\n    private ActivityMainBinding binding;\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        binding = ActivityMainBinding.inflate(getLayoutInflater());\n        setContentView(binding.getRoot());\n        binding.torchButton.setOnClickListener(v -> toggleTorch());\n    }\n    private void toggleTorch() {\n        try {\n            CameraManager m = (CameraManager) getSystemService(CAMERA_SERVICE);\n            m.setTorchMode(m.getCameraIdList()[0], true);\n        } catch (Exception e) {}\n    }\n}" > app/src/main/java/com/system/pro/MainActivity.java
 
-          public class MainActivity extends AppCompatActivity {
-              private ActivityMainBinding binding;
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  binding = ActivityMainBinding.inflate(getLayoutInflater());
-                  setContentView(binding.getRoot());
-                  
-                  binding.torchButton.setOnClickListener(v -> toggleTorch());
-              }
-              private void toggleTorch() {
-                  try {
-                      CameraManager manager = (CameraManager) getSystemService(CAMERA_SERVICE);
-                      String id = manager.getCameraIdList()[0];
-                      manager.setTorchMode(id, true);
-                  } catch (Exception e) {
-                      Toast.makeText(this, "Torch Error", Toast.LENGTH_SHORT).show();
-                  }
-              }
-          }
-          EOF
-
-      - name: Validate Layout ID
+      - name: Write Layout
         run: |
-          cat << EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
+          echo '<?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent">
@@ -109,16 +48,14 @@ jobs:
                   android:layout_height="wrap_content"
                   android:text="Toggle Torch"
                   android:layout_centerInParent="true"/>
-          </RelativeLayout>
-          EOF
+          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-      - name: Enterprise Grade Build
+      - name: Build
         run: |
           chmod +x gradlew || true
-          gradle assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Enterprise Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Enterprise-APK
           path: app/build/outputs/apk/debug/app-debug.apk
