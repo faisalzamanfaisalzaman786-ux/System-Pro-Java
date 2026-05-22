@@ -1,83 +1,68 @@
-import os, re, sys
-from pathlib import Path
-from datetime import datetime
+import os
+import re
+import sys
 
-LOG_FILE = "output_report/fixer_log.txt"
+target_pkg = os.environ.get('TARGET_PACKAGE', 'com.system.titan.pro')
+java_dir = f'app/src/main/java/{target_pkg.replace(".", "/")}'
 
-def log(msg):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{timestamp}] [INFO] {msg}"
-    print(line)
-    # اس بات کو یقینی بنانا کہ لاگ ڈائریکٹری موجود ہو
-    Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
+if not os.path.exists(java_dir):
+    print(f"Java directory not found: {java_dir}")
+    sys.exit(0)
 
-TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.system.titan.pro")
-JAVA_SRC_DIR = f"app/src/main/java/{TARGET_PACKAGE.replace('.', '/')}"
-GRADLE_BUILD = "app/build.gradle"
+for root, dirs, files in os.walk(java_dir):
+    for f in files:
+        if not f.endswith('.java'):
+            continue
+        path = os.path.join(root, f)
+        with open(path, 'r', encoding='utf-8') as file:
+            content = file.read()
+        original = content
 
-def read_file(p): return open(p, 'r', encoding='utf-8').read() if os.path.exists(p) else None
-def write_file(p, c): Path(p).parent.mkdir(parents=True, exist_ok=True); open(p, 'w', encoding='utf-8').write(c); log(f"Written: {p}")
+        # 1. Fix package line
+        content = re.sub(r'^package\s+[\w.]+;', f'package {target_pkg};', content, flags=re.M)
+        if not re.search(r'^package\s+', content, re.M):
+            content = f'package {target_pkg};\n' + content
 
-def fix_java(fpath):
-    c = read_file(fpath)
-    if not c: return False
-    orig = c
+        # 2. Fix import R
+        content = re.sub(r'import\s+[\w.]+\.R;', f'import {target_pkg}.R;', content)
 
-    # 1. صرف پیکج کو درست کریں (اگر موجود ہو تو تبدیل کریں، ورنہ شروع میں شامل کریں)
-    if re.search(r'^\s*package\s+[\w.]+;', c, re.M):
-        c = re.sub(r'^\s*package\s+[\w.]+;', f'package {TARGET_PACKAGE};', c, flags=re.M)
-    else:
-        c = f"package {TARGET_PACKAGE};\n" + c
-    
-    # 2. امپورٹ R کو درست کرنا (محفوظ طریقہ)
-    import_r = f"import {TARGET_PACKAGE}.R;"
-    if import_r not in c:
-        c = re.sub(r'import\s+[\w.]+\.R;', import_r, c)
-        if import_r not in c:
-            # اگر امپورٹ R موجود ہی نہیں تو اسے پیکج کے فوراً بعد لگائیں
-            c = c.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{import_r}")
+        # 3. Add missing imports for CameraManager, CameraCharacteristics, Toast
+        imports_to_add = []
+        if 'CameraManager' in content and 'android.hardware.camera2.CameraManager' not in content:
+            imports_to_add.append('import android.hardware.camera2.CameraManager;')
+        if 'CameraCharacteristics' in content and 'android.hardware.camera2.CameraCharacteristics' not in content:
+            imports_to_add.append('import android.hardware.camera2.CameraCharacteristics;')
+        if 'Toast' in content and 'android.widget.Toast' not in content:
+            imports_to_add.append('import android.widget.Toast;')
+        if imports_to_add:
+            lines = content.split('\n')
+            insert_pos = 0
+            for i, line in enumerate(lines):
+                if line.strip().startswith('package '):
+                    insert_pos = i + 1
+                    break
+            for imp in reversed(imports_to_add):
+                lines.insert(insert_pos, imp)
+            content = '\n'.join(lines)
 
-    # 3. سیمی کولن فکسنگ (صرف ان لائنز پر جو کسی بلاک کا حصہ نہ ہوں)
-    lines = c.split('\n')
-    new_lines = []
-    for line in lines:
-        s = line.strip()
-        # صرف کوڈ والی لائنز کو چیک کریں
-        if s and not s.endswith(('{', '}', ';', ':', '/', '*')) and not s.startswith(('@', 'import', 'package', 'public', 'private', 'protected', 'class', 'if', 'else', 'for', 'while')):
-            line = line.rstrip() + ';'
-        new_lines.append(line)
-    c = '\n'.join(new_lines)
+        # 4. Fix missing semicolons (careful, but comprehensive)
+        lines = content.split('\n')
+        new_lines = []
+        for line in lines:
+            stripped = line.rstrip()
+            # Conditions to skip adding semicolon
+            if stripped and not stripped.endswith(';') and not stripped.endswith('{') and not stripped.endswith('}') and not stripped.startswith('import ') and not stripped.startswith('package ') and not stripped.strip().startswith('@'):
+                # Skip control structures (if, for, while, try, catch, finally, else)
+                if not re.match(r'^\s*(if|for|while|switch|try|catch|finally|else)\s*\(', stripped):
+                    # Add semicolon
+                    stripped += ';'
+            new_lines.append(stripped)
+        content = '\n'.join(new_lines)
 
-    if c != orig:
-        write_file(fpath, c)
-        log(f"Safe fixed: {fpath}")
-        return True
-    return False
+        # 5. Special fix for `})` (anonymous class instantiation)
+        content = re.sub(r'\}\)$', r'});', content, flags=re.M)
 
-def fix_gradle():
-    # گریڈل فائل کو اوور رائٹ کرنے کے بجائے چیک کریں
-    g = f"namespace '{TARGET_PACKAGE}'"
-    if os.path.exists(GRADLE_BUILD):
-        content = read_file(GRADLE_BUILD)
-        if TARGET_PACKAGE not in content:
-            content = re.sub(r"namespace\s+['\"].*?['\"]", g, content)
-            write_file(GRADLE_BUILD, content)
-            log("Updated namespace in build.gradle")
-    return True
-
-def main():
-    log("=== Static Fixer Started (Safe Mode) ===")
-    fixes = 0
-    if os.path.exists(JAVA_SRC_DIR):
-        for r,_,fs in os.walk(JAVA_SRC_DIR):
-            for f in fs:
-                if f.endswith('.java') and fix_java(os.path.join(r,f)):
-                    fixes += 1
-    fix_gradle()
-    log(f"Total fixes applied: {fixes}")
-    log("=== Static Fixer Finished ===")
-
-if __name__ == "__main__":
-    main()
+        if content != original:
+            with open(path, 'w', encoding='utf-8') as file:
+                file.write(content)
+            print(f'Fixed: {path}')
