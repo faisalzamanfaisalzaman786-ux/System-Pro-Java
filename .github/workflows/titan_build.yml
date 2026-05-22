@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build (Gradle 8.5 Fixed)
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -7,77 +7,112 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'zulu'
+          java-version: '17'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Prepare Workspace
+      - name: Base Payload Decode
         run: |
-          find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'build_assets' ! -name '.' -exec rm -rf {} +
-          mkdir -p gradle/wrapper app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-mdpi
-
-      - name: Set Package Name from Payload
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name }}"
-          if [ -z "$PKG_NAME" ]; then PKG_NAME="com.system.pro"; fi
-          echo "PACKAGE_NAME=$PKG_NAME" >> $GITHUB_ENV
+          mkdir -p output_report
+          rm -rf app/src/main/java app/src/main/res app/build
+          rm -f gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
+          
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          
           mkdir -p "app/src/main/java/$PKG_PATH"
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip || true
+          if [ -s app_payload.zip ]; then
+            unzip -o app_payload.zip -d extracted_payload/ || true
+          fi
 
-      - name: Inject Gradle Configuration (Enforce Gradle 8.5)
+      - name: Copy User Resources (No Default Override)
         run: |
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m
-          EOF
-          
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
+          if [ -f extracted_payload/activity_main.xml ]; then cp -f extracted_payload/activity_main.xml app/src/main/res/layout/activity_main.xml; fi
+          if [ -f extracted_payload/colors.xml ]; then cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml; fi
+          if [ -d extracted_payload ]; then find extracted_payload -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true; fi
+
+      - name: Copy User Java Sources
+        run: |
+          if [ -d extracted_payload ]; then
+            find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
+          fi
+
+      - name: Fix Package Name & Imports in Java Files
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ -d "$TARGET_DIR" ]; then
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|import .*\.R;|import ${{ env.TARGET_PACKAGE }}.R;|g" {} \;
+            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+              if ! grep -q "^[[:space:]]*package" "$file"; then
+                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
+              fi
+            done
+          fi
+
+      - name: Fallback MainActivity (only if user didn't provide)
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
+            mkdir -p "$TARGET_DIR"
+            cat > "$TARGET_DIR/MainActivity.java" << 'EOF'
+          package ${{ env.TARGET_PACKAGE }};
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
               }
           }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = 'SystemPro'
-          include ':app'
           EOF
-          
-          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
-          
-          cat > app/build.gradle << EOF
+          fi
+
+      - name: Create AndroidManifest (without package attribute)
+        run: |
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Create build.gradle (Gradle 8.5 compatible)
+        run: |
+          cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
-              namespace '${{ env.PACKAGE_NAME }}'
+              namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
               defaultConfig {
-                  applicationId '${{ env.PACKAGE_NAME }}'
+                  applicationId "${{ env.TARGET_PACKAGE }}"
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName '1.0'
+                  versionName "1.0"
               }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -85,217 +120,85 @@ jobs:
           }
           EOF
 
-      - name: Copy Assets from build_assets
+      - name: Inject Master Permissions (if missing)
         run: |
-          if [ -d "build_assets" ]; then
-            if [ -d "build_assets/app" ]; then
-              cp -r build_assets/app/* app/
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          for perm in "android.permission.CAMERA" "android.permission.READ_EXTERNAL_STORAGE" "android.permission.WRITE_EXTERNAL_STORAGE" "android.permission.BLUETOOTH" "android.permission.BLUETOOTH_CONNECT" "android.permission.BLUETOOTH_SCAN"; do
+            if ! grep -q "$perm" "$MANIFEST"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
             fi
-            if [ -f "build_assets/AndroidManifest.xml" ]; then
-              cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            fi
-            if [ -f "build_assets/app_icon.png" ]; then
-              cp build_assets/app_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-            fi
+          done
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      # ========== FIRST BUILD ==========
+      - name: Build APK (Attempt 1)
+        id: build1
+        continue-on-error: true
+        run: |
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
           fi
 
-      - name: Auto-Heal Script (Fix Everything)
+      # ========== AI AGENT FALLBACK ==========
+      - name: 🤖 AI Agent Fixer (Groq)
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          cat > /tmp/auto_heal.py << 'SCRIPT'
-          import os, re, sys
-          from pathlib import Path
+          echo "First build failed. Invoking AI Agent with Gradle 8.5 instructions..."
+          ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
+          FILES_INFO=""
+          for file in $(find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \)); do
+            FILES_INFO="$FILES_INFO\n=== $file ===\n$(cat "$file")\n"
+          done
+          SYSTEM_PROMPT='You are an expert Android developer. Fix the build errors. The project uses Gradle 8.5, compileSdk 34, minSdk 24, targetSdk 34. Use only AndroidX dependencies. Fix missing imports, package names, resource references (strings, layouts, IDs), and manifest issues. Return ONLY a JSON array of objects with "path" and "content". Do NOT add explanations or markdown. Ensure package name is consistent across all Java files. Add missing resources (strings.xml, colors.xml, drawables) if needed.'
+          USER_PROMPT="Build error: $ERROR_LOG\nProject files:$FILES_INFO\nFix errors and return JSON array."
+          RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
+            -H "Authorization: Bearer $GROQ_API_KEY" -H "Content-Type: application/json" \
+            -d "{\"model\":\"llama-3.3-70b-versatile\",\"messages\":[{\"role\":\"system\",\"content\":\"$SYSTEM_PROMPT\"},{\"role\":\"user\",\"content\":\"$USER_PROMPT\"}],\"temperature\":0.1,\"max_tokens\":4000}")
+          echo "$RESPONSE" | python3 -c "
+          import sys, json, re, os
+          text = sys.stdin.read()
+          m = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
+          if m:
+              for fix in json.loads(m.group()):
+                  path = fix.get('path'); content = fix.get('content')
+                  if path and content:
+                      os.makedirs(os.path.dirname(path), exist_ok=True)
+                      with open(path, 'w') as f: f.write(content)
+                      print(f'Applied: {path}')
+          else: print('No JSON found')
+          "
 
-          TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.system.pro")
-          JAVA_SRC_DIR = f"app/src/main/java/{TARGET_PACKAGE.replace('.', '/')}"
-          RES_DIR = "app/src/main/res"
-          MANIFEST_FILE = "app/src/main/AndroidManifest.xml"
-          GRADLE_FILE = "app/build.gradle"
-
-          def log(msg): print(f"[AUTO-HEAL] {msg}")
-
-          def read_file(p):
-              try: return open(p, 'r', encoding='utf-8').read()
-              except: return None
-
-          def write_file(p, content):
-              Path(p).parent.mkdir(parents=True, exist_ok=True)
-              with open(p, 'w', encoding='utf-8') as f: f.write(content)
-              log(f"Fixed: {p}")
-
-          def fix_java_file(path):
-              c = read_file(path)
-              if not c: return False
-              orig = c
-              # Fix package
-              if re.search(r'^\s*package\s+[\w.]+;', c, re.M):
-                  c = re.sub(r'^\s*package\s+[\w.]+;', f'package {TARGET_PACKAGE};', c, flags=re.M)
-              else:
-                  c = f"package {TARGET_PACKAGE};\n" + c
-              # Import R
-              imp = f"import {TARGET_PACKAGE}.R;"
-              if imp not in c:
-                  c = re.sub(r'import\s+[\w.]+\.R;', imp, c)
-                  if imp not in c:
-                      c = c.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{imp}")
-              # Fix missing semicolons
-              lines = c.split('\n')
-              new_lines = []
-              for line in lines:
-                  s = line.strip()
-                  if s and not s.endswith(('{', '}', ';', ':', '/', '*')) and not s.startswith(('@', 'import', 'package', 'public', 'private', 'protected', 'class', 'interface', 'enum', 'if', 'else', 'for', 'while', 'return', '//', '/*')):
-                      line = line.rstrip() + ';'
-                  new_lines.append(line)
-              c = '\n'.join(new_lines)
-              if c != orig:
-                  write_file(path, c)
-                  return True
-              return False
-
-          def fix_xml_file(path):
-              c = read_file(path)
-              if not c: return False
-              orig = c
-              lines = c.split('\n')
-              new_lines = []
-              for line in lines:
-                  if '<' in line and '>' in line and not line.strip().startswith('<?'):
-                      if 'android:layout_width' not in line and 'layout_width' not in line:
-                          line = re.sub(r'<(\w+)', r'<\1 android:layout_width="match_parent"', line, count=1)
-                      if 'android:layout_height' not in line and 'layout_height' not in line:
-                          line = re.sub(r'<(\w+)', r'<\1 android:layout_height="wrap_content"', line, count=1)
-                  new_lines.append(line)
-              c = '\n'.join(new_lines)
-              if c != orig:
-                  write_file(path, c)
-                  return True
-              return False
-
-          def fix_manifest():
-              if not os.path.exists(MANIFEST_FILE):
-                  default = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>'''
-                  write_file(MANIFEST_FILE, default)
-                  return True
-              c = read_file(MANIFEST_FILE)
-              orig = c
-              c = re.sub(r'package="[^"]*"', '', c)
-              c = re.sub(r'<manifest\s+', '<manifest ', c)
-              c = re.sub(r'<activity(?!.*android:exported)', '<activity android:exported="true"', c)
-              if c != orig:
-                  write_file(MANIFEST_FILE, c)
-                  return True
-              return False
-
-          def fix_gradle():
-              if not os.path.exists(GRADLE_FILE): return False
-              c = read_file(GRADLE_FILE)
-              orig = c
-              c = re.sub(r"namespace\s+['\"].*?['\"]", f"namespace '{TARGET_PACKAGE}'", c)
-              c = re.sub(r"applicationId\s+['\"].*?['\"]", f"applicationId '{TARGET_PACKAGE}'", c)
-              if c != orig:
-                  write_file(GRADLE_FILE, c)
-                  return True
-              return False
-
-          def ensure_default_resources():
-              values = Path(RES_DIR) / "values"
-              values.mkdir(parents=True, exist_ok=True)
-              fixed = False
-              colors = values / "colors.xml"
-              if not colors.exists():
-                  colors.write_text('''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="purple_200">#FFBB86FC</color>
-              <color name="purple_500">#FF6200EE</color>
-              <color name="purple_700">#FF3700B3</color>
-              <color name="teal_200">#FF03DAC5</color>
-              <color name="teal_700">#FF018786</color>
-              <color name="black">#FF000000</color>
-              <color name="white">#FFFFFFFF</color>
-          </resources>''', encoding='utf-8')
-                  log("Created default colors.xml")
-                  fixed = True
-              strings = values / "strings.xml"
-              if not strings.exists():
-                  strings.write_text('''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">System Pro</string>
-          </resources>''', encoding='utf-8')
-                  log("Created default strings.xml")
-                  fixed = True
-              styles = values / "styles.xml"
-              if not styles.exists():
-                  styles.write_text('''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">#FF6200EE</item>
-                  <item name="colorPrimaryDark">#FF3700B3</item>
-                  <item name="colorAccent">#FF03DAC5</item>
-                  <item name="android:windowBackground">#FFFFFF</item>
-              </style>
-          </resources>''', encoding='utf-8')
-                  log("Created default styles.xml")
-                  fixed = True
-              return fixed
-
-          def main():
-              log("Starting Auto-Heal...")
-              total = 0
-              if os.path.exists(JAVA_SRC_DIR):
-                  for root, _, files in os.walk(JAVA_SRC_DIR):
-                      for f in files:
-                          if f.endswith('.java') and fix_java_file(os.path.join(root, f)):
-                              total += 1
-              if os.path.exists(RES_DIR):
-                  for root, _, files in os.walk(RES_DIR):
-                      for f in files:
-                          if f.endswith('.xml') and fix_xml_file(os.path.join(root, f)):
-                              total += 1
-              if fix_manifest(): total += 1
-              if fix_gradle(): total += 1
-              if ensure_default_resources(): total += 1
-              log(f"Done. Total fixes: {total}")
-              sys.exit(0)
-          if __name__ == "__main__":
-              main()
-          SCRIPT
-          
-          export TARGET_PACKAGE="${{ env.PACKAGE_NAME }}"
-          python3 /tmp/auto_heal.py
-
-      - name: Force Gradle 8.5 Wrapper (Remove any existing)
+      - name: Build APK (Attempt 2 - after AI)
+        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
         run: |
-          rm -f gradlew gradlew.bat
-          rm -rf gradle/wrapper
-          mkdir -p gradle/wrapper
-          # Generate wrapper with explicit 8.5 distribution
-          gradle wrapper --gradle-version 8.5 --distribution-type bin
-          # Alternatively, manually write gradle-wrapper.properties
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          chmod +x gradlew
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+          fi
 
-      - name: Build Debug APK with Gradle 8.5
+      - name: Validate APK (check size)
         run: |
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          if [ -f output_report/app-debug.apk ]; then
+            SIZE=$(stat -c%s output_report/app-debug.apk)
+            if [ $SIZE -lt 50000 ]; then
+              echo "WARNING: APK too small ($SIZE bytes). Build may have failed." >> output_report/build_log.txt
+            else
+              echo "APK size: $SIZE bytes - OK" >> output_report/build_log.txt
+            fi
+          else
+            echo "ERROR: No APK generated" >> output_report/build_log.txt
+          fi
 
-      - name: Upload APK Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: System-Pro-V2-Final
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: output_report/
