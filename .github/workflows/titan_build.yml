@@ -7,9 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      TARGET_PACKAGE: "com.system.titan.pro"
 
     steps:
       - name: Checkout Repository
@@ -21,51 +18,212 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Prepare Workspace & Decode Payload
+      - name: Base Workspace Design
         run: |
           mkdir -p output_report
-          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip
-          unzip -o app_payload.zip -d extracted_payload/ || true
-          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
+          rm -rf app/src/main/java app/src/main/res app/build
+          rm -f gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
+          
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          
           mkdir -p "app/src/main/java/$PKG_PATH"
-          [ -d extracted_payload ] && cp -f extracted_payload/*.java "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
-          [ -d extracted_payload ] && cp -f extracted_payload/*.xml app/src/main/res/layout/ 2>/dev/null || true
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
 
-      - name: Run Static AI Fixer (Safe Mode)
-        run: python3 static_fixer.py
-
-      - name: Build and Error Capture
-        id: build_step
+      - name: Extract Data From Assets Folder
         run: |
-          chmod +x gradlew
-          if ! ./gradlew assembleDebug --debug > build_log.txt 2>&1; then
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+          if [ -d "build_assets" ]; then
+            find build_assets/ -type f -name "activity_main.xml" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
+            find build_assets/ -type f -name "layout_config.txt" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
+            find build_assets/ -type f -name "colors.xml" -exec cp -f {} app/src/main/res/values/colors.xml \;
+            find build_assets/ -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true
+            find build_assets/ -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \; 2>/dev/null || true
           fi
-          echo "Checking for APK files..." >> build_log.txt
-          find app/build/outputs/apk/ -name "*.apk" >> build_log.txt
 
-      - name: AI Auto-Fixer (Groq Integration)
-        if: env.BUILD_FAILED == 'true'
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android"><TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          fi
+
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
+          fi
+
+      - name: Fix Package Name & Imports in Java Files
         run: |
-          ERR_SNIPPET=$(tail -n 100 build_log.txt)
-          curl -X POST "https://api.groq.com/openai/v1/chat/completions" \
-               -H "Authorization: Bearer $GROQ_API_KEY" \
-               -H "Content-Type: application/json" \
-               -d "{
-                 \"model\": \"llama-3.3-70b-versatile\",
-                 \"messages\": [
-                   {\"role\": \"system\", \"content\": \"You are an expert Android Build Engineer. Fix Gradle errors, dependency conflicts, and syntax issues.\"},
-                   {\"role\": \"user\", \"content\": \"The build failed. Gradle log: $ERR_SNIPPET\"}
-                 ]
-               }" > ai_fix_suggestion.json
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ -d "$TARGET_DIR" ]; then
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|^[[:space:]]*package .*;|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s|import .*\.R;|import ${{ env.TARGET_PACKAGE }}.R;|g" {} \;
+            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+              if ! grep -q "^[[:space:]]*package" "$file"; then
+                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
+              fi
+            done
+          fi
 
-      - name: Upload Build Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Build Fallback Architecture
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
+            mkdir -p "$TARGET_DIR"
+            cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
+          package ${{ env.TARGET_PACKAGE }};
+
+          import android.Manifest;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.Settings;
+          import androidx.annotation.NonNull;
+          import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public class MainActivity extends AppCompatActivity {
+              private static final int PERMISSION_REQ_CODE = 2026;
+              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
+
+              @Override
+              protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  setContentView(getLayoutResourceId());
+                  checkAndRequestRuntimePermissions();
+              }
+
+              private int getLayoutResourceId() {
+                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
+              }
+
+              private void checkAndRequestRuntimePermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
+                  }
+
+                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
+                  }
+
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                  }
+
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
+                  } else {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void addPermissionIfMissing(List<String> list, String permission) {
+                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                      list.add(permission);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQ_CODE) {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void checkSpecialPermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
+                          try {
+                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                              intent.addCategory("android.intent.category.DEFAULT");
+                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          } catch (Exception e) {
+                              Intent intent = new Intent();
+                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          fi
+
+      - name: Core Environment Setup
+        run: |
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+
+          if [ -f build_assets/app_icon.png ]; then
+            cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          else
+            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          fi
+
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+
+          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+
+      - name: Inject Master Hardware & Background Permissions
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CHANGE_WIFI_STATE"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.BLUETOOTH"
+            "android.permission.BLUETOOTH_ADMIN"
+            "android.permission.BLUETOOTH_CONNECT"
+            "android.permission.BLUETOOTH_SCAN"
+            "android.permission.BLUETOOTH_ADVERTISE"
+            "android.permission.CAMERA"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.MANAGE_EXTERNAL_STORAGE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.SYSTEM_ALERT_WINDOW"
+          )
+          for PERM in "${PERMISSIONS[@]}"; do
+            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
+            fi
+          done
+
+      - name: Setup Gradle 8.5 Explicitly
+        uses: gradle/actions/setup-gradle@v4
         with:
-          name: System-Pro-Build-Logs-and-APK
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            output_report/fixer_log.txt
-            build_log.txt
-            ai_fix_suggestion.json
+          gradle-version: '8.5'
+
+      - name: Build Asset APK
+        run: |
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+
+      - name: Upload Artifact (Always)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: System-Pro-V2-Final
+          path: output_report/
