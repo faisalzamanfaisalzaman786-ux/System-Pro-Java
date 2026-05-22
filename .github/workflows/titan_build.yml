@@ -1,4 +1,4 @@
-Name: System Pro Titan Master Build
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
