@@ -1,4 +1,4 @@
-package com.system.pro;
+package com.wrong.package.name; // <--- غلطی 1
 
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -17,15 +17,15 @@ import com.system.pro.R;
 
 public class MainActivity extends AppCompatActivity {
 
-    private CameraManager cameraManager;
-    private String cameraId;
+    private CameraManager cameraManager
+    private String cameraId
     private Button torchButton;
     private boolean isTorchOn = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
         torchButton = findViewById(R.id.torch_button);
         torchButton.setOnClickListener(new View.OnClickListener() {
@@ -37,7 +37,7 @@ public class MainActivity extends AppCompatActivity {
                     turnOnTorch();
                 }
             }
-        });
+        })
 
         cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
 
@@ -73,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
     private String getCameraId() {
         try {
             for (String id : cameraManager.getCameraIdList()) {
+                // یہاں ایک امپورٹ غلط ہے (CameraCharacteristics)
                 if (cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_UNIT) != null) {
                     return id;
                 }
