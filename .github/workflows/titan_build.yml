@@ -72,7 +72,7 @@ jobs:
 
       - name: Dynamic UI and Code Injection Engine
         run: |
-          cat << 'EOF' > app/src/main/res/values/styles.xml
+          cat <<-'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#FF0000</item>
@@ -84,14 +84,14 @@ jobs:
           if [ ! -z "${{ github.event.client_payload.layout_xml }}" ]; then
             echo "${{ github.event.client_payload.layout_xml }}" > app/src/main/res/layout/activity_main.xml
           else
-            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="#121212">
-            </RelativeLayout>
-          EOF
+            cat <<-'EOF' > app/src/main/res/layout/activity_main.xml
+			<?xml version="1.0" encoding="utf-8"?>
+			<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+			    android:layout_width="match_parent"
+			    android:layout_height="match_parent"
+			    android:background="#121212">
+			</RelativeLayout>
+			EOF
           fi
 
       - name: Setup Wrapper, Master Hardware Permissions and Manifest
@@ -99,7 +99,7 @@ jobs:
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          cat <<-'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.CAMERA" />
@@ -142,19 +142,19 @@ jobs:
           if [ ! -z "${{ github.event.client_payload.main_activity_java }}" ]; then
             echo "${{ github.event.client_payload.main_activity_java }}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
           else
-            cat << 'EOF' > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
-            package ${{ env.PACKAGE_NAME }};
-            import android.os.Bundle;
-            import androidx.appcompat.app.AppCompatActivity;
+            cat <<-'EOF' > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
+			package ${{ env.PACKAGE_NAME }};
+			import android.os.Bundle;
+			import androidx.appcompat.app.AppCompatActivity;
 
-            public class MainActivity extends AppCompatActivity {
-                @Override
-                protected void Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(R.layout.activity_main);
-                }
-            }
-          EOF
+			public class MainActivity extends AppCompatActivity {
+			    @Override
+			    protected void onCreate(Bundle savedInstanceState) {
+			        super.onCreate(savedInstanceState);
+			        setContentView(R.layout.activity_main);
+			    }
+			}
+			EOF
           fi
 
       - name: Final Build
