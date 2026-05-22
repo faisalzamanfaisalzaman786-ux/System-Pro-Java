@@ -17,33 +17,30 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Lock Gradle 8.5 Environment
+      - name: Setup Gradle 8.5
         run: |
           mkdir -p gradle/wrapper
-          # گریڈل کے ورژن کو 8.5 پر سختی سے پابند کر دیا
-          echo "distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists" > gradle/wrapper/gradle-wrapper.properties
-          
-          # Wrapper Jar کو ری جنریٹ کرنا تاکہ کوئی اور ورژن مداخلت نہ کرے
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/master/gradle/wrapper/gradle-wrapper.jar
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           chmod +x gradlew || true
 
-      - name: Write Enterprise Gradle Files
+      - name: Write Enterprise Configuration
         run: |
-          # Settings.gradle
-          echo "rootProject.name = 'SystemPro'
+          # 1. settings.gradle میں ریپوزٹریز کا ہونا لازمی ہے
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
           include ':app'" > settings.gradle
           
-          # Root Build.gradle (8.2.2 Plugin + 8.5 Gradle)
+          # 2. Root build.gradle
           echo "buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }" > build.gradle
           
-          # App Build.gradle (ViewBinding + Strict Config)
+          # 3. App build.gradle
+          mkdir -p app
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -60,7 +57,7 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Generate Professional Source Code
+      - name: Generate Source Code
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
@@ -93,7 +90,6 @@ jobs:
 
       - name: Titan Build Execution
         run: |
-          # 8.5 کے ساتھ بلڈ کو رن کرنا
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload Artifact
