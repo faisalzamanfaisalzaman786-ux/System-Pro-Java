@@ -42,11 +42,24 @@ jobs:
             unzip -o app_payload.zip -d extracted_payload/ || true
           fi
 
-      - name: Copy User Resources (No Default Override)
+      - name: Copy User Resources (with automatic XML fixing)
         run: |
-          if [ -f extracted_payload/activity_main.xml ]; then cp -f extracted_payload/activity_main.xml app/src/main/res/layout/activity_main.xml; fi
-          if [ -f extracted_payload/colors.xml ]; then cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml; fi
-          if [ -d extracted_payload ]; then find extracted_payload -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true; fi
+          # Copy layout
+          if [ -f extracted_payload/activity_main.xml ]; then
+            cp -f extracted_payload/activity_main.xml app/src/main/res/layout/activity_main.xml
+          elif [ -f extracted_payload/layout_config.txt ]; then
+            cp -f extracted_payload/layout_config.txt app/src/main/res/layout/activity_main.xml
+          fi
+          
+          # Copy colors.xml
+          if [ -f extracted_payload/colors.xml ]; then
+            cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml
+          fi
+          
+          # Copy any other XML files (drawables, etc.)
+          if [ -d extracted_payload ]; then
+            find extracted_payload -type f -name "*.xml" ! -name "activity_main.xml" ! -name "colors.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/drawable/ \; 2>/dev/null || true
+          fi
 
       - name: Copy User Java Sources
         run: |
@@ -67,6 +80,81 @@ jobs:
             done
           fi
 
+      # ========== CRITICAL: FIX ALL XML RESOURCES (namespace, closing tags, attributes) ==========
+      - name: Validate and Fix XML Resources
+        run: |
+          # Fix namespace for all XML files
+          find app/src/main/res -type f -name "*.xml" | while read xmlfile; do
+            if ! grep -q 'xmlns:android' "$xmlfile"; then
+              sed -i '1s/\(<[a-zA-Z][^>]*\)/\1 xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' "$xmlfile"
+              echo "Added namespace to $xmlfile"
+            fi
+            # Ensure all tags are closed (basic check)
+            if grep -q '<[^/>]*$' "$xmlfile"; then
+              echo "Warning: Possible unclosed tag in $xmlfile - attempting to fix"
+              sed -i 's/\(<[a-zA-Z][^>]*\)$/\1 \/>/' "$xmlfile"
+            fi
+          done
+          
+          # Ensure layout has width/height for all views
+          if [ -f app/src/main/res/layout/activity_main.xml ]; then
+            sed -i '/<[a-zA-Z]/ { /layout_width/! s/<\([a-zA-Z][^>]*\)/<\1 android:layout_width="match_parent" android:layout_height="wrap_content"/g }' app/src/main/res/layout/activity_main.xml
+          fi
+          
+          # Create default strings.xml if missing or add missing torch strings
+          STRINGS="app/src/main/res/values/strings.xml"
+          if [ ! -f "$STRINGS" ]; then
+            mkdir -p app/src/main/res/values
+            cat > "$STRINGS" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">SystemPro</string>
+              <string name="torch_on">Torch On</string>
+              <string name="torch_off">Torch Off</string>
+          </resources>
+          EOF
+          else
+            if ! grep -q 'torch_on' "$STRINGS"; then
+              sed -i '/<\/resources>/i \    <string name="torch_on">Torch On</string>\n    <string name="torch_off">Torch Off</string>' "$STRINGS"
+            fi
+          fi
+          
+          # Create default colors.xml if missing
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+          fi
+          
+          # Create default styles.xml if missing
+          if [ ! -f app/src/main/res/values/styles.xml ]; then
+            cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOF
+          fi
+          
+          # Ensure button_background.xml exists if referenced
+          if grep -q 'button_background' app/src/main/res/layout/activity_main.xml 2>/dev/null; then
+            mkdir -p app/src/main/res/drawable
+            cat > app/src/main/res/drawable/button_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="@color/colorPrimary"/>
+              <corners android:radius="8dp"/>
+          </shape>
+          EOF
+          fi
+
       - name: Fallback MainActivity (only if user didn't provide)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
@@ -75,11 +163,18 @@ jobs:
             cat > "$TARGET_DIR/MainActivity.java" << 'EOF'
           package ${{ env.TARGET_PACKAGE }};
           import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.Toast;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
               @Override protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
+                  Button btn = findViewById(getResources().getIdentifier("toggleButton", "id", getPackageName()));
+                  if (btn != null) {
+                      btn.setOnClickListener(v -> Toast.makeText(this, "Button clicked", Toast.LENGTH_SHORT).show());
+                  }
               }
           }
           EOF
@@ -91,9 +186,20 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
@@ -120,7 +226,7 @@ jobs:
           }
           EOF
 
-      - name: Inject Master Permissions (if missing)
+      - name: Inject Master Permissions (add missing)
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
           for perm in "android.permission.CAMERA" "android.permission.READ_EXTERNAL_STORAGE" "android.permission.WRITE_EXTERNAL_STORAGE" "android.permission.BLUETOOTH" "android.permission.BLUETOOTH_CONNECT" "android.permission.BLUETOOTH_SCAN"; do
@@ -134,7 +240,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      # ========== FIRST BUILD ==========
+      # ========== FIRST BUILD ATTEMPT ==========
       - name: Build APK (Attempt 1)
         id: build1
         continue-on-error: true
@@ -142,37 +248,49 @@ jobs:
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+            echo "APK_SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "APK_SUCCESS=false" >> $GITHUB_ENV
           fi
 
-      # ========== AI AGENT FALLBACK ==========
+      # ========== AI AGENT FALLBACK (only if build failed and API key exists) ==========
       - name: 🤖 AI Agent Fixer (Groq)
         if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          echo "First build failed. Invoking AI Agent with Gradle 8.5 instructions..."
+          echo "First build failed. Invoking AI Agent with error log..."
           ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
+          # Collect only error-related files
           FILES_INFO=""
           for file in $(find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \)); do
             FILES_INFO="$FILES_INFO\n=== $file ===\n$(cat "$file")\n"
           done
-          SYSTEM_PROMPT='You are an expert Android developer. Fix the build errors. The project uses Gradle 8.5, compileSdk 34, minSdk 24, targetSdk 34. Use only AndroidX dependencies. Fix missing imports, package names, resource references (strings, layouts, IDs), and manifest issues. Return ONLY a JSON array of objects with "path" and "content". Do NOT add explanations or markdown. Ensure package name is consistent across all Java files. Add missing resources (strings.xml, colors.xml, drawables) if needed.'
-          USER_PROMPT="Build error: $ERROR_LOG\nProject files:$FILES_INFO\nFix errors and return JSON array."
+          SYSTEM_PROMPT='You are an expert Android developer. Fix the build errors. The project uses Gradle 8.5, compileSdk 34, minSdk 24, targetSdk 34. Return ONLY a JSON array of objects with "path" and "content". Do NOT add explanations. Fix missing resources, imports, syntax errors. Add missing strings, colors, drawables if referenced.'
+          USER_PROMPT="Build error log: $ERROR_LOG\nProject files:$FILES_INFO\nFix errors and return JSON array."
           RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
-            -H "Authorization: Bearer $GROQ_API_KEY" -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GROQ_API_KEY" \
+            -H "Content-Type: application/json" \
             -d "{\"model\":\"llama-3.3-70b-versatile\",\"messages\":[{\"role\":\"system\",\"content\":\"$SYSTEM_PROMPT\"},{\"role\":\"user\",\"content\":\"$USER_PROMPT\"}],\"temperature\":0.1,\"max_tokens\":4000}")
           echo "$RESPONSE" | python3 -c "
           import sys, json, re, os
           text = sys.stdin.read()
           m = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
           if m:
-              for fix in json.loads(m.group()):
-                  path = fix.get('path'); content = fix.get('content')
-                  if path and content:
-                      os.makedirs(os.path.dirname(path), exist_ok=True)
-                      with open(path, 'w') as f: f.write(content)
-                      print(f'Applied: {path}')
-          else: print('No JSON found')
+              try:
+                  fixes = json.loads(m.group())
+                  for fix in fixes:
+                      path = fix.get('path')
+                      content = fix.get('content')
+                      if path and content:
+                          os.makedirs(os.path.dirname(path), exist_ok=True)
+                          with open(path, 'w') as f:
+                              f.write(content)
+                          print(f'Applied: {path}')
+              except Exception as e:
+                  print(f'Error: {e}')
+          else:
+              print('No JSON found')
           "
 
       - name: Build APK (Attempt 2 - after AI)
@@ -181,19 +299,24 @@ jobs:
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+            echo "APK_SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "APK_SUCCESS=false" >> $GITHUB_ENV
           fi
 
-      - name: Validate APK (check size)
+      - name: Validate APK Size
         run: |
           if [ -f output_report/app-debug.apk ]; then
             SIZE=$(stat -c%s output_report/app-debug.apk)
             if [ $SIZE -lt 50000 ]; then
-              echo "WARNING: APK too small ($SIZE bytes). Build may have failed." >> output_report/build_log.txt
+              echo "❌ APK too small ($SIZE bytes). Build failed." >> output_report/build_summary.txt
+              exit 1
             else
-              echo "APK size: $SIZE bytes - OK" >> output_report/build_log.txt
+              echo "✅ APK size: $SIZE bytes - OK" >> output_report/build_summary.txt
             fi
           else
-            echo "ERROR: No APK generated" >> output_report/build_log.txt
+            echo "❌ No APK generated." >> output_report/build_summary.txt
+            exit 1
           fi
 
       - name: Upload Artifact
