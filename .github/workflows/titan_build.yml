@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cleanup and Setup
+      - name: Setup Infrastructure
         run: |
           rm -rf app/src/main/java/com/system/pro/*
           mkdir -p app/src/main/java/com/system/pro
@@ -19,7 +19,14 @@ jobs:
       - name: Write Gradle Files
         run: |
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
+          
+          # درست روٹ بلڈ گریڈل
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }" > build.gradle
+          
+          # ایپ بلڈ گریڈل
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -50,10 +57,11 @@ jobs:
                   android:layout_centerInParent="true"/>
           </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-      - name: Build
-        run: |
-          chmod +x gradlew || true
-          ./gradlew assembleDebug --no-daemon
+      - name: Build with Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+          arguments: assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
