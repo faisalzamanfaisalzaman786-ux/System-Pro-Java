@@ -77,8 +77,46 @@ jobs:
           EOF
           fi
 
-      - name: Run static fixer (separate Python file)
-        run: python3 static_fixer.py
+      # ========== FIX JAVA FILES WITH SED (DIRECT, NO PYTHON) ==========
+      - name: Fix Java files (package, imports, semicolons)
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -d "$TARGET_DIR" ]; then
+            echo "Target dir not found, skipping fixes"
+            exit 0
+          fi
+          
+          # Fix package line (replace any package with correct one)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/^package .*;/package ${{ env.TARGET_PACKAGE }};/g' {} \;
+          
+          # Fix import R
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g' {} \;
+          
+          # Add missing semicolons at end of lines that are field declarations (private/public/protected ...)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
+          
+          # Add missing semicolon after super.onCreate(...) and setContentView(...)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
+          
+          # Add missing semicolon after }) (anonymous class end)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
+          
+          # Add missing semicolon after variable assignments that don't end with ; { }
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/ = .*[^;{}]$/ s/$/;/' {} \;
+          
+          # Ensure CameraManager and CameraCharacteristics imports are present
+          for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
+              sed -i '/^package .*/a import android.hardware.camera2.CameraManager;' "$file"
+            fi
+            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
+              sed -i '/^package .*/a import android.hardware.camera2.CameraCharacteristics;' "$file"
+            fi
+            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
+              sed -i '/^package .*/a import android.widget.Toast;' "$file"
+            fi
+          done
 
       - name: Build Main Class (Fallback if no Java file from payload)
         run: |
