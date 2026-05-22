@@ -45,22 +45,23 @@ for root, dirs, files in os.walk(java_dir):
                 lines.insert(insert_pos, imp)
             content = '\n'.join(lines)
 
-        # 4. Fix missing semicolons (careful, but comprehensive)
+        # 4. Fix missing semicolons (field declarations, statements, closures)
         lines = content.split('\n')
         new_lines = []
         for line in lines:
             stripped = line.rstrip()
-            # Conditions to skip adding semicolon
+            # Skip if line already ends with ; { } or is import/package/annotation/control structure
             if stripped and not stripped.endswith(';') and not stripped.endswith('{') and not stripped.endswith('}') and not stripped.startswith('import ') and not stripped.startswith('package ') and not stripped.strip().startswith('@'):
-                # Skip control structures (if, for, while, try, catch, finally, else)
                 if not re.match(r'^\s*(if|for|while|switch|try|catch|finally|else)\s*\(', stripped):
-                    # Add semicolon
                     stripped += ';'
             new_lines.append(stripped)
         content = '\n'.join(new_lines)
 
-        # 5. Special fix for `})` (anonymous class instantiation)
+        # Special fix for `})` (anonymous class instantiation)
         content = re.sub(r'\}\)$', r'});', content, flags=re.M)
+
+        # Also fix `});` that might appear incorrectly
+        content = re.sub(r'\}\)\;$', r'});', content, flags=re.M)
 
         if content != original:
             with open(path, 'w', encoding='utf-8') as file:
