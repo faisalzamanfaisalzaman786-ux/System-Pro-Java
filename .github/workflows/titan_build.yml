@@ -25,7 +25,7 @@ jobs:
           rm -f gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          PKG_NAME=${RAW_PKG:-"com.system.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
@@ -123,9 +123,8 @@ jobs:
       - name: Build Fallback Architecture
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -z "$(ls -A $TARGET_DIR)" ] || [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
-            mkdir -p "$TARGET_DIR"
-            cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
+          mkdir -p "$TARGET_DIR"
+          cat << 'EOF' > "$TARGET_DIR/MainActivity.java"
           package ${{ env.TARGET_PACKAGE }};
 
           import android.Manifest;
@@ -148,8 +147,8 @@ jobs:
               private static final int MANAGE_STORAGE_REQ_CODE = 2027;
 
               @Override
-              protected void onCreate(Bundle saved) {
-                  super.onCreate(saved);
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
                   setContentView(getLayoutResourceId());
                   checkAndRequestRuntimePermissions();
               }
@@ -213,7 +212,6 @@ jobs:
               }
           }
           EOF
-          fi
 
       - name: Core Environment Setup
         run: |
@@ -272,9 +270,55 @@ jobs:
           </manifest>
           EOF
 
-          echo -e 'include ":app"' > settings.gradle
-          echo -e 'buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath "com.android.tools.build:gradle:8.2.2"\n    }\n}\nallprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}' > build.gradle
-          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+          cat << EOF > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
+          EOF
+
+          cat << EOF > build.gradle
+          buildscript {
+              dependencies {
+                  classpath "com.android.tools.build:gradle:8.2.2"
+              }
+          }
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          cat << EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace "${{ env.TARGET_PACKAGE }}"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "${{ env.TARGET_PACKAGE }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation "androidx.appcompat:appcompat:1.6.1"
+              implementation "com.google.android.material:material:1.11.0"
+          }
+          EOF
 
       - name: Smart Android Manifest Activity Registration
         run: |
