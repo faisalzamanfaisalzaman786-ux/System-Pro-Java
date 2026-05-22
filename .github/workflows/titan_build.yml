@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build (Auto-Heal)
+name: System Pro Titan Master Build (Gradle 8.5 Fixed)
 
 on:
   repository_dispatch:
@@ -24,7 +24,6 @@ jobs:
 
       - name: Prepare Workspace
         run: |
-          # Clear everything except .git, .github, build_assets
           find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'build_assets' ! -name '.' -exec rm -rf {} +
           mkdir -p gradle/wrapper app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-mdpi
 
@@ -37,11 +36,12 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
 
-      - name: Inject Gradle Configuration
+      - name: Inject Gradle Configuration (Enforce Gradle 8.5)
         run: |
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
           EOF
           
           cat > settings.gradle << 'EOF'
@@ -137,7 +137,7 @@ jobs:
                   c = re.sub(r'import\s+[\w.]+\.R;', imp, c)
                   if imp not in c:
                       c = c.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{imp}")
-              # Fix missing semicolons (safe)
+              # Fix missing semicolons
               lines = c.split('\n')
               new_lines = []
               for line in lines:
@@ -211,7 +211,6 @@ jobs:
               values = Path(RES_DIR) / "values"
               values.mkdir(parents=True, exist_ok=True)
               fixed = False
-              # colors.xml
               colors = values / "colors.xml"
               if not colors.exists():
                   colors.write_text('''<?xml version="1.0" encoding="utf-8"?>
@@ -226,7 +225,6 @@ jobs:
           </resources>''', encoding='utf-8')
                   log("Created default colors.xml")
                   fixed = True
-              # strings.xml
               strings = values / "strings.xml"
               if not strings.exists():
                   strings.write_text('''<?xml version="1.0" encoding="utf-8"?>
@@ -235,7 +233,6 @@ jobs:
           </resources>''', encoding='utf-8')
                   log("Created default strings.xml")
                   fixed = True
-              # styles.xml
               styles = values / "styles.xml"
               if not styles.exists():
                   styles.write_text('''<?xml version="1.0" encoding="utf-8"?>
@@ -276,16 +273,26 @@ jobs:
           export TARGET_PACKAGE="${{ env.PACKAGE_NAME }}"
           python3 /tmp/auto_heal.py
 
-      - name: Build Debug APK
+      - name: Force Gradle 8.5 Wrapper (Remove any existing)
         run: |
-          # Setup Gradle wrapper if missing
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.5
-            chmod +x gradlew
-          else
-            chmod +x gradlew
-          fi
-          ./gradlew assembleDebug --no-daemon
+          rm -f gradlew gradlew.bat
+          rm -rf gradle/wrapper
+          mkdir -p gradle/wrapper
+          # Generate wrapper with explicit 8.5 distribution
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
+          # Alternatively, manually write gradle-wrapper.properties
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          chmod +x gradlew
+
+      - name: Build Debug APK with Gradle 8.5
+        run: |
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
