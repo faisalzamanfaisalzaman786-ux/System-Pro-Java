@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build
+Name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -32,7 +32,21 @@ jobs:
           echo "android.useAndroidX=true
           android.enableJetifier=true" > gradle.properties
 
-          echo "rootProject.name = 'SystemPro'
+          echo "pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'SystemPro'
           include ':app'" > settings.gradle
           
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
