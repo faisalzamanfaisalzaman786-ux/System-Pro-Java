@@ -15,37 +15,47 @@ jobs:
 
       - name: Setup Environment
         run: |
-          # پرانی فائلیں ہٹانا
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
           mkdir -p app/src/main/java/com/system/pro app/src/main/res/layout
-          
-          # Gradle 8.5 انسٹال کرنا تاکہ ہمیں wrapper کی ضرورت نہ پڑے
           wget https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
-          export GRADLE_HOME=$PWD/gradle-8.5
-          export PATH=$GRADLE_HOME/bin:$PATH
-          echo "GRADLE_HOME=$GRADLE_HOME" >> $GITHUB_ENV
-          echo "$GRADLE_HOME/bin" >> $GITHUB_PATH
+          echo "$PWD/gradle-8.5/bin" >> $GITHUB_PATH
 
-      - name: Write Project Configuration
+      - name: Write Configuration
         run: |
+          # Settings.gradle
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
+          
+          # Root build.gradle - بالکل سادہ اور درست
+          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          
+          # App build.gradle
           echo "plugins { id 'com.android.application' }
-          android { namespace 'com.system.pro'; compileSdk 34; defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }" > app/build.gradle
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }" > app/build.gradle
 
-      - name: Create Manifest and MainActivity
+      - name: Write Source
         run: |
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
-          <application android:allowBackup="true" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-          <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
-          </application></manifest>' > app/src/main/AndroidManifest.xml
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <application android:allowBackup="true" android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
           
           mkdir -p app/src/main/java/com/system/pro
           printf "package com.system.pro;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {}" > app/src/main/java/com/system/pro/MainActivity.java
 
-      - name: Final Build
+      - name: Build Execution
         run: gradle assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
