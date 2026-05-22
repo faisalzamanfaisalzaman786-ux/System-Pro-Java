@@ -86,13 +86,17 @@ jobs:
             fi
           fi
 
-      - name: Fallback Resources if Missing
+      - name: Fix Manifest Exported and Fallback Resources
         run: |
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            sed -i 's/android:exported="true"//g' app/src/main/AndroidManifest.xml
+            sed -i 's/android:exported="false"//g' app/src/main/AndroidManifest.xml
+            sed -i 's/<activity /<activity android:exported="true" /g' app/src/main/AndroidManifest.xml
+          else
+            echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"${{ env.PACKAGE_NAME }}\">\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.INTERNET\" />\n<application android:allowBackup=\"true\" android:label=\"System Pro\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\">\n<activity android:name=\".MainActivity\" android:exported=\"true\">\n<intent-filter>\n<action android:name=\"android.intent.action.MAIN\" />\n<category android:name=\"android.intent.category.LAUNCHER\" />\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
+          fi
           if [ ! -f "app/src/main/res/values/styles.xml" ]; then
             echo '<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#FF0000</item><item name="android:windowBackground">#121212</item></style></resources>' > app/src/main/res/values/styles.xml
-          fi
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"${{ env.PACKAGE_NAME }}\">\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.INTERNET\" />\n<application android:allowBackup=\"true\" android:label=\"System Pro\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\">\n<activity android:name=\".MainActivity\" android:exported=\"true\">\n<intent-filter>\n<action android:name=\"android.intent.action.MAIN\" />\n<category android:name=\"android.intent.category.LAUNCHER\" />\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
           fi
 
       - name: Final Build
