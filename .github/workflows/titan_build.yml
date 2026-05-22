@@ -72,7 +72,7 @@ jobs:
         with:
           name: System-Pro-Build-Logs-and-APK
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/*.apk
             output_report/fixer_log.txt
             build_log.txt
             ai_fix_suggestion.json
