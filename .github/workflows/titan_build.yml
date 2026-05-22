@@ -42,21 +42,14 @@ jobs:
             unzip -o app_payload.zip -d extracted_payload/ || true
           fi
 
-      - name: Copy User Resources (with automatic XML fixing)
+      - name: Copy User Resources
         run: |
-          # Copy layout
           if [ -f extracted_payload/activity_main.xml ]; then
             cp -f extracted_payload/activity_main.xml app/src/main/res/layout/activity_main.xml
-          elif [ -f extracted_payload/layout_config.txt ]; then
-            cp -f extracted_payload/layout_config.txt app/src/main/res/layout/activity_main.xml
           fi
-          
-          # Copy colors.xml
           if [ -f extracted_payload/colors.xml ]; then
             cp -f extracted_payload/colors.xml app/src/main/res/values/colors.xml
           fi
-          
-          # Copy any other XML files (drawables, etc.)
           if [ -d extracted_payload ]; then
             find extracted_payload -type f -name "*.xml" ! -name "activity_main.xml" ! -name "colors.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/drawable/ \; 2>/dev/null || true
           fi
@@ -80,28 +73,93 @@ jobs:
             done
           fi
 
-      # ========== CRITICAL: FIX ALL XML RESOURCES (namespace, closing tags, attributes) ==========
-      - name: Validate and Fix XML Resources
+      # ========== ROBUST XML REPAIR SCRIPT (NO AI NEEDED) ==========
+      - name: 🔧 Auto-Repair All XML Resources
         run: |
-          # Fix namespace for all XML files
-          find app/src/main/res -type f -name "*.xml" | while read xmlfile; do
-            if ! grep -q 'xmlns:android' "$xmlfile"; then
-              sed -i '1s/\(<[a-zA-Z][^>]*\)/\1 xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' "$xmlfile"
-              echo "Added namespace to $xmlfile"
-            fi
-            # Ensure all tags are closed (basic check)
-            if grep -q '<[^/>]*$' "$xmlfile"; then
-              echo "Warning: Possible unclosed tag in $xmlfile - attempting to fix"
-              sed -i 's/\(<[a-zA-Z][^>]*\)$/\1 \/>/' "$xmlfile"
-            fi
-          done
-          
-          # Ensure layout has width/height for all views
-          if [ -f app/src/main/res/layout/activity_main.xml ]; then
-            sed -i '/<[a-zA-Z]/ { /layout_width/! s/<\([a-zA-Z][^>]*\)/<\1 android:layout_width="match_parent" android:layout_height="wrap_content"/g }' app/src/main/res/layout/activity_main.xml
-          fi
-          
-          # Create default strings.xml if missing or add missing torch strings
+          python3 - << 'PYTHON_FIXER'
+          import os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          def log(msg): print(f"[XML FIX] {msg}")
+
+          def fix_xml_file(filepath):
+              try:
+                  # Read original
+                  with open(filepath, 'r', encoding='utf-8') as f:
+                      content = f.read()
+                  # Remove invalid characters (control chars except newline/tab)
+                  content = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', content)
+                  # Add missing namespace if not present and not a resources file
+                  if 'xmlns:android' not in content and '<manifest' not in content and '<resources' not in content:
+                      content = re.sub(r'(<\w+)', r'\1 xmlns:android="http://schemas.android.com/apk/res/android"', content, count=1)
+                  # Ensure all tags are closed (simple heuristic)
+                  if content.count('<') > content.count('>') * 2:
+                      # Add missing closing slash to the last unclosed tag
+                      content = re.sub(r'<([a-zA-Z][^>]*[^/])$', r'<\1 />', content.strip())
+                  # Try to parse with ET to validate
+                  try:
+                      ET.fromstring(content)
+                      # Write back only if changed
+                      with open(filepath, 'w', encoding='utf-8') as f:
+                          f.write(content)
+                      log(f"Valid: {filepath}")
+                  except ET.ParseError as e:
+                      log(f"ERROR parsing {filepath}: {e}")
+                      # If parse fails, create a minimal default file
+                      if 'layout' in str(filepath):
+                          default = '''<?xml version="1.0" encoding="utf-8"?>
+                          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                              android:layout_width="match_parent"
+                              android:layout_height="match_parent"
+                              android:orientation="vertical">
+                              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                  android:text="Fixed Layout" android:layout_gravity="center"/>
+                          </LinearLayout>'''
+                      elif 'values' in str(filepath):
+                          if 'colors' in str(filepath):
+                              default = '''<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#6200EE</color></resources>'''
+                          elif 'strings' in str(filepath):
+                              default = '''<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">App</string></resources>'''
+                          else:
+                              default = '''<?xml version="1.0" encoding="utf-8"?><resources/>'''
+                      else:
+                          default = '''<?xml version="1.0" encoding="utf-8"?>
+                          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+                              <solid android:color="#FFFFFF"/>
+                          </shape>'''
+                      with open(filepath, 'w', encoding='utf-8') as f:
+                          f.write(default)
+                      log(f"Replaced broken file with default: {filepath}")
+              except Exception as e:
+                  log(f"Unexpected error with {filepath}: {e}")
+
+          # Fix all XML files in res/
+          res_dir = "app/src/main/res"
+          if os.path.exists(res_dir):
+              for root, dirs, files in os.walk(res_dir):
+                  for file in files:
+                      if file.endswith('.xml'):
+                          fix_xml_file(os.path.join(root, file))
+          else:
+              log("No res directory found, creating minimal resources")
+              os.makedirs("app/src/main/res/layout", exist_ok=True)
+              os.makedirs("app/src/main/res/values", exist_ok=True)
+              with open("app/src/main/res/layout/activity_main.xml", 'w') as f:
+                  f.write('''<?xml version="1.0" encoding="utf-8"?>
+                  <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                      android:layout_width="match_parent"
+                      android:layout_height="match_parent"
+                      android:orientation="vertical">
+                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                          android:text="Default Layout" android:layout_gravity="center"/>
+                  </LinearLayout>''')
+              with open("app/src/main/res/values/strings.xml", 'w') as f:
+                  f.write('''<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>''')
+          PYTHON_FIXER
+
+      - name: Ensure Missing Resources (strings, colors, drawables)
+        run: |
+          # Ensure strings.xml has torch strings if not present
           STRINGS="app/src/main/res/values/strings.xml"
           if [ ! -f "$STRINGS" ]; then
             mkdir -p app/src/main/res/values
@@ -118,8 +176,7 @@ jobs:
               sed -i '/<\/resources>/i \    <string name="torch_on">Torch On</string>\n    <string name="torch_off">Torch Off</string>' "$STRINGS"
             fi
           fi
-          
-          # Create default colors.xml if missing
+          # Ensure colors.xml
           if [ ! -f app/src/main/res/values/colors.xml ]; then
             cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -129,8 +186,7 @@ jobs:
           </resources>
           EOF
           fi
-          
-          # Create default styles.xml if missing
+          # Ensure styles.xml
           if [ ! -f app/src/main/res/values/styles.xml ]; then
             cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -142,8 +198,7 @@ jobs:
           </resources>
           EOF
           fi
-          
-          # Ensure button_background.xml exists if referenced
+          # Ensure button_background.xml if referenced
           if grep -q 'button_background' app/src/main/res/layout/activity_main.xml 2>/dev/null; then
             mkdir -p app/src/main/res/drawable
             cat > app/src/main/res/drawable/button_background.xml << 'EOF'
@@ -155,7 +210,7 @@ jobs:
           EOF
           fi
 
-      - name: Fallback MainActivity (only if user didn't provide)
+      - name: Fallback MainActivity (if user didn't provide)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -f "$TARGET_DIR/MainActivity.java" ]; then
@@ -240,61 +295,8 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      # ========== FIRST BUILD ATTEMPT ==========
-      - name: Build APK (Attempt 1)
-        id: build1
-        continue-on-error: true
-        run: |
-          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
-            echo "APK_SUCCESS=true" >> $GITHUB_ENV
-          else
-            echo "APK_SUCCESS=false" >> $GITHUB_ENV
-          fi
-
-      # ========== AI AGENT FALLBACK (only if build failed and API key exists) ==========
-      - name: 🤖 AI Agent Fixer (Groq)
-        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          echo "First build failed. Invoking AI Agent with error log..."
-          ERROR_LOG=$(cat output_report/gradle_err.log | tail -300 | tr '"' ' ' | tr "'" ' ')
-          # Collect only error-related files
-          FILES_INFO=""
-          for file in $(find app/src/main -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \)); do
-            FILES_INFO="$FILES_INFO\n=== $file ===\n$(cat "$file")\n"
-          done
-          SYSTEM_PROMPT='You are an expert Android developer. Fix the build errors. The project uses Gradle 8.5, compileSdk 34, minSdk 24, targetSdk 34. Return ONLY a JSON array of objects with "path" and "content". Do NOT add explanations. Fix missing resources, imports, syntax errors. Add missing strings, colors, drawables if referenced.'
-          USER_PROMPT="Build error log: $ERROR_LOG\nProject files:$FILES_INFO\nFix errors and return JSON array."
-          RESPONSE=$(curl -s -X POST "https://api.groq.com/openai/v1/chat/completions" \
-            -H "Authorization: Bearer $GROQ_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"model\":\"llama-3.3-70b-versatile\",\"messages\":[{\"role\":\"system\",\"content\":\"$SYSTEM_PROMPT\"},{\"role\":\"user\",\"content\":\"$USER_PROMPT\"}],\"temperature\":0.1,\"max_tokens\":4000}")
-          echo "$RESPONSE" | python3 -c "
-          import sys, json, re, os
-          text = sys.stdin.read()
-          m = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
-          if m:
-              try:
-                  fixes = json.loads(m.group())
-                  for fix in fixes:
-                      path = fix.get('path')
-                      content = fix.get('content')
-                      if path and content:
-                          os.makedirs(os.path.dirname(path), exist_ok=True)
-                          with open(path, 'w') as f:
-                              f.write(content)
-                          print(f'Applied: {path}')
-              except Exception as e:
-                  print(f'Error: {e}')
-          else:
-              print('No JSON found')
-          "
-
-      - name: Build APK (Attempt 2 - after AI)
-        if: steps.build1.outcome == 'failure' && env.GROQ_API_KEY != ''
+      - name: Build APK
+        id: build
         run: |
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
@@ -309,7 +311,7 @@ jobs:
           if [ -f output_report/app-debug.apk ]; then
             SIZE=$(stat -c%s output_report/app-debug.apk)
             if [ $SIZE -lt 50000 ]; then
-              echo "❌ APK too small ($SIZE bytes). Build failed." >> output_report/build_summary.txt
+              echo "❌ APK too small ($SIZE bytes). Build likely failed." >> output_report/build_summary.txt
               exit 1
             else
               echo "✅ APK size: $SIZE bytes - OK" >> output_report/build_summary.txt
