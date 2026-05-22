@@ -62,12 +62,14 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Dynamic Asset and Icon Injection
+      - name: Dynamic Asset and Icon Injection Engine
         run: |
           if [ ! -z "${{ github.event.client_payload.app_icon_b64 }}" ]; then
             echo "${{ github.event.client_payload.app_icon_b64 }}" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
+            echo "HAS_ICON=true" >> $GITHUB_ENV
           else
             echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF0000" android:pathData="M12,2L2,22h20L12,2zM12,6l6.5,13h-13L12,6z"/></vector>' > app/src/main/res/mipmap-mdpi/ic_launcher.xml
+            echo "HAS_ICON=false" >> $GITHUB_ENV
           fi
 
       - name: Dynamic UI Injection Engine
@@ -85,7 +87,12 @@ jobs:
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-feature android:name="android.hardware.camera.flash" android:required="false" />\n<uses-feature android:name="android.hardware.camera" android:required="false" />\n<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.BODY_SENSORS" />\n<uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />\n<application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro">\n<activity android:name="${{ env.PACKAGE_NAME }}.MainActivity" android:exported="true">\n<intent-filter>\n<action android:name="android.intent.action.MAIN" />\n<category android:name="android.intent.category.LAUNCHER" />\n</intent-filter>\n</activity>\n</application>\n</manifest>' > app/src/main/AndroidManifest.xml
+          ICON_NAME="ic_launcher"
+          if [ "${{ env.HAS_ICON }}" = "false" ]; then
+            ICON_NAME="ic_launcher"
+          fi
+
+          echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />\n<uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n<uses-permission android:name=\"android.permission.BLUETOOTH\" android:maxSdkVersion=\"30\" />\n<uses-permission android:name=\"android.permission.BLUETOOTH_ADMIN\" android:maxSdkVersion=\"30\" />\n<uses-permission android:name=\"android.permission.BLUETOOTH_CONNECT\" />\n<uses-permission android:name=\"android.permission.BLUETOOTH_SCAN\" />\n<uses-permission android:name=\"android.permission.BLUETOOTH_ADVERTISE\" />\n<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />\n<uses-permission android:name=\"android.permission.ACCESS_COARSE_LOCATION\" />\n<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\" />\n<uses-permission android:name=\"android.permission.CHANGE_WIFI_STATE\" />\n<uses-permission android:name=\"android.permission.INTERNET\" />\n<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />\n<uses-permission android:name=\"android.permission.BODY_SENSORS\" />\n<uses-permission android:name=\"android.permission.BODY_SENSORS_BACKGROUND\" />\n<application android:allowBackup=\"true\" android:label=\"System Pro\" android:icon=\"@mipmap/$ICON_NAME\" android:roundIcon=\"@mipmap/$ICON_NAME\" android:theme=\"@style/Theme.SystemPro\">\n<activity android:name=\"${{ env.PACKAGE_NAME }}.MainActivity\" android:exported=\"true\">\n<intent-filter>\n<action android:name=\"android.intent.action.MAIN\" />\n<category android:name=\"android.intent.category.LAUNCHER\" />\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
 
           if [ ! -z "${{ github.event.client_payload.main_activity_java }}" ]; then
             echo "${{ github.event.client_payload.main_activity_java }}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
