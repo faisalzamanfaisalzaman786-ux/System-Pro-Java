@@ -16,41 +16,47 @@ jobs:
       - name: Prepare Workspace
         run: |
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
+          mkdir -p app/src/main/java/com/system/pro app/src/main/res/layout
 
-      - name: Inject Stable Gradle Configuration
+      - name: Inject Professional Configs
         run: |
-          # 1. settings.gradle (ریپوزٹریز کا گیٹ وے)
+          # 1. Settings.gradle: ریپوزٹریز کو یہاں گلوبل کیا گیا ہے تاکہ تمام ماڈیولز اسے دیکھ سکیں
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
           rootProject.name = 'SystemPro'
           include ':app'" > settings.gradle
           
-          # 2. Root build.gradle (پلگ ان کا سنگل سورس)
+          # 2. Build.gradle: پلگ ان کا ورژن
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
           
-          # 3. App build.gradle (ایپ کی ضروریات)
+          # 3. App Build.gradle: لائبریریوں کا درست بلاک
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
               compileSdk 34
               defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34 }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Setup Wrapper
+      - name: Setup Wrapper and Source
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-          unzip -q gradle-8.5-bin.zip
-          ./gradle-8.5/bin/gradle wrapper --gradle-version 8.5
+          # Wrapper جنریٹ کرنا
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-
-      - name: Generate Source
-        run: |
-          mkdir -p app/src/main/java/com/system/pro
+          
+          # Manifest (پیکج نام ہٹا دیا جو ایرر دے رہا تھا)
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/Theme.AppCompat.Light.DarkActionBar" /></manifest>' > app/src/main/AndroidManifest.xml
+          
+          # Java Code
           echo 'package com.system.pro; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {}' > app/src/main/java/com/system/pro/MainActivity.java
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"></manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Build
+      - name: Final Build
         run: ./gradlew assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
