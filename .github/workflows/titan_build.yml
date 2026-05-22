@@ -16,11 +16,15 @@ jobs:
       - name: Prepare Workspace
         run: |
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          mkdir -p app/src/main/java/com/system/pro app/src/main/res/layout
+          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
 
       - name: Inject Professional Configs
         run: |
-          # 1. Settings.gradle: ریپوزٹریز کو یہاں گلوبل کیا گیا ہے تاکہ تمام ماڈیولز اسے دیکھ سکیں
+          # 1. gradle.properties (سب سے اہم: AndroidX کو فعال کرنا)
+          echo "android.useAndroidX=true
+          android.enableJetifier=true" > gradle.properties
+
+          # 2. Settings.gradle
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -29,10 +33,10 @@ jobs:
           rootProject.name = 'SystemPro'
           include ':app'" > settings.gradle
           
-          # 2. Build.gradle: پلگ ان کا ورژن
+          # 3. Build.gradle
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
           
-          # 3. App Build.gradle: لائبریریوں کا درست بلاک
+          # 4. App Build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -46,14 +50,9 @@ jobs:
 
       - name: Setup Wrapper and Source
         run: |
-          # Wrapper جنریٹ کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          
-          # Manifest (پیکج نام ہٹا دیا جو ایرر دے رہا تھا)
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/Theme.AppCompat.Light.DarkActionBar" /></manifest>' > app/src/main/AndroidManifest.xml
-          
-          # Java Code
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > app/src/main/AndroidManifest.xml
           echo 'package com.system.pro; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {}' > app/src/main/java/com/system/pro/MainActivity.java
 
       - name: Final Build
