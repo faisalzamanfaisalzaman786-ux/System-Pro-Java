@@ -16,11 +16,11 @@ jobs:
       - name: Prepare Workspace
         run: |
           find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
-          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout
+          mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/layout app/src/main/res/mipmap-mdpi
 
       - name: Inject Professional Configs
         run: |
-          # 1. gradle.properties (سب سے اہم: AndroidX کو فعال کرنا)
+          # 1. gradle.properties
           echo "android.useAndroidX=true
           android.enableJetifier=true" > gradle.properties
 
@@ -48,12 +48,34 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Setup Wrapper and Source
+      - name: Setup Wrapper, Source, Launcher Icon and Manifest
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > app/src/main/AndroidManifest.xml
-          echo 'package com.system.pro; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {}' > app/src/main/java/com/system/pro/MainActivity.java
+          
+          # 1. ایپ کے لیے ایک عارضی مڈپائی آئیکن بنانا (یہاں اینڈرائیڈ کا ڈیفالٹ آئیکن جنریٹ ہوگا)
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF0000" android:pathData="M12,2L2,22h20L12,2zM12,6l6.5,13h-13L12,6z"/></vector>' > app/src/main/res/mipmap-mdpi/ic_launcher.xml
+
+          # 2. درست اینڈرائیڈ مینی فیسٹ (جس میں لانچر اور آئیکن دونوں سیٹ ہیں)
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application 
+                  android:allowBackup="true" 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+          
+          # 3. جاوا کوڈ
+          echo 'package com.system.pro; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); } }' > app/src/main/java/com/system/pro/MainActivity.java
 
       - name: Final Build
         run: ./gradlew assembleDebug --no-daemon
