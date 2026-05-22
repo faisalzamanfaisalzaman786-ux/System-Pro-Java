@@ -85,13 +85,13 @@ jobs:
             echo "${{ github.event.client_payload.layout_xml }}" > app/src/main/res/layout/activity_main.xml
           else
             cat <<-'EOF' > app/src/main/res/layout/activity_main.xml
-			<?xml version="1.0" encoding="utf-8"?>
-			<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-			    android:layout_width="match_parent"
-			    android:layout_height="match_parent"
-			    android:background="#121212">
-			</RelativeLayout>
-			EOF
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212">
+</RelativeLayout>
+EOF
           fi
 
       - name: Setup Wrapper, Master Hardware Permissions and Manifest
@@ -143,18 +143,18 @@ jobs:
             echo "${{ github.event.client_payload.main_activity_java }}" > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
           else
             cat <<-'EOF' > "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java"
-			package ${{ env.PACKAGE_NAME }};
-			import android.os.Bundle;
-			import androidx.appcompat.app.AppCompatActivity;
+package ${{ env.PACKAGE_NAME }};
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
 
-			public class MainActivity extends AppCompatActivity {
-			    @Override
-			    protected void onCreate(Bundle savedInstanceState) {
-			        super.onCreate(savedInstanceState);
-			        setContentView(R.layout.activity_main);
-			    }
-			}
-			EOF
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+    }
+}
+EOF
           fi
 
       - name: Final Build
