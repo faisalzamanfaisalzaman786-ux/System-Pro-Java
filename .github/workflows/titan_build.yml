@@ -55,7 +55,7 @@ jobs:
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
-          # Copy all values files (but later we'll filter out vectors)
+          # Copy all values files
           if [ -d "build_assets/app/src/main/res/values" ]; then
             cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
@@ -79,13 +79,13 @@ jobs:
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
 
-      - name: Fix wrong placement of vector drawables (from values to drawable)
+      - name: Fix wrong placement of drawable files (vector, shape, selector, gradient)
         run: |
-          # Move any XML containing <vector> or <path> from values/ to drawable/
+          # Move any XML containing drawable tags from values/ to drawable/
           if [ -d "app/src/main/res/values" ]; then
             for file in app/src/main/res/values/*.xml; do
-              if [ -f "$file" ] && (grep -q "<vector" "$file" || grep -q "<path" "$file"); then
-                echo "Moving vector drawable: $(basename "$file") from values to drawable"
+              if [ -f "$file" ] && (grep -q "<vector" "$file" || grep -q "<path" "$file" || grep -q "<shape" "$file" || grep -q "<selector" "$file" || grep -q "<gradient" "$file" || grep -q "<corners" "$file"); then
+                echo "Moving drawable XML: $(basename "$file") from values to drawable"
                 mv "$file" app/src/main/res/drawable/
               fi
             done
