@@ -24,7 +24,6 @@ jobs:
           rm -rf app/src/main/java app/src/main/res app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          # Sanitize package name: keep alnum, dot, underscore; replace others with dot
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
           PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
@@ -37,7 +36,6 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
           
-          # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
@@ -53,7 +51,7 @@ jobs:
           done
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      - name: Fix Java files (robust, sed only)
+      - name: Fix Java files (sed only)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -d "$TARGET_DIR" ]; then
@@ -61,33 +59,25 @@ jobs:
             exit 0
           fi
           
-          # Escape package name for sed (replace dot with \.)
-          ESCAPED_PKG=$(echo "${{ env.TARGET_PACKAGE }}" | sed 's/\./\\./g')
-          
-          # Fix package line (any package statement)
+          # Fix package line
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-          
           # Fix import R
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-          
-          # Add package line if missing
+          # Add missing package line
           for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          
-          # Fix missing semicolons (basic)
+          # Fix semicolons
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          
           # Fix button ID mismatches
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
-          
-          # Add missing imports (CameraManager, etc.)
+          # Add missing imports
           for file in $(find "$TARGET_DIR" -name "*.java"); do
             if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
               sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
@@ -100,9 +90,9 @@ jobs:
             fi
           done
 
-      - name: Ensure layout and resources
+      - name: Ensure layout and resources (fixed padding)
         run: |
-          # Create default layout if missing
+          # Create default layout with correct padding
           LAYOUT="app/src/main/res/layout/activity_main.xml"
           if [ ! -f "$LAYOUT" ]; then
             mkdir -p app/src/main/res/layout
@@ -114,11 +104,20 @@ jobs:
               android:orientation="vertical"
               android:gravity="center"
               android:padding="20dp">
-              <Button android:id="@+id/toggleButton" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="Toggle Torch" android:background="@drawable/button_background"
-                  android:textColor="@android:color/white" android:textSize="18sp" android:padding="14dp 32dp" />
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle Torch"
+                  android:background="@drawable/button_background"
+                  android:textColor="@android:color/white"
+                  android:textSize="18sp"
+                  android:padding="14dp" />
           </LinearLayout>
           EOF
+          else
+            # Fix existing layout: remove invalid padding
+            sed -i 's/android:padding="[0-9]*dp [0-9]*dp"/android:padding="14dp"/g' "$LAYOUT"
           fi
           
           # Create drawable folder and button background
@@ -127,10 +126,17 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <selector xmlns:android="http://schemas.android.com/apk/res/android">
               <item android:state_pressed="true">
-                  <shape><gradient android:startColor="#3700B3" android:endColor="#4A00E0" android:angle="45"/><corners android:radius="30dp"/></shape>
+                  <shape>
+                      <gradient android:startColor="#3700B3" android:endColor="#4A00E0" android:angle="45"/>
+                      <corners android:radius="30dp"/>
+                  </shape>
               </item>
               <item>
-                  <shape><gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/><corners android:radius="30dp"/><stroke android:width="1dp" android:color="#FFFFFF"/></shape>
+                  <shape>
+                      <gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/>
+                      <corners android:radius="30dp"/>
+                      <stroke android:width="1dp" android:color="#FFFFFF"/>
+                  </shape>
               </item>
           </selector>
           EOF
@@ -146,11 +152,20 @@ jobs:
           EOF
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><color name="colorPrimary">#6200EE</color><color name="colorPrimaryDark">#3700B3</color><color name="colorAccent">#03DAC5</color></resources>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
           EOF
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorAccent">@color/colorAccent</item></style></resources>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
           EOF
 
       - name: Copy app icon
@@ -218,7 +233,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload APK to Release (Permanent fix)
+      - name: Upload APK to Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-build
