@@ -38,11 +38,8 @@ jobs:
         run: |
           COM_DIR="build_assets/app/src/main/java/com"
           if [ -d "$COM_DIR" ]; then
-            # Loop over directories inside com/
             for d in "$COM_DIR"/*/; do
-              # Get the folder name (e.g. "systempro")
               dir_name=$(basename "$d")
-              # Current package's first segment (e.g. "systempro" from "com.systempro.torch")
               current_base=$(echo "${{ env.TARGET_PATH }}" | cut -d'/' -f1)
               if [ "$dir_name" != "$current_base" ]; then
                 echo "Removing old package folder: $dir_name"
@@ -59,28 +56,23 @@ jobs:
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          # Copy Java files from build_assets (any .java under the target path)
           if [ -d "build_assets/app/src/main/java" ]; then
             find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "$TARGET_JAVA_DIR/" \;
           fi
           
-          # Copy layout
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             mkdir -p app/src/main/res/layout
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
-          # Copy all values files
           if [ -d "build_assets/app/src/main/res/values" ]; then
             cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
           
-          # Copy drawable files
           if [ -d "build_assets/app/src/main/res/drawable" ]; then
             cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
           
-          # Copy icon
           if [ -f "build_assets/app_icon.png" ]; then
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
@@ -89,7 +81,6 @@ jobs:
             done
           fi
           
-          # Copy manifest
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
@@ -111,7 +102,6 @@ jobs:
           if [ -d "$TARGET_DIR" ]; then
             find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
             find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-            # Add package line if completely missing (should not happen)
             for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
               if ! grep -q "^package" "$file"; then
                 sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
@@ -146,23 +136,31 @@ jobs:
           EOF
           fi
 
-      - name: Fix AndroidManifest (add android:exported if missing)
+      - name: Fix AndroidManifest (robustly add android:exported)
         run: |
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            sed -i '/<activity(?!.*android:exported)/ s/<activity/<activity android:exported="true" /' app/src/main/AndroidManifest.xml
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            # Add android:exported="true" to every <activity> tag that does NOT already have it
+            sed -i '/<activity[^>]*>/ { /android:exported/! s/<activity/<activity android:exported="true" / }' "$MANIFEST"
+            echo "✅ Manifest fixed: android:exported added to activities missing it"
           else
-            cat > app/src/main/AndroidManifest.xml << EOF
+            # Create default manifest if completely missing
+            cat > "$MANIFEST" << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ env.TARGET_PACKAGE }}">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
               <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="${{ env.APP_NAME }}" android:theme="@style/AppTheme">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
+            echo "✅ Created default manifest with android:exported"
           fi
 
       - name: Setup Gradle 8.5
