@@ -78,9 +78,9 @@ jobs:
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          # Fix button ID mismatch (torch_button -> toggleButton)
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.torch_button/R.id.toggleButton/g' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.btn_torch/R.id.toggleButton/g' {} \;
+          # Fix button ID mismatch (using | as delimiter to avoid conflicts with /)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
           # Add missing imports
           for file in $(find "$TARGET_DIR" -name "*.java"); do
             if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
@@ -94,7 +94,7 @@ jobs:
             fi
           done
 
-      - name: Ensure layout has toggleButton
+      - name: Ensure layout has toggleButton (fixed sed delimiter)
         run: |
           LAYOUT="app/src/main/res/layout/activity_main.xml"
           if [ ! -f "$LAYOUT" ]; then
@@ -114,30 +114,26 @@ jobs:
           </LinearLayout>
           EOF
           else
-            # Convert torch_button to toggleButton in layout
-            sed -i 's/android:id="@+id/torch_button"/android:id="@+id/toggleButton"/g' "$LAYOUT"
-            sed -i 's/android:id="@+id/btn_torch"/android:id="@+id/toggleButton"/g' "$LAYOUT"
+            # Use '|' as delimiter to avoid issues with slashes in the pattern
+            sed -i 's|android:id="@+id/torch_button"|android:id="@+id/toggleButton"|g' "$LAYOUT"
+            sed -i 's|android:id="@+id/btn_torch"|android:id="@+id/toggleButton"|g' "$LAYOUT"
           fi
 
       # ========== IMPROVED APP ICON HANDLING ==========
       - name: Copy and validate app icon (all densities)
         run: |
-          # Create all mipmap directories
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p app/src/main/res/mipmap-$density
           done
           
-          # Check if user provided an icon
+          USE_DEFAULT_ICON=0
           if [ -f "build_assets/app_icon.png" ]; then
-            # Verify it's a valid PNG (check magic bytes)
             if file build_assets/app_icon.png | grep -q PNG; then
-              # Copy to all densities (Android will scale, but we put same image in all)
               for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
                 cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
                 cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
               echo "✅ User icon copied to all mipmap folders"
-              # Also create a smaller version for mdpi? optional, but fine.
             else
               echo "⚠️ User icon is not a valid PNG, using default"
               USE_DEFAULT_ICON=1
@@ -147,10 +143,9 @@ jobs:
             USE_DEFAULT_ICON=1
           fi
           
-          # Default icon (if needed)
           if [ "$USE_DEFAULT_ICON" = "1" ]; then
-            # Create a simple blue square icon base64
-            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzefzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/default_icon.png
+            # Simple blue square icon base64
+            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/default_icon.png
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
               cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
