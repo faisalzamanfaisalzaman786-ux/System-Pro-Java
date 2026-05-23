@@ -36,38 +36,37 @@ jobs:
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           mkdir -p output_report
 
-      - name: Clean and Copy from build_assets (with fallback)
+      - name: Clean and Copy from build_assets (with drawable fix)
         run: |
-          # Clear previous build artifacts
           rm -rf app
-          mkdir -p app/src/main/java app/src/main/res app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/java app/src/main/res app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable
           
-          # Target Java directory
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          # Copy Java files (any from build_assets)
+          # Copy Java files
           if [ -d "build_assets/app/src/main/java" ]; then
             find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "$TARGET_JAVA_DIR/" \;
           fi
           
-          # Copy layout if exists
+          # Copy layout
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             mkdir -p app/src/main/res/layout
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
-          # Copy all resource files (values, drawable)
+          # Copy all values files (but later we'll filter out vectors)
           if [ -d "build_assets/app/src/main/res/values" ]; then
             cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
+          
+          # Copy drawable files
           if [ -d "build_assets/app/src/main/res/drawable" ]; then
             cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
           
           # Copy icon
           if [ -f "build_assets/app_icon.png" ]; then
-            # Convert to multiple densities (just copy same to all for simplicity)
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
               cp -f "build_assets/app_icon.png" app/src/main/res/mipmap-$d/ic_launcher.png
@@ -75,15 +74,27 @@ jobs:
             done
           fi
           
-          # Copy manifest if exists
+          # Copy manifest
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
+          fi
+
+      - name: Fix wrong placement of vector drawables (from values to drawable)
+        run: |
+          # Move any XML containing <vector> or <path> from values/ to drawable/
+          if [ -d "app/src/main/res/values" ]; then
+            for file in app/src/main/res/values/*.xml; do
+              if [ -f "$file" ] && (grep -q "<vector" "$file" || grep -q "<path" "$file"); then
+                echo "Moving vector drawable: $(basename "$file") from values to drawable"
+                mv "$file" app/src/main/res/drawable/
+              fi
+            done
           fi
 
       - name: Auto-Heal with Python (Fix Java, Resources, Manifest)
         run: |
           cat > /tmp/auto_heal.py << 'SCRIPT'
-          import os, re, sys, xml.etree.ElementTree as ET
+          import os, re, sys
           from pathlib import Path
 
           TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.systempro.torch")
@@ -112,7 +123,7 @@ jobs:
                   content = re.sub(r'import\s+[\w.]+\.R;', imp, content)
                   if imp not in content:
                       content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{imp}")
-              # Fix missing semicolons (basic)
+              # Fix missing semicolons
               lines = content.split('\n')
               new_lines = []
               for line in lines:
@@ -121,9 +132,9 @@ jobs:
                       line = line.rstrip() + ';'
                   new_lines.append(line)
               content = '\n'.join(new_lines)
-              # Fix button IDs
+              # Button IDs
               content = re.sub(r'R\.id\.(torch_button|btn_torch)', 'R.id.toggleButton', content)
-              # Add missing imports (Camera2, Toast)
+              # Imports
               if 'CameraManager' in content and 'import android.hardware.camera2.CameraManager' not in content:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.hardware.camera2.CameraManager;")
               if 'Toast' in content and 'import android.widget.Toast' not in content:
@@ -141,7 +152,7 @@ jobs:
                   return True
               return False
 
-          # ---------- XML layout fixes ----------
+          # ---------- Layout fix ----------
           def fix_layout():
               if not os.path.exists(LAYOUT):
                   log("Layout missing, creating default")
@@ -163,7 +174,6 @@ jobs:
                   style="@style/TorchButton" />
           </LinearLayout>''')
                   return True
-              # Fix missing layout_width/height in any view
               with open(LAYOUT, 'r', encoding='utf-8') as f:
                   content = f.read()
               orig = content
@@ -176,7 +186,7 @@ jobs:
                   return True
               return False
 
-          # ---------- Manifest fixes ----------
+          # ---------- Manifest fix ----------
           def fix_manifest():
               if not os.path.exists(MANIFEST):
                   log("Manifest missing, creating default")
@@ -197,9 +207,7 @@ jobs:
               with open(MANIFEST, 'r', encoding='utf-8') as f:
                   content = f.read()
               orig = content
-              # Remove package attribute from manifest tag (if any)
               content = re.sub(r'package="[^"]*"', '', content)
-              # Ensure exported on main activity
               content = re.sub(r'<activity(?!.*android:exported)', '<activity android:exported="true"', content)
               if content != orig:
                   with open(MANIFEST, 'w', encoding='utf-8') as f:
@@ -208,16 +216,15 @@ jobs:
                   return True
               return False
 
-          # ---------- Default resources (if missing) ----------
+          # ---------- Default resources ----------
           def ensure_default_resources():
               os.makedirs(RES_VALUES, exist_ok=True)
               os.makedirs(RES_DRAWABLE, exist_ok=True)
               changed = False
               
-              # colors.xml
-              colors_path = os.path.join(RES_VALUES, 'colors.xml')
-              if not os.path.exists(colors_path):
-                  with open(colors_path, 'w', encoding='utf-8') as f:
+              colors = os.path.join(RES_VALUES, 'colors.xml')
+              if not os.path.exists(colors):
+                  with open(colors, 'w', encoding='utf-8') as f:
                       f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="background">#121212</color>
@@ -228,10 +235,9 @@ jobs:
                   log("Created default colors.xml")
                   changed = True
               
-              # styles.xml
-              styles_path = os.path.join(RES_VALUES, 'styles.xml')
-              if not os.path.exists(styles_path):
-                  with open(styles_path, 'w', encoding='utf-8') as f:
+              styles = os.path.join(RES_VALUES, 'styles.xml')
+              if not os.path.exists(styles):
+                  with open(styles, 'w', encoding='utf-8') as f:
                       f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
@@ -249,10 +255,9 @@ jobs:
                   log("Created default styles.xml")
                   changed = True
               
-              # strings.xml
-              strings_path = os.path.join(RES_VALUES, 'strings.xml')
-              if not os.path.exists(strings_path):
-                  with open(strings_path, 'w', encoding='utf-8') as f:
+              strings = os.path.join(RES_VALUES, 'strings.xml')
+              if not os.path.exists(strings):
+                  with open(strings, 'w', encoding='utf-8') as f:
                       f.write(f'''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">{os.environ.get('APP_NAME', 'Torch Pro')}</string>
@@ -260,7 +265,6 @@ jobs:
                   log("Created default strings.xml")
                   changed = True
               
-              # button_background.xml (drawable)
               btn_bg = os.path.join(RES_DRAWABLE, 'button_background.xml')
               if not os.path.exists(btn_bg):
                   with open(btn_bg, 'w', encoding='utf-8') as f:
@@ -278,7 +282,6 @@ jobs:
           def main():
               log("Starting Auto-Heal...")
               fixes = 0
-              # Fix Java files
               if os.path.exists(JAVA_DIR):
                   for root, _, files in os.walk(JAVA_DIR):
                       for f in files:
@@ -291,7 +294,7 @@ jobs:
               if fix_manifest(): fixes += 1
               if ensure_default_resources(): fixes += 1
               
-              # If no Java file at all, create a default MainActivity
+              # If no Java file at all, create default
               if not any(f.endswith('.java') for _, _, files in os.walk(JAVA_DIR) for f in files):
                   default_java = os.path.join(JAVA_DIR, "MainActivity.java")
                   os.makedirs(JAVA_DIR, exist_ok=True)
