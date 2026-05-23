@@ -33,36 +33,34 @@ jobs:
 
       - name: Clean and Copy ONLY Target Package from build_assets
         run: |
-          # 1. مکمل طور پر پرانی Java ڈائرکٹری حذف کریں
+          # حذف پرانی تمام Java فائلیں
           rm -rf app/src/main/java
           mkdir -p app/src/main/java
           
-          # 2. صرف موجودہ ٹارگٹ پیکیج کے لیے ڈھانچہ بنائیں
+          # ٹارگٹ پیکیج کے لیے ڈائریکٹری بنائیں
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          # 3. build_assets سے صرف مخصوص پیکیج فولڈر کی .java فائلیں کاپی کریں
+          # صرف مخصوص پیکیج فولڈر سے .java فائلیں کاپی کریں
           SOURCE_PKG_DIR="build_assets/app/src/main/java/com/${{ env.TARGET_PATH }}"
           if [ -d "$SOURCE_PKG_DIR" ]; then
             echo "Copying Java files from $SOURCE_PKG_DIR"
             cp -f "$SOURCE_PKG_DIR"/*.java "$TARGET_JAVA_DIR/" 2>/dev/null || true
           else
-            echo "Warning: Source package folder not found: $SOURCE_PKG_DIR"
+            echo "⚠️ Source package folder not found: $SOURCE_PKG_DIR"
           fi
           
-          # 4. کوئی اور .java فائلیں (اگر کہیں اور ہوں) نظر انداز کریں - نہ کاپی کریں
-          
-          # 5. ریسورس فولڈرز (layout, values, drawable) کو کاپی کریں
+          # ریسورس فولڈرز کاپی کریں
           if [ -d "build_assets/app/src/main/res" ]; then
             cp -rf build_assets/app/src/main/res/* app/src/main/res/ 2>/dev/null || true
           fi
           
-          # 6. AndroidManifest.xml کاپی کریں
+          # AndroidManifest.xml کاپی کریں
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
           
-          # 7. آئیکون کاپی کریں
+          # آئیکون کاپی کریں
           if [ -f "build_assets/app_icon.png" ]; then
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
@@ -131,7 +129,7 @@ jobs:
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          # غائب سیمی کولن کی بنیادی درستی
+          # سیمی کولن کی درستی
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
@@ -191,10 +189,18 @@ jobs:
           </resources>
           EOF
 
-      - name: Build AndroidManifest (if missing)
+      - name: 🔧 Auto-Fix AndroidManifest (Add android:exported)
         run: |
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat > app/src/main/AndroidManifest.xml << 'EOF'
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            # تمام activities میں android:exported شامل کریں اگر نہ ہو
+            sed -i '/<activity[^>]*>/ { /android:exported/! s/<activity/<activity android:exported="true" / }' "$MANIFEST"
+            # خاص طور پر .MainActivity کے لیے یقینی بنائیں
+            sed -i 's/<activity android:name="\.MainActivity">/<activity android:name=".MainActivity" android:exported="true">/g' "$MANIFEST"
+            echo "✅ Manifest fixed: android:exported added"
+          else
+            # اگر Manifest موجود نہ ہو تو ڈیفالٹ بنائیں
+            cat > "$MANIFEST" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -215,6 +221,7 @@ jobs:
               </application>
           </manifest>
           EOF
+            echo "✅ Default Manifest created with android:exported"
           fi
 
       - name: Setup Gradle 8.5
@@ -224,7 +231,7 @@ jobs:
 
       - name: Build APK
         run: |
-          # Gradle files already created in previous steps? We need them.
+          # Gradle فائلیں تشکیل دیں
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
@@ -264,12 +271,14 @@ jobs:
           }
           EOF
           
+          # بلڈ چلائیں
           gradle assembleDebug --no-daemon
           mkdir -p output_report
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+            echo "✅ APK built successfully"
           else
-            echo "Build failed"
+            echo "❌ Build failed"
             exit 1
           fi
 
