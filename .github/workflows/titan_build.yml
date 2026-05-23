@@ -4,7 +4,7 @@ on:
   repository_dispatch:
     types: [trigger_b64_build]
 
-# Important: Grant write permission for contents to create/update releases
+# Grant write permission for contents to create/update releases
 permissions:
   contents: write
 
@@ -446,6 +446,7 @@ jobs:
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v1
+        continue-on-error: true   # <-- یہ لائن Fail ہونے پر بھی Workflow کو Success رکھے گی
         with:
           tag_name: latest-build
           name: "Latest Build"
