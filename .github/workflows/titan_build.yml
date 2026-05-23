@@ -31,57 +31,53 @@ jobs:
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           mkdir -p output_report
 
-      - name: Clean and Copy from build_assets
+      - name: Clean and Copy ONLY Target Package from build_assets
         run: |
           # 1. مکمل طور پر پرانی Java ڈائرکٹری حذف کریں
           rm -rf app/src/main/java
           mkdir -p app/src/main/java
           
           # 2. صرف موجودہ ٹارگٹ پیکیج کے لیے ڈھانچہ بنائیں
-          mkdir -p "app/src/main/java/${{ env.TARGET_PATH }}"
-          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable app/src/main/res/mipmap-hdpi
+          TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          mkdir -p "$TARGET_JAVA_DIR"
           
-          # 3. build_assets سے Java فائلیں صرف ٹارگٹ پیکیج میں کاپی کریں
-          if [ -d "build_assets/app/src/main/java" ]; then
-            # تمام ذیلی پیکجز سے .java فائلیں ڈھونڈ کر ٹارگٹ میں ڈالیں
-            find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "app/src/main/java/${{ env.TARGET_PATH }}/" \;
+          # 3. build_assets سے صرف مخصوص پیکیج فولڈر کی .java فائلیں کاپی کریں
+          SOURCE_PKG_DIR="build_assets/app/src/main/java/com/${{ env.TARGET_PATH }}"
+          if [ -d "$SOURCE_PKG_DIR" ]; then
+            echo "Copying Java files from $SOURCE_PKG_DIR"
+            cp -f "$SOURCE_PKG_DIR"/*.java "$TARGET_JAVA_DIR/" 2>/dev/null || true
+          else
+            echo "Warning: Source package folder not found: $SOURCE_PKG_DIR"
           fi
           
-          # 4. اگر build_assets میں activity_main.xml موجود ہو تو کاپی کریں
-          if [ -f "build_assets/activity_main.xml" ]; then
-            cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
-          fi
+          # 4. کوئی اور .java فائلیں (اگر کہیں اور ہوں) نظر انداز کریں - نہ کاپی کریں
           
-          # 5. کوئی اور ریسورس فائلیں (drawable, values) کاپی کریں
+          # 5. ریسورس فولڈرز (layout, values, drawable) کو کاپی کریں
           if [ -d "build_assets/app/src/main/res" ]; then
             cp -rf build_assets/app/src/main/res/* app/src/main/res/ 2>/dev/null || true
           fi
           
-          # 6. اگر build_assets میں AndroidManifest.xml ہو تو کاپی کریں
+          # 6. AndroidManifest.xml کاپی کریں
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
+          
+          # 7. آئیکون کاپی کریں
+          if [ -f "build_assets/app_icon.png" ]; then
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p app/src/main/res/mipmap-$d
+              cp -f "build_assets/app_icon.png" "app/src/main/res/mipmap-$d/ic_launcher.png"
+              cp -f "build_assets/app_icon.png" "app/src/main/res/mipmap-$d/ic_launcher_round.png"
+            done
+          fi
 
-      - name: Consolidate Java files (remove extra packages)
+      - name: Create Default MainActivity if Missing
         run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          # کسی بھی دوسری ڈائرکٹری میں موجود .java فائلیں ہٹائیں
-          find app/src/main/java -type f -name "*.java" | while read f; do
-            if [[ "$f" != "$TARGET_DIR/"* ]]; then
-              echo "Removing extra Java file: $f"
-              rm -f "$f"
-            fi
-          done
-          # خالی ڈائرکٹریز حذف کریں
-          find app/src/main/java -type d -empty -delete 2>/dev/null || true
-
-      - name: Fix Java files (package, imports, semicolons)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ ! -d "$TARGET_DIR" ]; then
-            echo "No Java files found, creating default MainActivity"
-            mkdir -p "$TARGET_DIR"
-            cat > "$TARGET_DIR/MainActivity.java" << 'EOF'
+          TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -f "$TARGET_JAVA_DIR/MainActivity.java" ]; then
+            echo "No MainActivity found, creating default torch app"
+            mkdir -p "$TARGET_JAVA_DIR"
+            cat > "$TARGET_JAVA_DIR/MainActivity.java" << EOF
           package ${{ env.TARGET_PACKAGE }};
           import android.os.Bundle;
           import android.view.View;
@@ -116,6 +112,14 @@ jobs:
           }
           EOF
           fi
+
+      - name: Fix Java Files (Package, Imports, Semicolons)
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -d "$TARGET_DIR" ]; then
+            echo "No Java directory, skipping fixes"
+            exit 0
+          fi
           
           # پیکیج لائن درست کریں
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
@@ -127,12 +131,12 @@ jobs:
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          # غائب سیمی کولن کا سادہ حل
+          # غائب سیمی کولن کی بنیادی درستی
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          # بٹن ID کی مماثلت درست کریں
+          # بٹن ID مماثلت
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
 
@@ -160,18 +164,7 @@ jobs:
           EOF
           fi
           
-          # ڈراایبل اور دیگر ریسورسز
-          mkdir -p app/src/main/res/drawable
-          cat > app/src/main/res/drawable/button_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/>
-              <corners android:radius="30dp"/>
-              <stroke android:width="1dp" android:color="#FFFFFF"/>
-          </shape>
-          EOF
-          
-          # ویلیوز فائلیں
+          mkdir -p app/src/main/res/values
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -198,27 +191,10 @@ jobs:
           </resources>
           EOF
 
-      - name: Copy App Icon
+      - name: Build AndroidManifest (if missing)
         run: |
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p app/src/main/res/mipmap-$d; done
-          ICON=$(find build_assets -type f -name "*.png" | head -1)
-          if [ -n "$ICON" ] && file "$ICON" | grep -q "PNG image data"; then
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-          else
-            # ڈیفالٹ آئیکن (Base64 چھوٹا سا)
-            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpGmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-          fi
-
-      - name: Build AndroidManifest
-        run: |
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+            cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -239,9 +215,16 @@ jobs:
               </application>
           </manifest>
           EOF
+          fi
 
-      - name: Build Gradle files
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Build APK
         run: |
+          # Gradle files already created in previous steps? We need them.
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
@@ -280,15 +263,9 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
-      - name: Build APK
-        run: |
-          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          
+          gradle assembleDebug --no-daemon
+          mkdir -p output_report
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
           else
