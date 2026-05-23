@@ -1,172 +1,261 @@
 import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
-import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.params.StreamConfigurationMap;
-import android.media.ImageReader;
 import android.os.Bundle;
-import android.util.Size;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import java.util.ArrayList;
-import java.util.List;
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.hardware.camera2.CameraDevice.StateCallback;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.view.Surface;
-import android.view.SurfaceView;
-import android.widget.CompoundButton;
-import android.widget.Switch;
-import java.util.Arrays;
+
 public class MainActivity extends AppCompatActivity {
     private Button toggleButton;
+    private TextView display;
     private CameraManager cameraManager;
-    private String cameraId;
-    private CameraDevice cameraDevice;
-    private CaptureRequest.Builder captureRequestBuilder;
-    private CaptureRequest captureRequest;
-    private Size imageDimension;
-    private ImageReader imageReader;
-    private Handler backgroundHandler;
-    private HandlerThread backgroundThread;
+    private String[] permissions = {"android.permission.CAMERA", "android.permission.FLASHLIGHT"};
+    private boolean isTorchOn = false;
+    private String currentExpression = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         toggleButton = findViewById(R.id.toggleButton);
+        display = findViewById(R.id.display);
         cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
-        try {
-            cameraId = cameraManager.getCameraIdList()[0];
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
+        ActivityCompat.requestPermissions(this, permissions, 1);
+
         toggleButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (cameraDevice == null) {
-                    openCamera();
+                if (isTorchOn) {
+                    turnOffTorch();
                 } else {
-                    closeCamera();
+                    turnOnTorch();
                 }
             }
         });
-    }
-    private void openCamera() {
-        try {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                cameraManager.openCamera(cameraId, stateCallback, backgroundHandler);
-            } else {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA, Manifest.permission.FLASHLIGHT}, 101);
+
+        findViewById(R.id.zero).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "0";
+                display.setText(currentExpression);
             }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-    }
-    private void closeCamera() {
-        if (cameraDevice != null) {
-            cameraDevice.close();
-            cameraDevice = null;
-        }
-    }
-    private StateCallback stateCallback = new StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice camera) {
-            cameraDevice = camera;
-            createCameraPreview();
-        }
-        @Override
-        public void onDisconnected(@NonNull CameraDevice camera) {
-            cameraDevice = null;
-        }
-        @Override
-        public void onError(@NonNull CameraDevice camera, int error) {
-            cameraDevice = null;
-        }
-    };
-    private void createCameraPreview() {
-        try {
-            SurfaceTexture texture = new SurfaceTexture(0);
-            assert cameraDevice != null;
-            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            Size largest = null;
-            int maxArea = 0;
-            for (Size s : getCameraCharacteristics(cameraId).get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(SurfaceTexture.class)) {
-                if (s.getWidth() * s.getHeight() > maxArea) {
-                    maxArea = s.getWidth() * s.getHeight();
-                    largest = s;
+        });
+
+        findViewById(R.id.one).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "1";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.two).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "2";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.three).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "3";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.four).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "4";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.five).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "5";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.six).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "6";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.seven).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "7";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.eight).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "8";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.nine).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "9";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.plus).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "+";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.minus).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "-";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.multiply).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "*";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.divide).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression += "/";
+                display.setText(currentExpression);
+            }
+        });
+
+        findViewById(R.id.equals).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    double result = eval(currentExpression);
+                    display.setText(String.valueOf(result));
+                    currentExpression = String.valueOf(result);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Invalid expression", Toast.LENGTH_SHORT).show();
                 }
             }
-            imageDimension = largest;
-            imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 1);
-            imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
-                @Override
-                public void onImageAvailable(ImageReader reader) {
-                    // Get the image
+        });
+
+        findViewById(R.id.clear).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                currentExpression = "";
+                display.setText(currentExpression);
+            }
+        });
+    }
+
+    private double eval(final String str) {
+        return new Object() {
+            int pos = -1, ch;
+
+            void nextChar() {
+                ch = (++pos < str.length()) ? str.charAt(pos) : -1;
+            }
+
+            boolean eat(int charToEat) {
+                while (ch == ' ') nextChar();
+                if (ch == charToEat) {
+                    nextChar();
+                    return true;
                 }
-            }, backgroundHandler);
-            final ArrayList<Surface> outputSurfaces = new ArrayList<Surface>(2);
-            outputSurfaces.add(new Surface(texture));
-            outputSurfaces.add(imageReader.getSurface());
-            captureRequestBuilder.addTarget(new Surface(texture));
-            cameraDevice.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
-                @Override
-                public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    if (null == cameraDevice) {
-                        return;
-                    }
-                    captureRequest = captureRequestBuilder.build();
-                    try {
-                        cameraCaptureSession.setRepeatingRequest(captureRequest, null, backgroundHandler);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
+                return false;
+            }
+
+            double parse() {
+                nextChar();
+                double x = parseExpression();
+                if (pos < str.length()) throw new RuntimeException("Unexpected: " + (char)ch);
+                return x;
+            }
+
+            double parseExpression() {
+                double x = parseTerm();
+                for (;;) {
+                    if      (eat('+')) x += parseTerm(); // addition
+                    else if (eat('-')) x -= parseTerm(); // subtraction
+                    else return x;
                 }
-                @Override
-                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    Toast.makeText(MainActivity.this, "Configuration change", Toast.LENGTH_SHORT).show();
+            }
+
+            double parseTerm() {
+                double x = parseFactor();
+                for (;;) {
+                    if      (eat('*')) x *= parseFactor(); // multiplication
+                    else if (eat('/')) x /= parseFactor(); // division
+                    else return x;
                 }
-            }, backgroundHandler);
+            }
+
+            double parseFactor() {
+                if (eat('+')) return parseFactor(); // unary plus
+                if (eat('-')) return -parseFactor(); // unary minus
+
+                double x;
+                int startPos = this.pos;
+                if (eat('(')) { // parentheses
+                    x = parseExpression();
+                    eat(')');
+                } else if ((ch >= '0' && ch <= '9') || ch == '.') { // numbers
+                    while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
+                    x = Double.parseDouble(str.substring(startPos, this.pos));
+                } else if (ch >= 'a' && ch <= 'z') { // functions
+                    while (ch >= 'a' && ch <= 'z') nextChar();
+                    String func = str.substring(startPos, this.pos);
+                    x = parseFactor();
+                    if (func.equals("sqrt")) x = Math.sqrt(x);
+                } else {
+                    throw new RuntimeException("Unexpected: " + (char)ch);
+                }
+
+                return x;
+            }
+        }.parse();
+    }
+
+    private void turnOnTorch() {
+        try {
+            String cameraId = null;
+            cameraId = cameraManager.getCameraIdList()[0];
+            cameraManager.setTorchMode(cameraId, true);
+            isTorchOn = true;
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
-    private CameraCharacteristics getCameraCharacteristics(String cameraId) {
+
+    private void turnOffTorch() {
         try {
-            return cameraManager.getCameraCharacteristics(cameraId);
+            String cameraId = null;
+            cameraId = cameraManager.getCameraIdList()[0];
+            cameraManager.setTorchMode(cameraId, false);
+            isTorchOn = false;
         } catch (CameraAccessException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    @Override
-    protected void onResume() {
-        super.onResume();
-        startBackgroundThread();
-    }
-    @Override
-    protected void onPause() {
-        stopBackgroundThread();
-        super.onPause();
-    }
-    private void startBackgroundThread() {
-        backgroundThread = new HandlerThread("Camera Background");
-        backgroundThread.start();
-        backgroundHandler = new Handler(backgroundThread.getLooper());
-    }
-    private void stopBackgroundThread() {
-        backgroundThread.quitSafely();
-        try {
-            backgroundThread.join();
-            backgroundThread = null;
-            backgroundHandler = null;
-        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
