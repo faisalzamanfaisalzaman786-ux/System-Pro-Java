@@ -18,7 +18,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Copy Java and Manifest from build_assets
+      - name: Copy from build_assets
         run: |
           mkdir -p output_report
           rm -rf app/src/main/java app/src/main/res app/build
@@ -36,22 +36,14 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          # Copy Java files (all, including those in subfolders)
-          if [ -d "build_assets/app/src/main/java" ]; then
-            cp -rf build_assets/app/src/main/java/* app/src/main/java/
-          fi
-          # Also look for any .java in build_assets root or deeper
+          # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           
-          # Copy XML layout if provided
-          if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
-            mkdir -p app/src/main/res/layout
+          # Copy layout if exists
+          if [ -f "build_assets/activity_main.xml" ]; then
+            cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
+          elif [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/activity_main.xml
-          fi
-          
-          # Copy AndroidManifest if provided (we will overwrite later)
-          if [ -f "build_assets/AndroidManifest.xml" ]; then
-            cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml.user
           fi
           
           # Copy icon
@@ -60,29 +52,68 @@ jobs:
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      # ========== CONSOLIDATE ALL JAVA FILES INTO TARGET PACKAGE ==========
       - name: Consolidate all Java files into target package
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          echo "Moving all Java files to $TARGET_DIR"
           find app/src/main/java -type f -name "*.java" | while read f; do
             if [[ "$f" != *"/${{ env.TARGET_PATH }}/"* ]]; then
-              filename=$(basename "$f")
-              mv "$f" "$TARGET_DIR/$filename"
-              echo "Moved $filename to $TARGET_DIR"
+              mv "$f" "$TARGET_DIR/$(basename "$f")"
             fi
           done
-          # Remove empty directories
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      - name: Run static fixer (fixes package, imports, semicolons)
-        run: python3 static_fixer.py
-
-      - name: Create default resources (fallback)
+      - name: Fix Java files (package, import R, semicolons, and button ID)
         run: |
-          # Layout if not provided
-          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ ! -d "$TARGET_DIR" ]; then
+            echo "No Java files found"
+            exit 0
+          fi
+          
+          # 1. Fix package name
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/^package .*;/package ${{ env.TARGET_PACKAGE }};/g' {} \;
+          
+          # 2. Fix import R
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g' {} \;
+          
+          # 3. Add missing package line if absent
+          for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+            if ! grep -q "^package" "$file"; then
+              sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
+            fi
+          done
+          
+          # 4. Fix missing semicolons (simple)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
+          
+          # 5. FIX BUTTON ID MISMATCH: replace torch_button with toggleButton
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.torch_button/R.id.toggleButton/g' {} \;
+          # Also replace any other common variants
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.btn_torch/R.id.toggleButton/g' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.torch_btn/R.id.toggleButton/g' {} \;
+          
+          # 6. Add missing imports for Camera2 and Toast
+          for file in $(find "$TARGET_DIR" -name "*.java"); do
+            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
+              sed -i '/^package .*/a import android.hardware.camera2.CameraManager;' "$file"
+            fi
+            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
+              sed -i '/^package .*/a import android.hardware.camera2.CameraCharacteristics;' "$file"
+            fi
+            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
+              sed -i '/^package .*/a import android.widget.Toast;' "$file"
+            fi
+          done
+
+      - name: Ensure layout has toggleButton (fix ID if missing)
+        run: |
+          LAYOUT="app/src/main/res/layout/activity_main.xml"
+          if [ ! -f "$LAYOUT" ]; then
+            mkdir -p app/src/main/res/layout
+            cat > "$LAYOUT" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -96,8 +127,18 @@ jobs:
                   android:text="Toggle Torch" />
           </LinearLayout>
           EOF
+          else
+            # If layout exists but button ID is torch_button, rename it
+            if grep -q 'android:id="@+id/torch_button"' "$LAYOUT"; then
+              sed -i 's/android:id="@+id/torch_button"/android:id="@+id/toggleButton"/g' "$LAYOUT"
+            fi
+            if grep -q 'android:id="@+id/btn_torch"' "$LAYOUT"; then
+              sed -i 's/android:id="@+id/btn_torch"/android:id="@+id/toggleButton"/g' "$LAYOUT"
+            fi
           fi
-          
+
+      - name: Create default resources (strings, colors, styles)
+        run: |
           # Strings
           cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -144,7 +185,7 @@ jobs:
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      - name: Build AndroidManifest
+      - name: Build AndroidManifest (clean)
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
