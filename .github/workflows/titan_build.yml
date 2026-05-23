@@ -52,6 +52,7 @@ jobs:
               mv "$f" "$TARGET_DIR/$(basename "$f")"
             fi
           done
+          find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
       - name: Fix Java files
         run: |
@@ -90,58 +91,33 @@ jobs:
           EOF
           else
             sed -i 's|android:id="@+id/torch_button"|android:id="@+id/toggleButton"|g' "$LAYOUT"
+            sed -i 's|android:id="@+id/btn_torch"|android:id="@+id/toggleButton"|g' "$LAYOUT"
           fi
 
-      # ========== DEBUG AND COPY APP ICON ==========
-      - name: Copy app icon (debug and copy any PNG)
+      - name: Copy app icon
         run: |
-          echo "=== Contents of build_assets (showing first 20 lines) ==="
-          find build_assets -type f | head -20 || true
-          echo "========================================================"
-          
-          # Create mipmap folders
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p app/src/main/res/mipmap-$d
           done
           
-          # Find any PNG file anywhere under build_assets
           ICON_FILE=$(find build_assets -type f -name "*.png" | head -1)
-          
-          if [ -n "$ICON_FILE" ]; then
-            echo "Found PNG file: $ICON_FILE"
-            # Check if it's a valid PNG
-            if file "$ICON_FILE" | grep -q "PNG image data"; then
-              echo "✅ Valid PNG detected"
-              for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-                cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher.png
-                cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher_round.png
-              done
-              echo "✅ Icon copied to all mipmap folders"
-            else
-              echo "❌ File is not a valid PNG: $ICON_FILE"
-              echo "File type: $(file "$ICON_FILE")"
-              # Fallback to default
-              USE_DEFAULT=1
-            fi
-          else
-            echo "❌ No PNG file found in build_assets"
-            USE_DEFAULT=1
-          fi
-          
-          if [ "$USE_DEFAULT" = "1" ]; then
-            echo "Creating default icon"
-            # Simple blue gradient icon (base64)
-            cat > /tmp/default_icon.png.b64 << 'B64'
-iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=
-B64
-            base64 -d /tmp/default_icon.png.b64 > /tmp/default_icon.png
+          if [ -n "$ICON_FILE" ] && file "$ICON_FILE" | grep -q "PNG image data"; then
+            echo "✅ Using user icon: $ICON_FILE"
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f /tmp/default_icon.png app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f /tmp/default_icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
+              cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher_round.png
+            done
+          else
+            echo "⚠️ No valid PNG icon, creating default icon"
+            # Single-line base64 without heredoc
+            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
             done
           fi
 
-      - name: Create resources (strings, colors, styles, drawables)
+      - name: Create resources
         run: |
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -165,7 +141,7 @@ B64
           <shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="@color/colorPrimary"/><corners android:radius="8dp"/></shape>
           EOF
 
-      - name: Build AndroidManifest (all permissions)
+      - name: Build AndroidManifest
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
