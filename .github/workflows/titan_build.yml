@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [trigger_b64_build]
 
+# Important: Grant write permission for contents to create/update releases
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -121,14 +125,12 @@ jobs:
               # Remove references to iv_torch (ImageView) because layout has no such view
               content = re.sub(r'\s*torchIcon\s*=\s*findViewById\(R\.id\.iv_torch\);', '', content)
               content = re.sub(r'\s*torchIcon\.setImageResource\([^;]+\);', '', content)
-              # Remove torchIcon declaration if present
               content = re.sub(r'private\s+ImageView\s+torchIcon;', '', content)
-              # Remove any usage of torchIcon
               content = re.sub(r'torchIcon\.', '', content)
               # Ensure the toggleButton variable is declared
               if 'private Button toggleButton;' not in content:
                   content = content.replace('public class MainActivity', 'public class MainActivity {\n    private Button toggleButton;')
-              # Add missing imports if needed
+              # Add missing imports
               if 'CameraManager' in content and 'import android.hardware.camera2.CameraManager' not in content:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.hardware.camera2.CameraManager;")
               if 'Toast' in content and 'import android.widget.Toast' not in content:
@@ -139,7 +141,7 @@ jobs:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport androidx.core.content.ContextCompat;")
               if 'Manifest' in content and 'import android.Manifest' not in content:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.Manifest;")
-              # Fix missing semicolons (simple)
+              # Fix missing semicolons
               lines = content.split('\n')
               new_lines = []
               for line in lines:
@@ -189,11 +191,8 @@ jobs:
               if 'android:id="@+id/toggleButton"' not in content and 'android:id="@+id/btn_toggle"' in content:
                   content = content.replace('btn_toggle', 'toggleButton')
               if 'android:id="@+id/toggleButton"' not in content:
-                  # Insert a standard button
                   content = default_layout
-              # Remove ImageView if present
               content = re.sub(r'<ImageView[^>]*/>', '', content)
-              # Fix padding
               content = re.sub(r'android:padding="[^"]*14dp\s+32dp[^"]*"', 'android:padding="14dp"', content)
               if content != orig:
                   with open(LAYOUT, 'w', encoding='utf-8') as f:
@@ -253,7 +252,6 @@ jobs:
               else:
                   with open(colors_path, 'r', encoding='utf-8') as f:
                       content = f.read()
-                  # Strip after </resources>
                   end = content.find('</resources>')
                   if end != -1:
                       content = content[:end + len('</resources>')]
@@ -446,9 +444,8 @@ jobs:
           name: System-Pro-V2-Final
           path: output_report/app-debug.apk
 
-      - name: Upload to Release (if tag exists)
+      - name: Upload APK to Release
         uses: softprops/action-gh-release@v1
-        if: github.ref_type == 'tag' || github.event_name == 'repository_dispatch'
         with:
           tag_name: latest-build
           name: "Latest Build"
