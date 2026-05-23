@@ -39,7 +39,7 @@ jobs:
           # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           
-          # Copy layout if exists
+          # Copy layout if exists (we'll override later anyway)
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
           fi
@@ -62,33 +62,24 @@ jobs:
             exit 0
           fi
           
-          # Show what files we have
-          echo "Java files in $TARGET_DIR:"
-          find "$TARGET_DIR" -type f -name "*.java" | head -10
-          
-          # Fix package name (using perl for more reliable regex)
+          # Fix package name
           find "$TARGET_DIR" -type f -name "*.java" -exec perl -pi -e 's/^package\s+[\w.]+;/package $ENV{TARGET_PACKAGE};/' {} \;
-          
           # Fix import R
           find "$TARGET_DIR" -type f -name "*.java" -exec perl -pi -e 's/import\s+[\w.]+\.R;/import $ENV{TARGET_PACKAGE}.R;/' {} \;
-          
           # Add package line if missing
           for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          
-          # Fix missing semicolons (basic)
+          # Fix basic syntax
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          
-          # Fix button ID mismatches
+          # Button ID fix
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
-          
           # Add missing imports
           for file in $(find "$TARGET_DIR" -name "*.java"); do
             if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
@@ -102,32 +93,42 @@ jobs:
             fi
           done
 
-      - name: Ensure layout has toggleButton
+      - name: Ensure layout has toggleButton (with modern styling)
         run: |
           LAYOUT="app/src/main/res/layout/activity_main.xml"
-          if [ ! -f "$LAYOUT" ]; then
-            mkdir -p app/src/main/res/layout
-            cat > "$LAYOUT" << 'EOF'
+          mkdir -p app/src/main/res/layout
+          cat > "$LAYOUT" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:gravity="center">
-              <Button android:id="@+id/toggleButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Toggle Torch" />
+              android:gravity="center"
+              android:padding="20dp"
+              android:background="#02040c">
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle Torch"
+                  android:background="@drawable/button_background"
+                  android:textColor="@android:color/white"
+                  android:textSize="18sp"
+                  android:fontFamily="sans-serif-medium"
+                  android:paddingLeft="32dp"
+                  android:paddingRight="32dp"
+                  android:paddingTop="14dp"
+                  android:paddingBottom="14dp"
+                  android:minWidth="200dp"
+                  android:elevation="4dp" />
           </LinearLayout>
           EOF
-          else
-            sed -i 's|android:id="@+id/torch_button"|android:id="@+id/toggleButton"|g' "$LAYOUT"
-            sed -i 's|android:id="@+id/btn_torch"|android:id="@+id/toggleButton"|g' "$LAYOUT"
-          fi
 
       - name: Copy app icon
         run: |
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p app/src/main/res/mipmap-$d
           done
-          
           ICON_FILE=$(find build_assets -type f -name "*.png" | head -1)
           if [ -n "$ICON_FILE" ] && file "$ICON_FILE" | grep -q "PNG image data"; then
             echo "✅ Using user icon: $ICON_FILE"
@@ -144,8 +145,9 @@ jobs:
             done
           fi
 
-      - name: Create resources
+      - name: Create resources (modern button drawable)
         run: |
+          # Strings
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -154,18 +156,60 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
+          
+          # Colors
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><color name="colorPrimary">#6200EE</color><color name="colorAccent">#03DAC5</color></resources>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+              <color name="button_normal">#6200EE</color>
+              <color name="button_pressed">#3700B3</color>
+          </resources>
           EOF
+          
+          # Styles
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorAccent">@color/colorAccent</item></style></resources>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
           EOF
+          
+          # Drawable folder
           mkdir -p app/src/main/res/drawable
+          
+          # Modern gradient button background
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="@color/colorPrimary"/><corners android:radius="8dp"/></shape>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_pressed="true">
+                  <shape android:shape="rectangle">
+                      <gradient android:startColor="@color/button_pressed" android:endColor="#4A00E0" android:angle="45"/>
+                      <corners android:radius="30dp"/>
+                  </shape>
+              </item>
+              <item>
+                  <shape android:shape="rectangle">
+                      <gradient android:startColor="@color/button_normal" android:endColor="#8E2DE2" android:angle="45"/>
+                      <corners android:radius="30dp"/>
+                      <stroke android:width="1dp" android:color="#FFFFFF" />
+                  </shape>
+              </item>
+          </selector>
+          EOF
+          
+          # Edittext background (optional)
+          cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#1AFFFFFF"/>
+              <corners android:radius="8dp"/>
+          </shape>
           EOF
 
       - name: Build AndroidManifest
