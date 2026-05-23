@@ -18,6 +18,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Prepare Package Name
         id: pkg
         run: |
@@ -31,137 +36,334 @@ jobs:
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           mkdir -p output_report
 
-      - name: Clean and Copy from build_assets (with resources)
+      - name: Clean and Copy from build_assets (with fallback)
         run: |
-          # پُرانی تمام فائلیں ہٹائیں
-          rm -rf app/src/main/java app/src/main/res app/src/main/AndroidManifest.xml 2>/dev/null || true
-          mkdir -p app/src/main/java app/src/main/res app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable app/src/main/res/mipmap-hdpi
+          # Clear previous build artifacts
+          rm -rf app
+          mkdir -p app/src/main/java app/src/main/res app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable app/src/main/res/mipmap-hdpi
           
-          # پیکیج کے لیے ڈائریکٹری بنائیں
+          # Target Java directory
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          # Java فائلیں کاپی کریں (اگر موجود ہوں)
+          # Copy Java files (any from build_assets)
           if [ -d "build_assets/app/src/main/java" ]; then
             find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "$TARGET_JAVA_DIR/" \;
           fi
           
-          # لے آؤٹ کاپی کریں
+          # Copy layout if exists
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
-            cp -f build_assets/app/src/main/res/layout/activity_main.xml app/src/main/res/layout/
+            mkdir -p app/src/main/res/layout
+            cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
-          # تمام ویلیوز فائلیں (colors, styles, themes, dimens, strings) کاپی کریں
+          # Copy all resource files (values, drawable)
           if [ -d "build_assets/app/src/main/res/values" ]; then
-            cp -f build_assets/app/src/main/res/values/*.xml app/src/main/res/values/ 2>/dev/null || true
+            cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
-          
-          # ڈراایبل فائلیں (button_gradient, icons) کاپی کریں
           if [ -d "build_assets/app/src/main/res/drawable" ]; then
-            cp -f build_assets/app/src/main/res/drawable/*.xml app/src/main/res/drawable/ 2>/dev/null || true
+            cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
           
-          # آئیکون (اگر build_assets میں ہو)
+          # Copy icon
           if [ -f "build_assets/app_icon.png" ]; then
+            # Convert to multiple densities (just copy same to all for simplicity)
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
-              cp -f build_assets/app_icon.png app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f build_assets/app_icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
+              cp -f "build_assets/app_icon.png" app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f "build_assets/app_icon.png" app/src/main/res/mipmap-$d/ic_launcher_round.png
             done
           fi
           
-          # مینی فیسٹ کاپی کریں
+          # Copy manifest if exists
           if [ -f "build_assets/AndroidManifest.xml" ]; then
-            cp -f build_assets/AndroidManifest.xml app/src/main/
+            cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
-          
-          # اگر کوئی Java فائل نہ ملے تو ڈیفالٹ بنا دیں
-          if [ ! -f "$TARGET_JAVA_DIR/MainActivity.java" ]; then
-            cat > "$TARGET_JAVA_DIR/MainActivity.java" << 'EOF'
-          package ${{ env.TARGET_PACKAGE }};
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.Toast;
-          import androidx.appcompat.app.AppCompatActivity;
-          import android.hardware.camera2.CameraManager;
-          public class MainActivity extends AppCompatActivity {
-              private Button toggleButton;
-              private CameraManager cameraManager;
-              private boolean isTorchOn = false;
-              @Override protected void onCreate(Bundle b) {
-                  super.onCreate(b);
-                  setContentView(R.layout.activity_main);
-                  toggleButton = findViewById(R.id.btn_toggle);
-                  cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
-                  toggleButton.setOnClickListener(v -> {
-                      try { String id = cameraManager.getCameraIdList()[0];
-                          isTorchOn = !isTorchOn;
-                          cameraManager.setTorchMode(id, isTorchOn);
-                          Toast.makeText(MainActivity.this, isTorchOn ? "ON" : "OFF", Toast.LENGTH_SHORT).show();
-                      } catch (Exception e) { Toast.makeText(MainActivity.this, "Error", Toast.LENGTH_SHORT).show(); }
-                  });
-              }
-          }
-          EOF
-          fi
-          
-          # اگر مینی فیسٹ نہ ملے تو ڈیفالٹ
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ env.TARGET_PACKAGE }}">
+
+      - name: Auto-Heal with Python (Fix Java, Resources, Manifest)
+        run: |
+          cat > /tmp/auto_heal.py << 'SCRIPT'
+          import os, re, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          TARGET_PACKAGE = os.environ.get("TARGET_PACKAGE", "com.systempro.torch")
+          JAVA_DIR = f"app/src/main/java/{TARGET_PACKAGE.replace('.', '/')}"
+          MANIFEST = "app/src/main/AndroidManifest.xml"
+          RES_VALUES = "app/src/main/res/values"
+          RES_DRAWABLE = "app/src/main/res/drawable"
+          LAYOUT = "app/src/main/res/layout/activity_main.xml"
+
+          def log(msg): print(f"[AUTO-HEAL] {msg}")
+
+          # ---------- Java Fixes ----------
+          def fix_java_file(path):
+              if not os.path.exists(path): return False
+              with open(path, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              orig = content
+              # Fix package
+              if re.search(r'^\s*package\s+[\w.]+;', content, re.M):
+                  content = re.sub(r'^\s*package\s+[\w.]+;', f'package {TARGET_PACKAGE};', content, flags=re.M)
+              else:
+                  content = f"package {TARGET_PACKAGE};\n" + content
+              # Fix import R
+              imp = f"import {TARGET_PACKAGE}.R;"
+              if imp not in content:
+                  content = re.sub(r'import\s+[\w.]+\.R;', imp, content)
+                  if imp not in content:
+                      content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{imp}")
+              # Fix missing semicolons (basic)
+              lines = content.split('\n')
+              new_lines = []
+              for line in lines:
+                  stripped = line.strip()
+                  if stripped and not stripped.endswith(('{', '}', ';', ':', '/', '*')) and not stripped.startswith(('@', 'import', 'package', 'public', 'private', 'protected', 'class', 'interface', 'enum', 'if', 'else', 'for', 'while', 'return', '//', '/*')):
+                      line = line.rstrip() + ';'
+                  new_lines.append(line)
+              content = '\n'.join(new_lines)
+              # Fix button IDs
+              content = re.sub(r'R\.id\.(torch_button|btn_torch)', 'R.id.toggleButton', content)
+              # Add missing imports (Camera2, Toast)
+              if 'CameraManager' in content and 'import android.hardware.camera2.CameraManager' not in content:
+                  content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.hardware.camera2.CameraManager;")
+              if 'Toast' in content and 'import android.widget.Toast' not in content:
+                  content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.widget.Toast;")
+              if 'ActivityCompat' in content and 'import androidx.core.app.ActivityCompat' not in content:
+                  content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport androidx.core.app.ActivityCompat;")
+              if 'ContextCompat' in content and 'import androidx.core.content.ContextCompat' not in content:
+                  content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport androidx.core.content.ContextCompat;")
+              if 'Manifest' in content and 'import android.Manifest' not in content:
+                  content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.Manifest;")
+              if content != orig:
+                  with open(path, 'w', encoding='utf-8') as f:
+                      f.write(content)
+                  log(f"Fixed Java: {path}")
+                  return True
+              return False
+
+          # ---------- XML layout fixes ----------
+          def fix_layout():
+              if not os.path.exists(LAYOUT):
+                  log("Layout missing, creating default")
+                  os.makedirs(os.path.dirname(LAYOUT), exist_ok=True)
+                  with open(LAYOUT, 'w', encoding='utf-8') as f:
+                      f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="20dp"
+              android:background="@color/background">
+              <Button
+                  android:id="@+id/toggleButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Toggle Torch"
+                  style="@style/TorchButton" />
+          </LinearLayout>''')
+                  return True
+              # Fix missing layout_width/height in any view
+              with open(LAYOUT, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              orig = content
+              if 'android:layout_width' not in content and 'layout_width' not in content:
+                  content = content.replace('<Button', '<Button android:layout_width="wrap_content" android:layout_height="wrap_content"')
+              if content != orig:
+                  with open(LAYOUT, 'w', encoding='utf-8') as f:
+                      f.write(content)
+                  log("Fixed layout dimensions")
+                  return True
+              return False
+
+          # ---------- Manifest fixes ----------
+          def fix_manifest():
+              if not os.path.exists(MANIFEST):
+                  log("Manifest missing, creating default")
+                  os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
+                  with open(MANIFEST, 'w', encoding='utf-8') as f:
+                      f.write(f'''<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{TARGET_PACKAGE}">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <uses-permission android:name="android.permission.INTERNET" />
               <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="Torch" android:theme="@style/AppTheme">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
                   </activity>
               </application>
-          </manifest>
-          EOF
-          fi
-          
-          # اگر لے آؤٹ نہ ملے تو ڈیفالٹ
-          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
-            mkdir -p app/src/main/res/layout
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:gravity="center" android:orientation="vertical" android:padding="24dp">
-              <Button android:id="@+id/btn_toggle" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="Toggle Torch" style="@style/TorchButton"/>
-          </LinearLayout>
-          EOF
-          fi
+          </manifest>''')
+                  return True
+              with open(MANIFEST, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              orig = content
+              # Remove package attribute from manifest tag (if any)
+              content = re.sub(r'package="[^"]*"', '', content)
+              # Ensure exported on main activity
+              content = re.sub(r'<activity(?!.*android:exported)', '<activity android:exported="true"', content)
+              if content != orig:
+                  with open(MANIFEST, 'w', encoding='utf-8') as f:
+                      f.write(content)
+                  log("Fixed manifest")
+                  return True
+              return False
 
-      - name: Fix Java Files (Package, Imports)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-          fi
+          # ---------- Default resources (if missing) ----------
+          def ensure_default_resources():
+              os.makedirs(RES_VALUES, exist_ok=True)
+              os.makedirs(RES_DRAWABLE, exist_ok=True)
+              changed = False
+              
+              # colors.xml
+              colors_path = os.path.join(RES_VALUES, 'colors.xml')
+              if not os.path.exists(colors_path):
+                  with open(colors_path, 'w', encoding='utf-8') as f:
+                      f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="background">#121212</color>
+              <color name="buttonBg">#00FFCC</color>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>''')
+                  log("Created default colors.xml")
+                  changed = True
+              
+              # styles.xml
+              styles_path = os.path.join(RES_VALUES, 'styles.xml')
+              if not os.path.exists(styles_path):
+                  with open(styles_path, 'w', encoding='utf-8') as f:
+                      f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="android:windowBackground">@color/background</item>
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+              <style name="TorchButton" parent="Widget.AppCompat.Button">
+                  <item name="android:backgroundTint">@color/buttonBg</item>
+                  <item name="android:textSize">20sp</item>
+                  <item name="android:textColor">@android:color/white</item>
+                  <item name="android:padding">14dp</item>
+              </style>
+          </resources>''')
+                  log("Created default styles.xml")
+                  changed = True
+              
+              # strings.xml
+              strings_path = os.path.join(RES_VALUES, 'strings.xml')
+              if not os.path.exists(strings_path):
+                  with open(strings_path, 'w', encoding='utf-8') as f:
+                      f.write(f'''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">{os.environ.get('APP_NAME', 'Torch Pro')}</string>
+          </resources>''')
+                  log("Created default strings.xml")
+                  changed = True
+              
+              # button_background.xml (drawable)
+              btn_bg = os.path.join(RES_DRAWABLE, 'button_background.xml')
+              if not os.path.exists(btn_bg):
+                  with open(btn_bg, 'w', encoding='utf-8') as f:
+                      f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <gradient android:startColor="#00FFCC" android:endColor="#A855F7" android:angle="45"/>
+              <corners android:radius="40dp"/>
+          </shape>''')
+                  log("Created default button_background.xml")
+                  changed = True
+              
+              return changed
+
+          # ---------- Main ----------
+          def main():
+              log("Starting Auto-Heal...")
+              fixes = 0
+              # Fix Java files
+              if os.path.exists(JAVA_DIR):
+                  for root, _, files in os.walk(JAVA_DIR):
+                      for f in files:
+                          if f.endswith('.java') and fix_java_file(os.path.join(root, f)):
+                              fixes += 1
+              else:
+                  log(f"Java dir not found: {JAVA_DIR}")
+              
+              if fix_layout(): fixes += 1
+              if fix_manifest(): fixes += 1
+              if ensure_default_resources(): fixes += 1
+              
+              # If no Java file at all, create a default MainActivity
+              if not any(f.endswith('.java') for _, _, files in os.walk(JAVA_DIR) for f in files):
+                  default_java = os.path.join(JAVA_DIR, "MainActivity.java")
+                  os.makedirs(JAVA_DIR, exist_ok=True)
+                  with open(default_java, 'w', encoding='utf-8') as f:
+                      f.write(f'''package {TARGET_PACKAGE};
+          import android.os.Bundle;
+          import android.widget.Button;
+          import android.widget.Toast;
+          import androidx.appcompat.app.AppCompatActivity;
+          import android.hardware.camera2.CameraManager;
+          public class MainActivity extends AppCompatActivity {{
+              private Button toggleButton;
+              private CameraManager cameraManager;
+              private boolean isTorchOn = false;
+              @Override protected void onCreate(Bundle b) {{
+                  super.onCreate(b);
+                  setContentView(R.layout.activity_main);
+                  toggleButton = findViewById(R.id.toggleButton);
+                  cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+                  toggleButton.setOnClickListener(v -> {{
+                      try {{
+                          String id = cameraManager.getCameraIdList()[0];
+                          isTorchOn = !isTorchOn;
+                          cameraManager.setTorchMode(id, isTorchOn);
+                          Toast.makeText(MainActivity.this, isTorchOn ? "ON" : "OFF", Toast.LENGTH_SHORT).show();
+                      }} catch (Exception e) {{
+                          Toast.makeText(MainActivity.this, "Error", Toast.LENGTH_SHORT).show();
+                      }}
+                  }});
+              }}
+          }}''')
+                  log("Created default MainActivity.java")
+                  fixes += 1
+              
+              log(f"Auto-Heal completed. {fixes} fixes applied.")
+              sys.exit(0)
+
+          if __name__ == "__main__":
+              main()
+          SCRIPT
+          
+          export TARGET_PACKAGE="${{ env.TARGET_PACKAGE }}"
+          export APP_NAME="${{ env.APP_NAME }}"
+          python3 /tmp/auto_heal.py
 
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
 
-      - name: Build APK
+      - name: Build Gradle files
         run: |
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
           EOF
+          
           cat > settings.gradle << 'EOF'
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
           rootProject.name = 'SystemPro'
           include ':app'
           EOF
+          
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          
           cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
@@ -174,26 +376,43 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
           EOF
+
+      - name: Build APK
+        run: |
           gradle assembleDebug --no-daemon
           mkdir -p output_report
-          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+            echo "✅ APK built successfully"
+          else
+            echo "❌ Build failed"
+            exit 1
+          fi
 
-      - name: Upload APK to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest-build
-          name: "Latest Build"
-          files: output_report/app-debug.apk
-          prerelease: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload artifact
+      - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: System-Pro-V2-Final
-          path: output_report/
+          path: output_report/app-debug.apk
+
+      - name: Upload to Release (if tag exists)
+        uses: softprops/action-gh-release@v1
+        if: github.ref_type == 'tag' || github.event_name == 'repository_dispatch'
+        with:
+          tag_name: latest-build
+          name: "Latest Build"
+          body: "APK from workflow run #${{ github.run_number }}"
+          files: output_report/app-debug.apk
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
