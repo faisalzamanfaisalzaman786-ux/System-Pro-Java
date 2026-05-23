@@ -48,7 +48,7 @@ jobs:
             done
           fi
 
-      - name: Copy files from build_assets to app (only current package)
+      - name: Copy files from build_assets (only current package, no fallback)
         run: |
           rm -rf app
           mkdir -p app/src/main/java app/src/main/res app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable
@@ -56,23 +56,29 @@ jobs:
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          if [ -d "build_assets/app/src/main/java" ]; then
-            find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "$TARGET_JAVA_DIR/" \;
+          # 1. Java files: only from the exact current package folder
+          SRC_JAVA_DIR="build_assets/app/src/main/java/${{ env.TARGET_PATH }}"
+          if [ -d "$SRC_JAVA_DIR" ]; then
+            cp -f "$SRC_JAVA_DIR"/*.java "$TARGET_JAVA_DIR/" 2>/dev/null || true
+          else
+            echo "⚠️ No Java folder found for current package at $SRC_JAVA_DIR"
           fi
           
+          # 2. Layout: only if exists
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             mkdir -p app/src/main/res/layout
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
+          # 3. Values and drawable: copy all (colors, styles, strings, etc.)
           if [ -d "build_assets/app/src/main/res/values" ]; then
             cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
-          
           if [ -d "build_assets/app/src/main/res/drawable" ]; then
             cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
           
+          # 4. Icon
           if [ -f "build_assets/app_icon.png" ]; then
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
@@ -81,8 +87,20 @@ jobs:
             done
           fi
           
+          # 5. Manifest
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
+          fi
+
+      - name: Ensure MainActivity.java exists (fail if not)
+        run: |
+          TARGET_JAVA_FILE="app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          if [ ! -f "$TARGET_JAVA_FILE" ]; then
+            echo "❌ No MainActivity.java found for package ${{ env.TARGET_PACKAGE }}"
+            echo "Please make sure your Java file is at build_assets/app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+            exit 1
+          else
+            echo "✅ MainActivity.java found"
           fi
 
       - name: Move mis‑placed drawable XML files (from values to drawable)
@@ -140,11 +158,9 @@ jobs:
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            # Add android:exported="true" to every <activity> tag that does NOT already have it
             sed -i '/<activity[^>]*>/ { /android:exported/! s/<activity/<activity android:exported="true" / }' "$MANIFEST"
-            echo "✅ Manifest fixed: android:exported added to activities missing it"
+            echo "✅ Manifest fixed: android:exported added"
           else
-            # Create default manifest if completely missing
             cat > "$MANIFEST" << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ env.TARGET_PACKAGE }}">
@@ -160,7 +176,7 @@ jobs:
               </application>
           </manifest>
           EOF
-            echo "✅ Created default manifest with android:exported"
+            echo "✅ Created default manifest"
           fi
 
       - name: Setup Gradle 8.5
