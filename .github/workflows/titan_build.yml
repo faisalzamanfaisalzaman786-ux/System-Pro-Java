@@ -34,7 +34,6 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
           
           # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
@@ -44,12 +43,6 @@ jobs:
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
           elif [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/activity_main.xml
-          fi
-          
-          # Copy icon
-          if [ -f "build_assets/app_icon.png" ]; then
-            cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
       - name: Consolidate all Java files into target package
@@ -62,7 +55,7 @@ jobs:
           done
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      - name: Fix Java files (package, import R, semicolons, and button ID)
+      - name: Fix Java files (package, import R, semicolons, button IDs)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -d "$TARGET_DIR" ]; then
@@ -70,32 +63,25 @@ jobs:
             exit 0
           fi
           
-          # 1. Fix package name
+          # Fix package name
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/^package .*;/package ${{ env.TARGET_PACKAGE }};/g' {} \;
-          
-          # 2. Fix import R
+          # Fix import R
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g' {} \;
-          
-          # 3. Add missing package line if absent
+          # Add missing package line
           for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          
-          # 4. Fix missing semicolons (simple)
+          # Fix semicolons
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          
-          # 5. FIX BUTTON ID MISMATCH: replace torch_button with toggleButton
+          # Fix button ID mismatch (torch_button -> toggleButton)
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.torch_button/R.id.toggleButton/g' {} \;
-          # Also replace any other common variants
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.btn_torch/R.id.toggleButton/g' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/R\.id\.torch_btn/R.id.toggleButton/g' {} \;
-          
-          # 6. Add missing imports for Camera2 and Toast
+          # Add missing imports
           for file in $(find "$TARGET_DIR" -name "*.java"); do
             if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
               sed -i '/^package .*/a import android.hardware.camera2.CameraManager;' "$file"
@@ -108,7 +94,7 @@ jobs:
             fi
           done
 
-      - name: Ensure layout has toggleButton (fix ID if missing)
+      - name: Ensure layout has toggleButton
         run: |
           LAYOUT="app/src/main/res/layout/activity_main.xml"
           if [ ! -f "$LAYOUT" ]; then
@@ -128,16 +114,51 @@ jobs:
           </LinearLayout>
           EOF
           else
-            # If layout exists but button ID is torch_button, rename it
-            if grep -q 'android:id="@+id/torch_button"' "$LAYOUT"; then
-              sed -i 's/android:id="@+id/torch_button"/android:id="@+id/toggleButton"/g' "$LAYOUT"
-            fi
-            if grep -q 'android:id="@+id/btn_torch"' "$LAYOUT"; then
-              sed -i 's/android:id="@+id/btn_torch"/android:id="@+id/toggleButton"/g' "$LAYOUT"
-            fi
+            # Convert torch_button to toggleButton in layout
+            sed -i 's/android:id="@+id/torch_button"/android:id="@+id/toggleButton"/g' "$LAYOUT"
+            sed -i 's/android:id="@+id/btn_torch"/android:id="@+id/toggleButton"/g' "$LAYOUT"
           fi
 
-      - name: Create default resources (strings, colors, styles)
+      # ========== IMPROVED APP ICON HANDLING ==========
+      - name: Copy and validate app icon (all densities)
+        run: |
+          # Create all mipmap directories
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p app/src/main/res/mipmap-$density
+          done
+          
+          # Check if user provided an icon
+          if [ -f "build_assets/app_icon.png" ]; then
+            # Verify it's a valid PNG (check magic bytes)
+            if file build_assets/app_icon.png | grep -q PNG; then
+              # Copy to all densities (Android will scale, but we put same image in all)
+              for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+                cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
+                cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+              done
+              echo "✅ User icon copied to all mipmap folders"
+              # Also create a smaller version for mdpi? optional, but fine.
+            else
+              echo "⚠️ User icon is not a valid PNG, using default"
+              USE_DEFAULT_ICON=1
+            fi
+          else
+            echo "No user icon found, using default"
+            USE_DEFAULT_ICON=1
+          fi
+          
+          # Default icon (if needed)
+          if [ "$USE_DEFAULT_ICON" = "1" ]; then
+            # Create a simple blue square icon base64
+            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzefzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/default_icon.png
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
+              cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+            echo "Default icon applied"
+          fi
+
+      - name: Create default resources (strings, colors, styles, drawables)
         run: |
           # Strings
           cat > app/src/main/res/values/strings.xml << 'EOF'
@@ -178,14 +199,8 @@ jobs:
               <corners android:radius="8dp"/>
           </shape>
           EOF
-          
-          # Default icon
-          if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
-            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          fi
 
-      - name: Build AndroidManifest (clean)
+      - name: Build AndroidManifest
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -196,6 +211,7 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:label="@string/app_name"
                   android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
