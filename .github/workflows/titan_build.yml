@@ -84,7 +84,7 @@ jobs:
             done
           fi
 
-      - name: Auto-Heal with Python (Final Fixed Version)
+      - name: Auto-Heal with Python (Final Version - Forces Compatible Torch App)
         run: |
           cat > /tmp/auto_heal.py << 'SCRIPT'
           import os, re, sys
@@ -99,7 +99,7 @@ jobs:
 
           def log(msg): print(f"[AUTO-HEAL] {msg}")
 
-          # ---------- Java Fixes ----------
+          # ---------- Java Fixes: Force standard torch app with toggleButton ----------
           def fix_java_file(path):
               if not os.path.exists(path): return False
               with open(path, 'r', encoding='utf-8') as f:
@@ -116,18 +116,19 @@ jobs:
                   content = re.sub(r'import\s+[\w.]+\.R;', imp, content)
                   if imp not in content:
                       content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\n{imp}")
-              # Fix missing semicolons
-              lines = content.split('\n')
-              new_lines = []
-              for line in lines:
-                  stripped = line.strip()
-                  if stripped and not stripped.endswith(('{', '}', ';', ':', '/', '*')) and not stripped.startswith(('@', 'import', 'package', 'public', 'private', 'protected', 'class', 'interface', 'enum', 'if', 'else', 'for', 'while', 'return', '//', '/*')):
-                      line = line.rstrip() + ';'
-                  new_lines.append(line)
-              content = '\n'.join(new_lines)
-              # Button IDs
-              content = re.sub(r'R\.id\.(torch_button|btn_torch)', 'R.id.toggleButton', content)
-              # Imports
+              # Replace button IDs to match layout (use toggleButton)
+              content = re.sub(r'R\.id\.(btn_toggle|torch_button)', 'R.id.toggleButton', content)
+              # Remove references to iv_torch (ImageView) because layout has no such view
+              content = re.sub(r'\s*torchIcon\s*=\s*findViewById\(R\.id\.iv_torch\);', '', content)
+              content = re.sub(r'\s*torchIcon\.setImageResource\([^;]+\);', '', content)
+              # Remove torchIcon declaration if present
+              content = re.sub(r'private\s+ImageView\s+torchIcon;', '', content)
+              # Remove any usage of torchIcon
+              content = re.sub(r'torchIcon\.', '', content)
+              # Ensure the toggleButton variable is declared
+              if 'private Button toggleButton;' not in content:
+                  content = content.replace('public class MainActivity', 'public class MainActivity {\n    private Button toggleButton;')
+              # Add missing imports if needed
               if 'CameraManager' in content and 'import android.hardware.camera2.CameraManager' not in content:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.hardware.camera2.CameraManager;")
               if 'Toast' in content and 'import android.widget.Toast' not in content:
@@ -138,6 +139,15 @@ jobs:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport androidx.core.content.ContextCompat;")
               if 'Manifest' in content and 'import android.Manifest' not in content:
                   content = content.replace(f"package {TARGET_PACKAGE};", f"package {TARGET_PACKAGE};\nimport android.Manifest;")
+              # Fix missing semicolons (simple)
+              lines = content.split('\n')
+              new_lines = []
+              for line in lines:
+                  stripped = line.strip()
+                  if stripped and not stripped.endswith(('{', '}', ';', ':', '/', '*')) and not stripped.startswith(('@', 'import', 'package', 'public', 'private', 'protected', 'class', 'interface', 'enum', 'if', 'else', 'for', 'while', 'return', '//', '/*')):
+                      line = line.rstrip() + ';'
+                  new_lines.append(line)
+              content = '\n'.join(new_lines)
               if content != orig:
                   with open(path, 'w', encoding='utf-8') as f:
                       f.write(content)
@@ -145,7 +155,7 @@ jobs:
                   return True
               return False
 
-          # ---------- Layout fix ----------
+          # ---------- Layout fix: ensure only toggleButton exists ----------
           def fix_layout():
               os.makedirs(os.path.dirname(LAYOUT), exist_ok=True)
               default_layout = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -175,16 +185,20 @@ jobs:
                   content = f.read()
               orig = content
               
+              # Ensure there is a Button with id toggleButton
+              if 'android:id="@+id/toggleButton"' not in content and 'android:id="@+id/btn_toggle"' in content:
+                  content = content.replace('btn_toggle', 'toggleButton')
+              if 'android:id="@+id/toggleButton"' not in content:
+                  # Insert a standard button
+                  content = default_layout
+              # Remove ImageView if present
+              content = re.sub(r'<ImageView[^>]*/>', '', content)
+              # Fix padding
               content = re.sub(r'android:padding="[^"]*14dp\s+32dp[^"]*"', 'android:padding="14dp"', content)
-              if 'android:layout_width' not in content:
-                  content = content.replace('<Button', '<Button android:layout_width="wrap_content" android:layout_height="wrap_content"')
-              if 'android:background="@color/background"' not in content:
-                  content = content.replace('<LinearLayout', '<LinearLayout android:background="@color/background"')
-              
               if content != orig:
                   with open(LAYOUT, 'w', encoding='utf-8') as f:
                       f.write(content)
-                  log("Fixed layout (padding and background)")
+                  log("Fixed layout: ensured toggleButton and removed ImageView")
                   return True
               return False
 
@@ -218,7 +232,7 @@ jobs:
                   return True
               return False
 
-          # ---------- Default resources (FIXED: correctly insert missing colors) ----------
+          # ---------- Default resources (with background color) ----------
           def ensure_default_resources():
               os.makedirs(RES_VALUES, exist_ok=True)
               os.makedirs(RES_DRAWABLE, exist_ok=True)
@@ -237,16 +251,13 @@ jobs:
                   log("Created default colors.xml")
                   changed = True
               else:
-                  # Read and fix malformed XML (extra content after closing tag)
                   with open(colors_path, 'r', encoding='utf-8') as f:
                       content = f.read()
-                  # Strip any content after </resources> (including appended junk)
-                  end_tag_index = content.find('</resources>')
-                  if end_tag_index != -1:
-                      content = content[:end_tag_index + len('</resources>')]
-                  # Ensure background color exists inside resources
+                  # Strip after </resources>
+                  end = content.find('</resources>')
+                  if end != -1:
+                      content = content[:end + len('</resources>')]
                   if 'name="background"' not in content:
-                      # Insert before </resources>
                       lines = content.split('\n')
                       new_lines = []
                       inserted = False
@@ -258,13 +269,9 @@ jobs:
                       content = '\n'.join(new_lines)
                       with open(colors_path, 'w', encoding='utf-8') as f:
                           f.write(content)
-                      log("Added missing background color to colors.xml")
+                      log("Added missing background color")
                       changed = True
-                  else:
-                      # Fix any duplicate or misplaced entries? Not needed.
-                      pass
               
-              # styles.xml
               styles_path = os.path.join(RES_VALUES, 'styles.xml')
               if not os.path.exists(styles_path):
                   with open(styles_path, 'w', encoding='utf-8') as f:
@@ -285,7 +292,6 @@ jobs:
                   log("Created default styles.xml")
                   changed = True
               
-              # strings.xml
               strings_path = os.path.join(RES_VALUES, 'strings.xml')
               if not os.path.exists(strings_path):
                   with open(strings_path, 'w', encoding='utf-8') as f:
@@ -296,7 +302,6 @@ jobs:
                   log("Created default strings.xml")
                   changed = True
               
-              # button_background.xml
               btn_bg = os.path.join(RES_DRAWABLE, 'button_background.xml')
               if not os.path.exists(btn_bg):
                   with open(btn_bg, 'w', encoding='utf-8') as f:
@@ -326,7 +331,7 @@ jobs:
               if fix_manifest(): fixes += 1
               if ensure_default_resources(): fixes += 1
               
-              # If no Java file at all, create default
+              # If still no Java file, create default one
               if not any(f.endswith('.java') for _, _, files in os.walk(JAVA_DIR) for f in files):
                   default_java = os.path.join(JAVA_DIR, "MainActivity.java")
                   os.makedirs(JAVA_DIR, exist_ok=True)
