@@ -36,14 +36,12 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
           
-          # Copy Java files
+          # Copy Java files (all, including those in subfolders)
           if [ -d "build_assets/app/src/main/java" ]; then
             cp -rf build_assets/app/src/main/java/* app/src/main/java/
           fi
-          if [ -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
-            cp -f "build_assets/app/src/main/java/$PKG_PATH/MainActivity.java" "app/src/main/java/$PKG_PATH/MainActivity.java"
-          fi
-          find build_assets -maxdepth 2 -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
+          # Also look for any .java in build_assets root or deeper
+          find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           
           # Copy XML layout if provided
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
@@ -51,7 +49,7 @@ jobs:
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/activity_main.xml
           fi
           
-          # Copy AndroidManifest if provided
+          # Copy AndroidManifest if provided (we will overwrite later)
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml.user
           fi
@@ -62,7 +60,22 @@ jobs:
             cp -f build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           fi
 
-      - name: Run static fixer
+      # ========== CONSOLIDATE ALL JAVA FILES INTO TARGET PACKAGE ==========
+      - name: Consolidate all Java files into target package
+        run: |
+          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          echo "Moving all Java files to $TARGET_DIR"
+          find app/src/main/java -type f -name "*.java" | while read f; do
+            if [[ "$f" != *"/${{ env.TARGET_PATH }}/"* ]]; then
+              filename=$(basename "$f")
+              mv "$f" "$TARGET_DIR/$filename"
+              echo "Moved $filename to $TARGET_DIR"
+            fi
+          done
+          # Remove empty directories
+          find app/src/main/java -type d -empty -delete 2>/dev/null || true
+
+      - name: Run static fixer (fixes package, imports, semicolons)
         run: python3 static_fixer.py
 
       - name: Create default resources (fallback)
