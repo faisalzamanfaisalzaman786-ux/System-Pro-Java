@@ -24,15 +24,19 @@ jobs:
           rm -rf app/src/main/java app/src/main/res app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          # Sanitize package name
+          # Sanitize package name: keep only alphanumeric, dot, underscore
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g')
           CLEAN_PKG=$(echo "$CLEAN_PKG" | sed 's/\.\.*/./g')
           CLEAN_PKG=$(echo "$CLEAN_PKG" | sed 's/^\.//;s/\.$//')
           PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # Extract app name from last part of package name (e.g., "torch" from "com.system.torch")
+          APP_NAME=$(echo "$PKG_NAME" | awk -F'.' '{print $NF}')
+          
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
           echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout
@@ -122,15 +126,13 @@ jobs:
             sed -i 's|android:id="@+id/btn_torch"|android:id="@+id/toggleButton"|g' "$LAYOUT"
           fi
 
-      # ========== IMPROVED APP ICON HANDLING (any PNG in build_assets) ==========
+      # ========== APP ICON (any PNG from build_assets) ==========
       - name: Copy user app icon (any PNG from build_assets)
         run: |
-          # Create all mipmap directories
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p app/src/main/res/mipmap-$density
           done
           
-          # Find any PNG file in build_assets (not in subfolders, just root or directly)
           ICON_FILE=""
           if [ -f "build_assets/app_icon.png" ]; then
             ICON_FILE="build_assets/app_icon.png"
@@ -139,19 +141,17 @@ jobs:
           elif [ -f "build_assets/ic_launcher.png" ]; then
             ICON_FILE="build_assets/ic_launcher.png"
           else
-            # Also search in build_assets root for any .png (take first)
             ICON_FILE=$(find build_assets -maxdepth 1 -type f -name "*.png" | head -1)
           fi
           
           if [ -n "$ICON_FILE" ] && file "$ICON_FILE" | grep -q PNG; then
-            echo "✅ Found user icon: $ICON_FILE"
+            echo "✅ Using user icon: $ICON_FILE"
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               cp -f "$ICON_FILE" app/src/main/res/mipmap-$density/ic_launcher.png
               cp -f "$ICON_FILE" app/src/main/res/mipmap-$density/ic_launcher_round.png
             done
           else
-            echo "⚠️ No valid user icon found, using default"
-            # Create a simple blue square icon (base64)
+            echo "⚠️ No valid user icon, using default"
             echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/default_icon.png
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
@@ -159,16 +159,19 @@ jobs:
             done
           fi
 
-      - name: Create default resources (strings, colors, styles, drawables)
+      # ========== RESOURCES (strings, colors, styles, drawables) ==========
+      - name: Create default resources (with dynamic app name)
         run: |
-          cat > app/src/main/res/values/strings.xml << 'EOF'
+          # Strings - use extracted app name
+          cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">System Pro</string>
+              <string name="app_name">${{ env.APP_NAME }}</string>
               <string name="torch_on">Torch On</string>
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
+          
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -176,6 +179,7 @@ jobs:
               <color name="colorAccent">#03DAC5</color>
           </resources>
           EOF
+          
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -185,6 +189,7 @@ jobs:
               </style>
           </resources>
           EOF
+          
           mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -194,8 +199,8 @@ jobs:
           </shape>
           EOF
 
-      # ========== FULL HARDWARE PERMISSIONS ==========
-      - name: Build AndroidManifest with all hardware permissions
+      # ========== ANDROID MANIFEST with all hardware permissions ==========
+      - name: Build AndroidManifest
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
