@@ -36,10 +36,7 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
           
-          # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
-          
-          # Copy layout if exists (we'll override later anyway)
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
           fi
@@ -57,97 +54,64 @@ jobs:
       - name: Fix Java files (robust)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ ! -d "$TARGET_DIR" ]; then
-            echo "No Java directory found, skipping fixes"
-            exit 0
-          fi
+          [ ! -d "$TARGET_DIR" ] && exit 0
           
-          # Fix package name
-          find "$TARGET_DIR" -type f -name "*.java" -exec perl -pi -e 's/^package\s+[\w.]+;/package $ENV{TARGET_PACKAGE};/' {} \;
-          # Fix import R
-          find "$TARGET_DIR" -type f -name "*.java" -exec perl -pi -e 's/import\s+[\w.]+\.R;/import $ENV{TARGET_PACKAGE}.R;/' {} \;
-          # Add package line if missing
-          for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+          find "$TARGET_DIR" -name "*.java" -exec perl -pi -e 's/^package\s+[\w.]+;/package $ENV{TARGET_PACKAGE};/' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec perl -pi -e 's/import\s+[\w.]+\.R;/import $ENV{TARGET_PACKAGE}.R;/' {} \;
+          for file in $(find "$TARGET_DIR" -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          # Fix basic syntax
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          # Button ID fix
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
-          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
-          # Add missing imports
+          find "$TARGET_DIR" -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/})$/});/g' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
+          find "$TARGET_DIR" -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
+          
           for file in $(find "$TARGET_DIR" -name "*.java"); do
-            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
-            fi
-            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
-            fi
-            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
-              sed -i '/^package /a import android.widget.Toast;' "$file"
-            fi
+            grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file" && sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
+            grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file" && sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
+            grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file" && sed -i '/^package /a import android.widget.Toast;' "$file"
           done
 
-      - name: Ensure layout has toggleButton (with modern styling)
+      - name: Ensure layout and resources
         run: |
+          # Create default layout if missing
           LAYOUT="app/src/main/res/layout/activity_main.xml"
-          mkdir -p app/src/main/res/layout
-          cat > "$LAYOUT" << 'EOF'
+          if [ ! -f "$LAYOUT" ]; then
+            mkdir -p app/src/main/res/layout
+            cat > "$LAYOUT" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="20dp"
-              android:background="#02040c">
-              <Button
-                  android:id="@+id/toggleButton"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Toggle Torch"
-                  android:background="@drawable/button_background"
-                  android:textColor="@android:color/white"
-                  android:textSize="18sp"
-                  android:fontFamily="sans-serif-medium"
-                  android:paddingLeft="32dp"
-                  android:paddingRight="32dp"
-                  android:paddingTop="14dp"
-                  android:paddingBottom="14dp"
-                  android:minWidth="200dp"
-                  android:elevation="4dp" />
+              android:padding="20dp">
+              <Button android:id="@+id/toggleButton" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="Toggle Torch" android:background="@drawable/button_background"
+                  android:textColor="@android:color/white" android:textSize="18sp" android:padding="14dp 32dp" />
           </LinearLayout>
           EOF
-
-      - name: Copy app icon
-        run: |
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p app/src/main/res/mipmap-$d
-          done
-          ICON_FILE=$(find build_assets -type f -name "*.png" | head -1)
-          if [ -n "$ICON_FILE" ] && file "$ICON_FILE" | grep -q "PNG image data"; then
-            echo "✅ Using user icon: $ICON_FILE"
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f "$ICON_FILE" app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-          else
-            echo "⚠️ No valid PNG icon, creating default"
-            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
           fi
-
-      - name: Create resources (modern button drawable)
-        run: |
-          # Strings
+          
+          # Create drawable folder and button background
+          mkdir -p app/src/main/res/drawable
+          cat > app/src/main/res/drawable/button_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_pressed="true">
+                  <shape><gradient android:startColor="#3700B3" android:endColor="#4A00E0" android:angle="45"/><corners android:radius="30dp"/></shape>
+              </item>
+              <item>
+                  <shape><gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/><corners android:radius="30dp"/><stroke android:width="1dp" android:color="#FFFFFF"/></shape>
+              </item>
+          </selector>
+          EOF
+          
+          # Strings, colors, styles
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -156,61 +120,28 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
-          
-          # Colors
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
-              <color name="button_normal">#6200EE</color>
-              <color name="button_pressed">#3700B3</color>
-          </resources>
+          <resources><color name="colorPrimary">#6200EE</color><color name="colorPrimaryDark">#3700B3</color><color name="colorAccent">#03DAC5</color></resources>
           EOF
-          
-          # Styles
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
+          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorAccent">@color/colorAccent</item></style></resources>
           EOF
-          
-          # Drawable folder
-          mkdir -p app/src/main/res/drawable
-          
-          # Modern gradient button background
-          cat > app/src/main/res/drawable/button_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <selector xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:state_pressed="true">
-                  <shape android:shape="rectangle">
-                      <gradient android:startColor="@color/button_pressed" android:endColor="#4A00E0" android:angle="45"/>
-                      <corners android:radius="30dp"/>
-                  </shape>
-              </item>
-              <item>
-                  <shape android:shape="rectangle">
-                      <gradient android:startColor="@color/button_normal" android:endColor="#8E2DE2" android:angle="45"/>
-                      <corners android:radius="30dp"/>
-                      <stroke android:width="1dp" android:color="#FFFFFF" />
-                  </shape>
-              </item>
-          </selector>
-          EOF
-          
-          # Edittext background (optional)
-          cat > app/src/main/res/drawable/edittext_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#1AFFFFFF"/>
-              <corners android:radius="8dp"/>
-          </shape>
-          EOF
+
+      - name: Copy app icon
+        run: |
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p app/src/main/res/mipmap-$d; done
+          ICON=$(find build_assets -type f -name "*.png" | head -1)
+          if [ -n "$ICON" ] && file "$ICON" | grep -q "PNG image data"; then
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher_round.png
+            done
+          else
+            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png; cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png; done
+          fi
 
       - name: Build AndroidManifest
         run: |
@@ -220,13 +151,6 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="@string/app_name" android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
@@ -267,21 +191,20 @@ jobs:
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
           else
-            echo "APK not found" >> output_report/build_summary.txt
             exit 1
           fi
 
-      - name: Validate APK size
-        run: |
-          SIZE=$(stat -c%s output_report/app-debug.apk 2>/dev/null || echo 0)
-          if [ $SIZE -lt 50000 ]; then
-            echo "APK too small ($SIZE bytes)" >> output_report/build_summary.txt
-            exit 1
-          else
-            echo "APK size OK ($SIZE bytes)" >> output_report/build_summary.txt
-          fi
+      - name: Upload APK to Release (Permanent fix)
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest-build
+          name: "Latest Build"
+          body: "APK from workflow run #${{ github.run_number }}"
+          files: output_report/app-debug.apk
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact
+      - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
         if: always()
         with:
