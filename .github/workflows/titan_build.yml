@@ -24,6 +24,7 @@ jobs:
           rm -rf app/src/main/java app/src/main/res app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
+          # Sanitize package name: keep alnum, dot, underscore; replace others with dot
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
           PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
@@ -36,6 +37,7 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
           
+          # Copy all Java files
           find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
@@ -51,29 +53,51 @@ jobs:
           done
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      - name: Fix Java files (robust)
+      - name: Fix Java files (robust, sed only)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          [ ! -d "$TARGET_DIR" ] && exit 0
+          if [ ! -d "$TARGET_DIR" ]; then
+            echo "No Java files found, skipping fixes"
+            exit 0
+          fi
           
-          find "$TARGET_DIR" -name "*.java" -exec perl -pi -e 's/^package\s+[\w.]+;/package $ENV{TARGET_PACKAGE};/' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec perl -pi -e 's/import\s+[\w.]+\.R;/import $ENV{TARGET_PACKAGE}.R;/' {} \;
-          for file in $(find "$TARGET_DIR" -name "*.java"); do
+          # Escape package name for sed (replace dot with \.)
+          ESCAPED_PKG=$(echo "${{ env.TARGET_PACKAGE }}" | sed 's/\./\\./g')
+          
+          # Fix package line (any package statement)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
+          
+          # Fix import R
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
+          
+          # Add package line if missing
+          for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          find "$TARGET_DIR" -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
-          find "$TARGET_DIR" -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
           
+          # Fix missing semicolons (basic)
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
+          
+          # Fix button ID mismatches
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
+          find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
+          
+          # Add missing imports (CameraManager, etc.)
           for file in $(find "$TARGET_DIR" -name "*.java"); do
-            grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file" && sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
-            grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file" && sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
-            grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file" && sed -i '/^package /a import android.widget.Toast;' "$file"
+            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
+              sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
+            fi
+            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
+              sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
+            fi
+            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
+              sed -i '/^package /a import android.widget.Toast;' "$file"
+            fi
           done
 
       - name: Ensure layout and resources
