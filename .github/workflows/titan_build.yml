@@ -18,81 +18,126 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Copy from build_assets
+      - name: Prepare Package Name
+        id: pkg
         run: |
-          mkdir -p output_report
-          rm -rf app/src/main/java app/src/main/res app/build
-          
           RAW_PKG="${{ github.event.client_payload.package_name }}"
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
           PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           APP_NAME=$(echo "$PKG_NAME" | awk -F'.' '{print $NF}')
-          
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
           echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          mkdir -p output_report
+
+      - name: Clean and Copy from build_assets
+        run: |
+          # 1. مکمل طور پر پرانی Java ڈائرکٹری حذف کریں
+          rm -rf app/src/main/java
+          mkdir -p app/src/main/java
           
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
+          # 2. صرف موجودہ ٹارگٹ پیکیج کے لیے ڈھانچہ بنائیں
+          mkdir -p "app/src/main/java/${{ env.TARGET_PATH }}"
+          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable app/src/main/res/mipmap-hdpi
           
-          find build_assets -type f -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
+          # 3. build_assets سے Java فائلیں صرف ٹارگٹ پیکیج میں کاپی کریں
+          if [ -d "build_assets/app/src/main/java" ]; then
+            # تمام ذیلی پیکجز سے .java فائلیں ڈھونڈ کر ٹارگٹ میں ڈالیں
+            find build_assets/app/src/main/java -type f -name "*.java" -exec cp -f {} "app/src/main/java/${{ env.TARGET_PATH }}/" \;
+          fi
+          
+          # 4. اگر build_assets میں activity_main.xml موجود ہو تو کاپی کریں
           if [ -f "build_assets/activity_main.xml" ]; then
             cp -f "build_assets/activity_main.xml" app/src/main/res/layout/activity_main.xml
           fi
+          
+          # 5. کوئی اور ریسورس فائلیں (drawable, values) کاپی کریں
+          if [ -d "build_assets/app/src/main/res" ]; then
+            cp -rf build_assets/app/src/main/res/* app/src/main/res/ 2>/dev/null || true
+          fi
+          
+          # 6. اگر build_assets میں AndroidManifest.xml ہو تو کاپی کریں
+          if [ -f "build_assets/AndroidManifest.xml" ]; then
+            cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
+          fi
 
-      - name: Consolidate Java files
+      - name: Consolidate Java files (remove extra packages)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
+          # کسی بھی دوسری ڈائرکٹری میں موجود .java فائلیں ہٹائیں
           find app/src/main/java -type f -name "*.java" | while read f; do
-            if [[ "$f" != *"/${{ env.TARGET_PATH }}/"* ]]; then
-              mv "$f" "$TARGET_DIR/$(basename "$f")"
+            if [[ "$f" != "$TARGET_DIR/"* ]]; then
+              echo "Removing extra Java file: $f"
+              rm -f "$f"
             fi
           done
+          # خالی ڈائرکٹریز حذف کریں
           find app/src/main/java -type d -empty -delete 2>/dev/null || true
 
-      - name: Fix Java files (sed only)
+      - name: Fix Java files (package, imports, semicolons)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ ! -d "$TARGET_DIR" ]; then
-            echo "No Java files found, skipping fixes"
-            exit 0
+            echo "No Java files found, creating default MainActivity"
+            mkdir -p "$TARGET_DIR"
+            cat > "$TARGET_DIR/MainActivity.java" << 'EOF'
+          package ${{ env.TARGET_PACKAGE }};
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.Toast;
+          import androidx.appcompat.app.AppCompatActivity;
+          import android.hardware.camera2.CameraManager;
+          public class MainActivity extends AppCompatActivity {
+              private Button toggleButton;
+              private CameraManager cameraManager;
+              private boolean isTorchOn = false;
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  toggleButton = findViewById(R.id.toggleButton);
+                  cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+                  toggleButton.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          try {
+                              String cameraId = cameraManager.getCameraIdList()[0];
+                              isTorchOn = !isTorchOn;
+                              cameraManager.setTorchMode(cameraId, isTorchOn);
+                              Toast.makeText(MainActivity.this, isTorchOn ? "Torch ON" : "Torch OFF", Toast.LENGTH_SHORT).show();
+                          } catch (Exception e) {
+                              Toast.makeText(MainActivity.this, "Torch not available", Toast.LENGTH_SHORT).show();
+                          }
+                      }
+                  });
+              }
+          }
+          EOF
           fi
           
-          # Fix package line
+          # پیکیج لائن درست کریں
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-          # Fix import R
+          # امپورٹ R درست کریں
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-          # Add missing package line
+          # اگر پیکیج لائن موجود نہ ہو تو شامل کریں
           for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
             if ! grep -q "^package" "$file"; then
               sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
             fi
           done
-          # Fix semicolons
+          # غائب سیمی کولن کا سادہ حل
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i '/^[[:space:]]*\(private\|public\|protected\)/ s/\([^;{}]\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          # Fix button ID mismatches
+          # بٹن ID کی مماثلت درست کریں
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
-          # Add missing imports
-          for file in $(find "$TARGET_DIR" -name "*.java"); do
-            if grep -q "CameraManager" "$file" && ! grep -q "import android.hardware.camera2.CameraManager" "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraManager;' "$file"
-            fi
-            if grep -q "CameraCharacteristics" "$file" && ! grep -q "import android.hardware.camera2.CameraCharacteristics" "$file"; then
-              sed -i '/^package /a import android.hardware.camera2.CameraCharacteristics;' "$file"
-            fi
-            if grep -q "Toast" "$file" && ! grep -q "import android.widget.Toast" "$file"; then
-              sed -i '/^package /a import android.widget.Toast;' "$file"
-            fi
-          done
 
-      - name: Ensure layout and resources (fixed padding)
+      - name: Ensure Layout and Resources
         run: |
-          # Create default layout with correct padding
           LAYOUT="app/src/main/res/layout/activity_main.xml"
           if [ ! -f "$LAYOUT" ]; then
             mkdir -p app/src/main/res/layout
@@ -109,39 +154,24 @@ jobs:
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="Toggle Torch"
-                  android:background="@drawable/button_background"
-                  android:textColor="@android:color/white"
                   android:textSize="18sp"
                   android:padding="14dp" />
           </LinearLayout>
           EOF
-          else
-            # Fix existing layout: remove invalid padding
-            sed -i 's/android:padding="[0-9]*dp [0-9]*dp"/android:padding="14dp"/g' "$LAYOUT"
           fi
           
-          # Create drawable folder and button background
+          # ڈراایبل اور دیگر ریسورسز
           mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <selector xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:state_pressed="true">
-                  <shape>
-                      <gradient android:startColor="#3700B3" android:endColor="#4A00E0" android:angle="45"/>
-                      <corners android:radius="30dp"/>
-                  </shape>
-              </item>
-              <item>
-                  <shape>
-                      <gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/>
-                      <corners android:radius="30dp"/>
-                      <stroke android:width="1dp" android:color="#FFFFFF"/>
-                  </shape>
-              </item>
-          </selector>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <gradient android:startColor="#6200EE" android:endColor="#8E2DE2" android:angle="45"/>
+              <corners android:radius="30dp"/>
+              <stroke android:width="1dp" android:color="#FFFFFF"/>
+          </shape>
           EOF
           
-          # Strings, colors, styles
+          # ویلیوز فائلیں
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -168,7 +198,7 @@ jobs:
           </resources>
           EOF
 
-      - name: Copy app icon
+      - name: Copy App Icon
         run: |
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p app/src/main/res/mipmap-$d; done
           ICON=$(find build_assets -type f -name "*.png" | head -1)
@@ -178,8 +208,12 @@ jobs:
               cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher_round.png
             done
           else
-            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png; cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png; done
+            # ڈیفالٹ آئیکن (Base64 چھوٹا سا)
+            echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpGmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/icon.png
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f /tmp/icon.png app/src/main/res/mipmap-$d/ic_launcher_round.png
+            done
           fi
 
       - name: Build AndroidManifest
@@ -190,17 +224,41 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="@string/app_name" android:theme="@style/Theme.AppCompat.NoActionBar">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-      - name: Build Gradle file
+      - name: Build Gradle files
         run: |
-          cat > app/build.gradle << 'EOF'
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'SystemPro'
+          include ':app'
+          EOF
+          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          cat > app/build.gradle << EOF
           plugins { id 'com.android.application' }
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
@@ -211,6 +269,10 @@ jobs:
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
           }
           dependencies {
@@ -230,6 +292,7 @@ jobs:
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
           else
+            echo "Build failed"
             exit 1
           fi
 
