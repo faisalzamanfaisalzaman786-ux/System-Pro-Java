@@ -24,7 +24,11 @@ jobs:
           rm -rf app/src/main/java app/src/main/res app/build
           
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          # Sanitize package name: only keep alphanumeric, dot, underscore
+          CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g')
+          CLEAN_PKG=$(echo "$CLEAN_PKG" | sed 's/\.\.*/./g')
+          CLEAN_PKG=$(echo "$CLEAN_PKG" | sed 's/^\.//;s/\.$//')
+          PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
@@ -78,7 +82,7 @@ jobs:
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(super\.[a-zA-Z]*(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/\(setContentView(.*)\)$/\1;/' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's/})$/});/g' {} \;
-          # Fix button ID mismatch (using | as delimiter to avoid conflicts with /)
+          # Fix button ID mismatch
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.torch_button|R.id.toggleButton|g' {} \;
           find "$TARGET_DIR" -type f -name "*.java" -exec sed -i 's|R\.id\.btn_torch|R.id.toggleButton|g' {} \;
           # Add missing imports
@@ -94,7 +98,7 @@ jobs:
             fi
           done
 
-      - name: Ensure layout has toggleButton (fixed sed delimiter)
+      - name: Ensure layout has toggleButton
         run: |
           LAYOUT="app/src/main/res/layout/activity_main.xml"
           if [ ! -f "$LAYOUT" ]; then
@@ -114,48 +118,39 @@ jobs:
           </LinearLayout>
           EOF
           else
-            # Use '|' as delimiter to avoid issues with slashes in the pattern
             sed -i 's|android:id="@+id/torch_button"|android:id="@+id/toggleButton"|g' "$LAYOUT"
             sed -i 's|android:id="@+id/btn_torch"|android:id="@+id/toggleButton"|g' "$LAYOUT"
           fi
 
-      # ========== IMPROVED APP ICON HANDLING ==========
-      - name: Copy and validate app icon (all densities)
+      # ========== APP ICON (all densities) ==========
+      - name: Copy and validate app icon
         run: |
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p app/src/main/res/mipmap-$density
           done
           
-          USE_DEFAULT_ICON=0
-          if [ -f "build_assets/app_icon.png" ]; then
-            if file build_assets/app_icon.png | grep -q PNG; then
-              for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-                cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
-                cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-              done
-              echo "✅ User icon copied to all mipmap folders"
-            else
-              echo "⚠️ User icon is not a valid PNG, using default"
-              USE_DEFAULT_ICON=1
-            fi
+          USE_DEFAULT=0
+          if [ -f "build_assets/app_icon.png" ] && file build_assets/app_icon.png | grep -q PNG; then
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
+              cp -f build_assets/app_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+            echo "✅ User icon copied"
           else
-            echo "No user icon found, using default"
-            USE_DEFAULT_ICON=1
+            USE_DEFAULT=1
           fi
           
-          if [ "$USE_DEFAULT_ICON" = "1" ]; then
-            # Simple blue square icon base64
+          if [ "$USE_DEFAULT" = "1" ]; then
+            # Simple blue square icon (base64)
             echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAasQAAGrEB+67c0QAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAN+SURBVHic7Z1NatxAFEa/KiAw2GSfGWRZdxPQHkF2A/EJFF9BdJJF8AkkK4tu4CMYWXYWgWyC8AVUIsg4nULF/VVVjx5JY/HgTzJUzTzK/eju6pa6q0sIISGEkP8LEUJQiwghghpBhBDUCCKEoEYQIQS1h5C/X/rz5U6fPn52nz9/dv1+r3t3dzaTrKpKq6piURTa7/c6n8+apsk2RwghAo+AmqYx73leq6rKdV1nXddl1nWdzebzLM9zNpvNMmuyzRFCiIAjYJomGYADYFnGzPOcdV1nmqbJVFWVMUJQOwgJkOd5ZpqmMefruSyLzDzPWWyMn8fR8zwzhmEyY4QQYpEAmqaZMsuyjDHGmHmeZ8Z1XWPmeZYFQdAYIYQQiwT0fd8YQSbjOOacxhsQYoUQYpEA13Ubay1jjLHGcRzNPM8z55zrNEZpLAgRVgghtoiQpmmiI4QQQvwhQuq6vhohhBDiDxFSVdXVCCGEEH+IkKqqrkYIIYT4Q4SUVXU1QgghxB8ipKqqqxFCCCH+ECHzef01QgghxB8iZDabXY0QQgjxhwjJsuwqhBBC/EOCzWbTVQghhPhDiNi2fTVCg0F3NUIIIf4QwT0gPpAgy3I/olSYlZdl+T1PLfM8zwkhhAT5HsA9IB9I8DyPqWmSGwQhhBDfT7/2fg/kviBwXdc/Inw/XzebzddPy/OcZVnyS1kIqU2ixHmeM0KIMXmeZ++hJk1Txj3kEWsTRVH2AQIgrus2juM8h8X7EbTZbKKu6xrrq99N2jRNNAhCgIZh+IhIiqKIMs/zOIoiFkURa5qGMcY40zRNhBBSK9u2/zZN8/GRRVEwQoiNqqpi7/8tCCH/hTAMHyJkOp3KCCHkP61WiyVJ8hEheZ6zQRAEwzDMMcYYY5Zl2SgIgrHv+xwhhHwuyzLmvqAEIYSIQwJc12Vd17G+7xkhhNR1XTudThljzBljLGuapgkhhOQhAeM4MsYYY4wxe98XQgjJxwI4IYQQkYgAUEIISUAEgBBCCPEkAkAIIcSTCAAhhBALiQAQQgixkAgAIYQQC4kAEEIIsZAIACGEECNKwLNnz1jTNNcxTdMcIYQQI0pA27Z8Pp+/Nz8/P68nhBCSBCGEEEJIIAghhJBACCGEEEIIIYSQH+RfcDyYUnU7NOkAAAAASUVORK5CYII=" | base64 -d > /tmp/default_icon.png
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher.png
               cp -f /tmp/default_icon.png app/src/main/res/mipmap-$density/ic_launcher_round.png
             done
-            echo "Default icon applied"
           fi
 
       - name: Create default resources (strings, colors, styles, drawables)
         run: |
-          # Strings
           cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -164,8 +159,6 @@ jobs:
               <string name="torch_off">Torch Off</string>
           </resources>
           EOF
-          
-          # Colors
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -173,8 +166,6 @@ jobs:
               <color name="colorAccent">#03DAC5</color>
           </resources>
           EOF
-          
-          # Styles
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -184,8 +175,6 @@ jobs:
               </style>
           </resources>
           EOF
-          
-          # Button background
           mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/button_background.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -195,14 +184,72 @@ jobs:
           </shape>
           EOF
 
-      - name: Build AndroidManifest
+      # ========== FULL HARDWARE PERMISSIONS INJECTION ==========
+      - name: Build AndroidManifest with all hardware permissions
         run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <!-- Basic Network -->
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+              <!-- Camera / Flashlight -->
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.FLASHLIGHT" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+
+              <!-- Storage -->
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+              <!-- Bluetooth (full) -->
+              <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+              <!-- Location (GPS) -->
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+              <!-- Microphone / Audio Record -->
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+              <!-- Phone / Cellular -->
+              <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+              <uses-permission android:name="android.permission.CALL_PHONE" />
+
+              <!-- Sensors (Body, Heart rate, etc.) -->
+              <uses-permission android:name="android.permission.BODY_SENSORS" />
+
+              <!-- SMS / Contacts (optional but common) -->
+              <uses-permission android:name="android.permission.READ_SMS" />
+              <uses-permission android:name="android.permission.SEND_SMS" />
+              <uses-permission android:name="android.permission.READ_CONTACTS" />
+              <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
+              <!-- Calendar -->
+              <uses-permission android:name="android.permission.READ_CALENDAR" />
+              <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+              <!-- Notification (Android 13+) -->
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <!-- Others -->
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -239,15 +286,6 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-
-      - name: Inject extra permissions
-        run: |
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          for perm in "android.permission.READ_EXTERNAL_STORAGE" "android.permission.WRITE_EXTERNAL_STORAGE" "android.permission.BLUETOOTH" "android.permission.BLUETOOTH_CONNECT" "android.permission.BLUETOOTH_SCAN"; do
-            if ! grep -q "$perm" "$MANIFEST"; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
-            fi
-          done
 
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v4
