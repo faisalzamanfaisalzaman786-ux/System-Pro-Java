@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build (Gradle 8.5 + AGP 8.4.1)
+name: System Pro Titan Master Build (Gradle 8.5 + AGP 8.3.2)
 
 on:
   repository_dispatch:
@@ -29,7 +29,7 @@ jobs:
             echo "CUSTOM_APPNAME=$(echo '${{ github.event.client_payload.app_name }}' | base64 --decode)" >> $GITHUB_ENV
           fi
 
-      - name: Update package and app name
+      - name: Update package and app name in Android files
         run: |
           if [ -n "$CUSTOM_PACKAGE" ]; then
             sed -i "s/package=\".*\"/package=\"$CUSTOM_PACKAGE\"/" app/src/main/AndroidManifest.xml
@@ -40,24 +40,31 @@ jobs:
             sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$CUSTOM_APPNAME<\/string>/" app/src/main/res/values/strings.xml
           fi
 
-      - name: Force AGP 8.4.1 (compatible with Gradle 8.5)
+      - name: Force AGP 8.3.2 (compatible with Gradle 8.5)
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.4.1' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-          # Remove any pluginManagement from settings.gradle
-          sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
 
-      - name: Clean app/build.gradle plugin block
+      - name: Clean any pluginManagement or version catalogs
         run: |
+          # Remove any existing pluginManagement block from settings.gradle
+          sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
+          # Remove libs.versions.toml if exists (to avoid forcing higher AGP)
+          rm -f gradle/libs.versions.toml 2>/dev/null || true
+
+      - name: Clean and fix app/build.gradle plugin block
+        run: |
+          # Remove any existing plugins block
           sed -i '/^plugins {/,/^}/d' app/build.gradle
+          # Insert correct plugin block at top
           sed -i '1i plugins {\n    id "com.android.application"\n}\n' app/build.gradle
 
-      - name: Build APK
+      - name: Build APK with Gradle 8.5
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
