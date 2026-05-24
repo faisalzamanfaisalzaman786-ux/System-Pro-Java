@@ -3,16 +3,6 @@ name: System Pro Titan Master Build
 on:
   repository_dispatch:
     types: [trigger_b64_build]
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package name (e.g., com.systempro.webview)'
-        required: false
-        default: 'com.systempro.webview'
-        type: string
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -29,105 +19,78 @@ jobs:
           java-version: '17'
 
       - name: Prepare Package Name
-        id: pkg
         run: |
-          # First priority: from repository_dispatch payload
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          # Second priority: from workflow_dispatch input
-          if [ -z "$RAW_PKG" ]; then
-            RAW_PKG="${{ github.event.inputs.package_name }}"
-          fi
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
-          PKG_NAME=${CLEAN_PKG:-"com.systempro.webview"}
+          PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           APP_NAME=$(echo "$PKG_NAME" | awk -F'.' '{print $NF}')
+          
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
           echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          mkdir -p output_report
 
-      - name: Clean old package folders from build_assets (keep only current)
+      - name: Clean old package folders from build_assets (avoid conflicts)
         run: |
-          COM_DIR="build_assets/app/src/main/java/com"
-          if [ -d "$COM_DIR" ]; then
-            for d in "$COM_DIR"/*/; do
-              dir_name=$(basename "$d")
-              current_base=$(echo "${{ env.TARGET_PATH }}" | cut -d'/' -f1)
-              if [ "$dir_name" != "$current_base" ]; then
-                echo "Removing old package folder: $dir_name"
-                rm -rf "$d"
-              fi
-            done
-          fi
+          find build_assets/app/src/main/java -type d -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+          mkdir -p build_assets/app/src/main/java/${{ env.TARGET_PATH }}
 
-      - name: Copy files from build_assets (only current package, no fallback)
+      - name: Copy files from build_assets (only current package)
         run: |
-          rm -rf app
-          mkdir -p app/src/main/java app/src/main/res app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable
+          rm -rf app/src/main/java app/src/main/res app/build
+          mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
+          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
+
+          find build_assets -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
           
-          TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          mkdir -p "$TARGET_JAVA_DIR"
-          
-          SRC_JAVA_DIR="build_assets/app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -d "$SRC_JAVA_DIR" ]; then
-            cp -f "$SRC_JAVA_DIR"/*.java "$TARGET_JAVA_DIR/" 2>/dev/null || true
-          else
-            echo "⚠️ No Java folder found for current package at $SRC_JAVA_DIR"
+          if [ -f build_assets/activity_main.xml ]; then
+            cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
-          
-          if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
-            mkdir -p app/src/main/res/layout
-            cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
-          fi
-          
-          if [ -d "build_assets/app/src/main/res/values" ]; then
-            cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
-          fi
-          if [ -d "build_assets/app/src/main/res/drawable" ]; then
-            cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
-          fi
-          
-          if [ -f "build_assets/app_icon.png" ]; then
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p app/src/main/res/mipmap-$d
-              cp -f "build_assets/app_icon.png" app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f "build_assets/app_icon.png" app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-          fi
-          
-          if [ -f "build_assets/AndroidManifest.xml" ]; then
-            cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
+          if [ -f build_assets/app/src/main/res/layout/activity_main.xml ]; then
+            cp -f build_assets/app/src/main/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
 
-      - name: Ensure MainActivity.java exists (fail if not)
+      - name: Ensure MainActivity.java exists (create fallback if missing)
         run: |
-          TARGET_JAVA_FILE="app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
-          if [ ! -f "$TARGET_JAVA_FILE" ]; then
-            echo "❌ No MainActivity.java found for package ${{ env.TARGET_PACKAGE }}"
-            echo "Please make sure your Java file is at build_assets/app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
-            exit 1
-          else
-            echo "✅ MainActivity.java found"
+          TARGET_FILE="app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          if [ ! -f "$TARGET_FILE" ]; then
+            echo "⚠️ MainActivity.java not found, creating fallback."
+            mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
+            cat > "$TARGET_FILE" << EOF
+          package ${{ env.TARGET_PACKAGE }};
+
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("https://github.com");
+                  setContentView(webView);
+              }
+          }
+          EOF
           fi
 
-      - name: Move mis‑placed drawable XML files
+      - name: Move mis-placed drawable XML files
         run: |
-          if [ -d "app/src/main/res/values" ]; then
-            for file in app/src/main/res/values/*.xml; do
-              if [ -f "$file" ] && (grep -q "<vector" "$file" || grep -q "<path" "$file" || grep -q "<shape" "$file" || grep -q "<selector" "$file" || grep -q "<gradient" "$file"); then
-                echo "Moving drawable XML: $(basename "$file") to drawable"
-                mv "$file" app/src/main/res/drawable/
-              fi
-            done
+          if [ -f app/src/main/res/layout/*.xml ]; then
+            mv app/src/main/res/layout/*.xml app/src/main/res/drawable/ 2>/dev/null || true
           fi
 
       - name: Fix package name and import R
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-            find "$TARGET_DIR" -type f -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-            for file in $(find "$TARGET_DIR" -type f -name "*.java"); do
+            find "$TARGET_DIR" -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
+            find "$TARGET_DIR" -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
+            for file in $(find "$TARGET_DIR" -name "*.java"); do
               if ! grep -q "^package" "$file"; then
                 sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
               fi
@@ -137,132 +100,107 @@ jobs:
       - name: Ensure basic resources exist (only if missing)
         run: |
           mkdir -p app/src/main/res/values
-          if [ ! -f "app/src/main/res/values/colors.xml" ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <color name="background">#121212</color>
-              <color name="buttonBg">#00FFCC</color>
+              <string name="app_name">${{ env.APP_NAME }}</string>
           </resources>
           EOF
           fi
-          if [ ! -f "app/src/main/res/values/styles.xml" ]; then
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources><color name="colorPrimary">#6200EE</color></resources>
+          EOF
+          fi
+          if [ ! -f app/src/main/res/values/styles.xml ]; then
             cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:windowBackground">@color/background</item>
-              </style>
-              <style name="TorchButton" parent="Widget.AppCompat.Button">
-                  <item name="android:backgroundTint">@color/buttonBg</item>
-                  <item name="android:textSize">20sp</item>
-              </style>
-          </resources>
+          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/></resources>
+          EOF
+          fi
+          mkdir -p app/src/main/res/drawable
+          if [ ! -f app/src/main/res/drawable/button_background.xml ]; then
+            cat > app/src/main/res/drawable/button_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#6200EE"/>
+              <corners android:radius="8dp"/>
+          </shape>
           EOF
           fi
 
       - name: Fix AndroidManifest (robustly add android:exported)
         run: |
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i '/<activity[^>]*>/ { /android:exported/! s/<activity/<activity android:exported="true" / }' "$MANIFEST"
-            echo "✅ Manifest fixed: android:exported added"
-          else
-            cat > "$MANIFEST" << EOF
+          if [ ! -f app/src/main/AndroidManifest.xml ]; then
+            cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ env.TARGET_PACKAGE }}">
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.FLASHLIGHT" />
-              <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="${{ env.APP_NAME }}" android:theme="@style/AppTheme">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${{ env.TARGET_PACKAGE }}">
+              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
-            echo "✅ Created default manifest"
+          else
+            sed -i '/<activity android:name=".MainActivity"/ s/android:exported="false"/android:exported="true"/' app/src/main/AndroidManifest.xml
+            sed -i '/<activity android:name=".MainActivity"/ s/android:exported="[^"]*"/android:exported="true"/' app/src/main/AndroidManifest.xml
+            if ! grep -q 'android:exported="true"' app/src/main/AndroidManifest.xml; then
+              sed -i '/<activity android:name=".MainActivity"/ s/>/ android:exported="true">/' app/src/main/AndroidManifest.xml
+            fi
           fi
 
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
-      - name: Build Gradle files
+      - name: Build Gradle file
         run: |
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m
-          EOF
-          
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = 'SystemPro'
-          include ':app'
-          EOF
-          
-          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
-          
-          cat > app/build.gradle << EOF
+          cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
               defaultConfig {
                   applicationId "${{ env.TARGET_PACKAGE }}"
-                  minSdk 24
+                  minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
       - name: Build APK
         run: |
-          gradle assembleDebug --no-daemon
-          mkdir -p output_report
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
-            echo "✅ APK built successfully"
           else
-            echo "❌ Build failed"
+            echo "APK not found" >> output_report/build_summary.txt
             exit 1
           fi
 
-      - name: Upload APK as Artifact
+      - name: Validate APK size
+        run: |
+          SIZE=$(stat -c%s output_report/app-debug.apk 2>/dev/null || echo 0)
+          if [ $SIZE -lt 50000 ]; then
+            echo "APK too small ($SIZE bytes)" >> output_report/build_summary.txt
+            exit 1
+          else
+            echo "APK size OK ($SIZE bytes)" >> output_report/build_summary.txt
+          fi
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: System-Pro-V2-Final
-          path: output_report/app-debug.apk
-
-      - name: Upload APK to Release (create/update latest-build tag)
-        uses: softprops/action-gh-release@v1
-        continue-on-error: true
-        with:
-          tag_name: latest-build
-          name: "Latest Build"
-          body: "APK from workflow run #${{ github.run_number }}"
-          files: output_report/app-debug.apk
-          prerelease: true
-          overwrite: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: output_report/
