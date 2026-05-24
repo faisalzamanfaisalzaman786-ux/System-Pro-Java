@@ -1,5 +1,0 @@
-<resources>
-    <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="colorPrimary">#00FFCC</item>
-    </style>
-</resources>
