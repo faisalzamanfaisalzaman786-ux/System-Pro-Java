@@ -2,228 +2,99 @@ name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
-    types: [trigger_b64_build]
+    types: [android_full_build]   # <-- یہ ایونٹ ہمارا ٹول بھیجتا ہے
+  workflow_dispatch:               # (آپشنل) manual run بھی کر سکتے ہیں
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # artifact upload کے لیے
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Prepare Package Name
+      - name: Setup Gradle (use wrapper if exists, else create)
         run: |
-          RAW_PKG="${{ github.event.client_payload.package_name }}"
-          CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
-          PKG_NAME=${CLEAN_PKG:-"com.system.titan.pro"}
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          APP_NAME=$(echo "$PKG_NAME" | awk -F'.' '{print $NF}')
-          
-          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
-          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-
-      - name: Clean old package folders and prepare directories
-        run: |
-          # Clean old Java folders in build_assets (avoid conflicts)
-          find build_assets/app/src/main/java -type d -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-          mkdir -p build_assets/app/src/main/java/${{ env.TARGET_PATH }}
-          
-          # Clean app source
-          rm -rf app/src/main/java app/src/main/res app/build
-          mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
-          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
-
-      - name: Copy Java files from build_assets
-        run: |
-          find build_assets -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
-          
-          # Also copy layout if present in build_assets
-          if [ -f build_assets/activity_main.xml ]; then
-            cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
-          fi
-          if [ -f build_assets/app/src/main/res/layout/activity_main.xml ]; then
-            cp -f build_assets/app/src/main/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-          fi
-
-      - name: Ensure MainActivity.java (fallback with WebView)
-        run: |
-          TARGET_FILE="app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
-          if [ ! -f "$TARGET_FILE" ]; then
-            echo "MainActivity.java not found, creating fallback."
-            mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
-            cat > "$TARGET_FILE" << 'EOF'
-          package ${{ env.TARGET_PACKAGE }};
-
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("https://github.com");
-                  setContentView(webView);
-              }
-          }
-          EOF
-          fi
-
-      - name: Fix package name and import R (using sed)
-        run: |
-          TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
-          if [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -name "*.java" -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-            find "$TARGET_DIR" -name "*.java" -exec sed -i "s/import .*\.R;/import ${{ env.TARGET_PACKAGE }}.R;/g" {} \;
-            for file in $(find "$TARGET_DIR" -name "*.java"); do
-              if ! grep -q "^package" "$file"; then
-                sed -i "1i package ${{ env.TARGET_PACKAGE }};" "$file"
-              fi
-            done
-          fi
-
-      - name: Add basic resources (if missing)
-        run: |
-          # Strings
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            mkdir -p app/src/main/res/values
-            cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">${{ env.APP_NAME }}</string>
-          </resources>
-          EOF
-          fi
-          # Colors
-          if [ ! -f app/src/main/res/values/colors.xml ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-          </resources>
-          EOF
-          fi
-          # Styles
-          if [ ! -f app/src/main/res/values/styles.xml ]; then
-            cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/>
-          </resources>
-          EOF
-          fi
-          # Drawable (simple button background)
-          mkdir -p app/src/main/res/drawable
-          if [ ! -f app/src/main/res/drawable/button_background.xml ]; then
-            cat > app/src/main/res/drawable/button_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#6200EE"/>
-              <corners android:radius="8dp"/>
-          </shape>
-          EOF
-          fi
-
-      - name: Generate clean AndroidManifest.xml (avoid parsing errors)
-        run: |
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ env.TARGET_PACKAGE }}">
-              <application
-                  android:allowBackup="true"
-                  android:label="@string/app_name"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Copy app icon (if any)
-        run: |
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p app/src/main/res/mipmap-$d
-          done
-          ICON=$(find build_assets -type f -name "*.png" | head -1)
-          if [ -n "$ICON" ] && file "$ICON" | grep -q "PNG image data"; then
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher.png
-              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-            echo "Custom icon applied"
+          if [ ! -f gradlew ]; then
+            echo "Gradle wrapper not found, creating default wrapper (gradle 8.5)"
+            gradle wrapper --gradle-version 8.5 --distribution-type bin
+            chmod +x gradlew
           else
-            echo "No custom icon found, default will be used"
+            chmod +x gradlew
           fi
 
-      - name: Build Gradle file
+      - name: Decode package name from dispatch payload (optional)
         run: |
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              namespace "${{ env.TARGET_PACKAGE }}"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ env.TARGET_PACKAGE }}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
+          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
+            DECODED_PKG=$(echo "${{ github.event.client_payload.package_name }}" | base64 --decode)
+            echo "CUSTOM_PACKAGE=$DECODED_PKG" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+            DECODED_APP=$(echo "${{ github.event.client_payload.app_name }}" | base64 --decode)
+            echo "CUSTOM_APPNAME=$DECODED_APP" >> $GITHUB_ENV
+          fi
 
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
-      - name: Create output directory and build APK
+      - name: Sync package name in AndroidManifest.xml (if needed)
         run: |
-          mkdir -p output_report
-          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
-          else
-            echo "APK not found" >> output_report/build_summary.txt
+          if [ -n "$CUSTOM_PACKAGE" ]; then
+            MANIFEST="app/src/main/AndroidManifest.xml"
+            if [ -f "$MANIFEST" ]; then
+              sed -i "s/package=\".*\"/package=\"$CUSTOM_PACKAGE\"/" "$MANIFEST"
+              echo "Updated manifest package to $CUSTOM_PACKAGE"
+            fi
+            # Also update build.gradle namespace
+            BUILD_GRADLE="app/build.gradle"
+            if [ -f "$BUILD_GRADLE" ]; then
+              sed -i "s/namespace \".*\"/namespace \"$CUSTOM_PACKAGE\"/" "$BUILD_GRADLE"
+              sed -i "s/applicationId \".*\"/applicationId \"$CUSTOM_PACKAGE\"/" "$BUILD_GRADLE"
+              echo "Updated app/build.gradle with new package"
+            fi
+          fi
+          if [ -n "$CUSTOM_APPNAME" ]; then
+            STRINGS="app/src/main/res/values/strings.xml"
+            if [ -f "$STRINGS" ]; then
+              sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$CUSTOM_APPNAME<\/string>/" "$STRINGS"
+              echo "Updated app name to $CUSTOM_APPNAME"
+            fi
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Check APK output
+        id: check_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "APK not found!"
             exit 1
           fi
+          echo "APK_FILE=$APK_PATH" >> $GITHUB_ENV
+          echo "APK_SIZE=$(stat -c%s "$APK_PATH")" >> $GITHUB_ENV
 
-      - name: Validate APK size
-        run: |
-          SIZE=$(stat -c%s output_report/app-debug.apk 2>/dev/null || echo 0)
-          if [ $SIZE -lt 50000 ]; then
-            echo "APK too small ($SIZE bytes)" >> output_report/build_summary.txt
-            exit 1
-          else
-            echo "APK size OK ($SIZE bytes)" >> output_report/build_summary.txt
-          fi
-
-      - name: Upload artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: System-Pro-V2-Final
-          path: output_report/
+          name: System-Pro-APK
+          path: ${{ env.APK_FILE }}
+          retention-days: 7
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "Build completed at $(date)" >> build_summary.txt
+          echo "APK size: ${{ env.APK_SIZE }} bytes" >> build_summary.txt
+          echo "Package: ${CUSTOM_PACKAGE:-$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml)}" >> build_summary.txt
+          cat build_summary.txt
