@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="bg_dark">#0A0F1D</color>
-    <color name="btn_gradient_start">#00FFCC</color>
-    <color name="btn_gradient_end">#A855F7</color>
-    <color name="text_light">#B0B3C8</color>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorAccent">#03DAC5</color>
-</resources>
