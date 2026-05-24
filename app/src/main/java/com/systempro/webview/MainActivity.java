@@ -10,6 +10,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         TextView tv = findViewById(R.id.textView);
-        tv.setText("Webview is ready!");
+        tv.setText("webview is ready!");
     }
 }
