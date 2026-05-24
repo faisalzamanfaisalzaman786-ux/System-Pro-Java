@@ -2,15 +2,15 @@ name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
-    types: [android_full_build]   # <-- یہ ایونٹ ہمارا ٹول بھیجتا ہے
-  workflow_dispatch:               # (آپشنل) manual run بھی کر سکتے ہیں
+    types: [android_full_build]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write   # artifact upload کے لیے
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -22,17 +22,23 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle (use wrapper if exists, else create)
+      - name: Force Gradle wrapper to version 8.5
         run: |
-          if [ ! -f gradlew ]; then
-            echo "Gradle wrapper not found, creating default wrapper (gradle 8.5)"
-            gradle wrapper --gradle-version 8.5 --distribution-type bin
-            chmod +x gradlew
-          else
-            chmod +x gradlew
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          # Download wrapper jar if missing (optional but safe)
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
           fi
+          chmod +x gradlew 2>/dev/null || true
 
-      - name: Decode package name from dispatch payload (optional)
+      - name: Decode payload (package name and app name)
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             DECODED_PKG=$(echo "${{ github.event.client_payload.package_name }}" | base64 --decode)
@@ -43,42 +49,79 @@ jobs:
             echo "CUSTOM_APPNAME=$DECODED_APP" >> $GITHUB_ENV
           fi
 
-      - name: Sync package name in AndroidManifest.xml (if needed)
+      - name: Update Android files with custom package and app name
         run: |
           if [ -n "$CUSTOM_PACKAGE" ]; then
-            MANIFEST="app/src/main/AndroidManifest.xml"
-            if [ -f "$MANIFEST" ]; then
-              sed -i "s/package=\".*\"/package=\"$CUSTOM_PACKAGE\"/" "$MANIFEST"
+            # Update AndroidManifest.xml
+            if [ -f app/src/main/AndroidManifest.xml ]; then
+              sed -i "s/package=\".*\"/package=\"$CUSTOM_PACKAGE\"/" app/src/main/AndroidManifest.xml
               echo "Updated manifest package to $CUSTOM_PACKAGE"
             fi
-            # Also update build.gradle namespace
-            BUILD_GRADLE="app/build.gradle"
-            if [ -f "$BUILD_GRADLE" ]; then
-              sed -i "s/namespace \".*\"/namespace \"$CUSTOM_PACKAGE\"/" "$BUILD_GRADLE"
-              sed -i "s/applicationId \".*\"/applicationId \"$CUSTOM_PACKAGE\"/" "$BUILD_GRADLE"
-              echo "Updated app/build.gradle with new package"
+            # Update app/build.gradle (namespace and applicationId)
+            if [ -f app/build.gradle ]; then
+              sed -i "s/namespace \".*\"/namespace \"$CUSTOM_PACKAGE\"/" app/build.gradle
+              sed -i "s/applicationId \".*\"/applicationId \"$CUSTOM_PACKAGE\"/" app/build.gradle
+              echo "Updated app/build.gradle"
             fi
           fi
           if [ -n "$CUSTOM_APPNAME" ]; then
-            STRINGS="app/src/main/res/values/strings.xml"
-            if [ -f "$STRINGS" ]; then
-              sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$CUSTOM_APPNAME<\/string>/" "$STRINGS"
+            if [ -f app/src/main/res/values/strings.xml ]; then
+              sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$CUSTOM_APPNAME<\/string>/" app/src/main/res/values/strings.xml
               echo "Updated app name to $CUSTOM_APPNAME"
             fi
+          fi
+
+      - name: Ensure project-level build.gradle uses AGP 8.5.0 (compatible with Gradle 8.5)
+        run: |
+          # Overwrite or create project build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.5.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+          echo "Project build.gradle set to AGP 8.5.0"
+
+      - name: Ensure app/build.gradle is compatible (no version conflicts)
+        run: |
+          # If app/build.gradle exists, make sure it doesn't specify incompatible AGP version
+          if [ -f app/build.gradle ]; then
+            # Remove any 'plugins { id 'com.android.application' version ... }' line that might force AGP version
+            sed -i '/^plugins {/,/^}/d' app/build.gradle
+            # Prepend proper plugin block
+            cat > app/build.gradle.new << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          EOF
+            cat app/build.gradle >> app/build.gradle.new
+            mv app/build.gradle.new app/build.gradle
+            echo "Fixed app/build.gradle plugin declaration"
           fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
+      - name: Build Debug APK with Gradle 8.5
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Check APK output
-        id: check_apk
+      - name: Locate APK
+        id: find_apk
         run: |
           APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "APK not found!"
+            echo "No APK found!"
             exit 1
           fi
           echo "APK_FILE=$APK_PATH" >> $GITHUB_ENV
@@ -96,5 +139,6 @@ jobs:
         run: |
           echo "Build completed at $(date)" >> build_summary.txt
           echo "APK size: ${{ env.APK_SIZE }} bytes" >> build_summary.txt
-          echo "Package: ${CUSTOM_PACKAGE:-$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml)}" >> build_summary.txt
+          PACKAGE_NAME=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml 2>/dev/null || echo "unknown")
+          echo "Package: $PACKAGE_NAME" >> build_summary.txt
           cat build_summary.txt
