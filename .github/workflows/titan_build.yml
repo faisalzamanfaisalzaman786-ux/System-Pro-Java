@@ -22,21 +22,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Force Gradle wrapper to version 8.5
+      - name: Generate Gradle wrapper with version 8.5
         run: |
-          mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          # Download wrapper jar if missing (optional but safe)
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
-          fi
-          chmod +x gradlew 2>/dev/null || true
+          # Ensure gradle is installed (runner has gradle by default)
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
+          chmod +x gradlew
 
       - name: Decode payload (package name and app name)
         run: |
@@ -73,7 +63,6 @@ jobs:
 
       - name: Ensure project-level build.gradle uses AGP 8.5.0 (compatible with Gradle 8.5)
         run: |
-          # Overwrite or create project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -93,25 +82,19 @@ jobs:
           EOF
           echo "Project build.gradle set to AGP 8.5.0"
 
-      - name: Ensure app/build.gradle is compatible (no version conflicts)
+      - name: Ensure app/build.gradle has correct plugin block
         run: |
-          # If app/build.gradle exists, make sure it doesn't specify incompatible AGP version
           if [ -f app/build.gradle ]; then
-            # Remove any 'plugins { id 'com.android.application' version ... }' line that might force AGP version
+            # Remove any version from plugin block (if exists)
             sed -i '/^plugins {/,/^}/d' app/build.gradle
             # Prepend proper plugin block
-            cat > app/build.gradle.new << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-          EOF
+            echo "plugins {" > app/build.gradle.new
+            echo "    id 'com.android.application'" >> app/build.gradle.new
+            echo "}" >> app/build.gradle.new
             cat app/build.gradle >> app/build.gradle.new
             mv app/build.gradle.new app/build.gradle
-            echo "Fixed app/build.gradle plugin declaration"
+            echo "Fixed app/build.gradle"
           fi
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
 
       - name: Build Debug APK with Gradle 8.5
         run: ./gradlew assembleDebug --no-daemon
