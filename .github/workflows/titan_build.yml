@@ -30,19 +30,22 @@ jobs:
           echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
 
-      - name: Clean old package folders from build_assets (avoid conflicts)
+      - name: Clean old package folders and prepare directories
         run: |
+          # Clean old Java folders in build_assets (avoid conflicts)
           find build_assets/app/src/main/java -type d -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
           mkdir -p build_assets/app/src/main/java/${{ env.TARGET_PATH }}
-
-      - name: Copy files from build_assets (only current package)
-        run: |
+          
+          # Clean app source
           rm -rf app/src/main/java app/src/main/res app/build
           mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
           mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
 
+      - name: Copy Java files from build_assets
+        run: |
           find build_assets -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
           
+          # Also copy layout if present in build_assets
           if [ -f build_assets/activity_main.xml ]; then
             cp -f build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
@@ -50,13 +53,13 @@ jobs:
             cp -f build_assets/app/src/main/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
 
-      - name: Ensure MainActivity.java exists (create fallback if missing)
+      - name: Ensure MainActivity.java (fallback with WebView)
         run: |
           TARGET_FILE="app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
           if [ ! -f "$TARGET_FILE" ]; then
-            echo "⚠️ MainActivity.java not found, creating fallback."
+            echo "MainActivity.java not found, creating fallback."
             mkdir -p app/src/main/java/${{ env.TARGET_PATH }}
-            cat > "$TARGET_FILE" << EOF
+            cat > "$TARGET_FILE" << 'EOF'
           package ${{ env.TARGET_PACKAGE }};
 
           import android.os.Bundle;
@@ -78,13 +81,7 @@ jobs:
           EOF
           fi
 
-      - name: Move mis-placed drawable XML files
-        run: |
-          if [ -f app/src/main/res/layout/*.xml ]; then
-            mv app/src/main/res/layout/*.xml app/src/main/res/drawable/ 2>/dev/null || true
-          fi
-
-      - name: Fix package name and import R
+      - name: Fix package name and import R (using sed)
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
@@ -97,10 +94,11 @@ jobs:
             done
           fi
 
-      - name: Ensure basic resources exist (only if missing)
+      - name: Add basic resources (if missing)
         run: |
-          mkdir -p app/src/main/res/values
+          # Strings
           if [ ! -f app/src/main/res/values/strings.xml ]; then
+            mkdir -p app/src/main/res/values
             cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -108,18 +106,25 @@ jobs:
           </resources>
           EOF
           fi
+          # Colors
           if [ ! -f app/src/main/res/values/colors.xml ]; then
             cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><color name="colorPrimary">#6200EE</color></resources>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+          </resources>
           EOF
           fi
+          # Styles
           if [ ! -f app/src/main/res/values/styles.xml ]; then
             cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/></resources>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/>
+          </resources>
           EOF
           fi
+          # Drawable (simple button background)
           mkdir -p app/src/main/res/drawable
           if [ ! -f app/src/main/res/drawable/button_background.xml ]; then
             cat > app/src/main/res/drawable/button_background.xml << 'EOF'
@@ -131,32 +136,49 @@ jobs:
           EOF
           fi
 
-      - name: Fix AndroidManifest (robustly add android:exported)
+      - name: Generate clean AndroidManifest.xml (avoid parsing errors)
         run: |
-          if [ ! -f app/src/main/AndroidManifest.xml ]; then
-            cat > app/src/main/AndroidManifest.xml << EOF
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${{ env.TARGET_PACKAGE }}">
-              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+              <application
+                  android:allowBackup="true"
+                  android:label="@string/app_name"
+                  android:icon="@mipmap/ic_launcher">
+                  <activity android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
+
+      - name: Copy app icon (if any)
+        run: |
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p app/src/main/res/mipmap-$d
+          done
+          ICON=$(find build_assets -type f -name "*.png" | head -1)
+          if [ -n "$ICON" ] && file "$ICON" | grep -q "PNG image data"; then
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher.png
+              cp -f "$ICON" app/src/main/res/mipmap-$d/ic_launcher_round.png
+            done
+            echo "Custom icon applied"
           else
-            sed -i '/<activity android:name=".MainActivity"/ s/android:exported="false"/android:exported="true"/' app/src/main/AndroidManifest.xml
-            sed -i '/<activity android:name=".MainActivity"/ s/android:exported="[^"]*"/android:exported="true"/' app/src/main/AndroidManifest.xml
-            if ! grep -q 'android:exported="true"' app/src/main/AndroidManifest.xml; then
-              sed -i '/<activity android:name=".MainActivity"/ s/>/ android:exported="true">/' app/src/main/AndroidManifest.xml
-            fi
+            echo "No custom icon found, default will be used"
           fi
 
       - name: Build Gradle file
         run: |
           cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
