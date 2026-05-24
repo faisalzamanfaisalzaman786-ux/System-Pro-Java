@@ -64,13 +64,14 @@ jobs:
           </manifest>
           EOF
 
-          # Create a simple MainActivity.java
-          cat > app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')/MainActivity.java << 'EOF'
+          # Create MainActivity.java with proper R import
+          cat > app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')/MainActivity.java << EOF
           package $CUSTOM_PACKAGE;
 
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           import android.widget.TextView;
+          import $CUSTOM_PACKAGE.R;
 
           public class MainActivity extends AppCompatActivity {
               @Override
@@ -107,7 +108,7 @@ jobs:
           </resources>
           EOF
 
-          # Create colors.xml and themes.xml (minimal)
+          # Create colors.xml
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -115,6 +116,7 @@ jobs:
           </resources>
           EOF
 
+          # Create themes.xml
           cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -188,7 +190,6 @@ jobs:
       - name: Remove any conflicting files
         run: |
           rm -f gradle/libs.versions.toml 2>/dev/null || true
-          # Ensure no pluginManagement block in settings.gradle
           sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
 
       - name: Build APK
