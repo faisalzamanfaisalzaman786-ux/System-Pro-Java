@@ -1,9 +1,9 @@
 plugins { id 'com.android.application' }
 android {
-    namespace 'com.systempro.webview'
+    namespace 'com.systempro.webview1'
     compileSdk 34
     defaultConfig {
-        applicationId "com.systempro.webview"
+        applicationId "com.systempro.webview1"
         minSdk 21
         targetSdk 34
         versionCode 1
