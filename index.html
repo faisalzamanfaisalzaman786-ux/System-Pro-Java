@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SystemPro AI – Puter.js (Free & Unlimited)</title>
+    <title>SystemPro AI – Secure & Permanent Instructions</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- Puter.js library - no API key needed -->
@@ -54,109 +54,164 @@
         .instructions-box { background: #0d1426; border-radius: 12px; padding: 8px; margin-top: 8px; }
         .instructions-box label { font-size: 0.7rem; color: #00FFCC; }
         .instructions-box textarea { width: 100%; background: #030617; border: 1px solid #2f4170; border-radius: 8px; padding: 6px; color: #d6e6ff; font-size: 0.7rem; font-family: monospace; resize: vertical; margin-top: 4px; }
-        .small-btn { background: #334155; border: none; padding: 4px 8px; border-radius: 12px; color: white; font-size: 0.65rem; cursor: pointer; margin-top: 4px; }
+        /* Login overlay styles */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+        .login-box {
+            background: #0f172a;
+            padding: 30px;
+            border-radius: 30px;
+            border: 1px solid #00FFCC;
+            width: 90%;
+            max-width: 350px;
+            text-align: center;
+        }
+        .login-box h2 { color: #00FFCC; margin-bottom: 20px; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; background: #1e293b; border: 1px solid #334155; border-radius: 30px; color: white; }
+        .login-box button { background: #a855f7; width: 100%; padding: 12px; border-radius: 30px; font-weight: bold; cursor: pointer; }
+        .login-error { color: #ff5555; margin-top: 10px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
-
-<div class="app-container">
-    <div class="main-title"><h1>⚡ SystemPro AI – Puter.js (Free & Unlimited)</h1></div>
-    
-    <div class="action-row">
-        <button class="action-btn" onclick="saveAllData()"><i class="fas fa-save"></i> SAVE ALL</button>
-        <button class="action-btn" onclick="toggleModal(true)"><i class="fas fa-cog"></i> SETTINGS</button>
-        <button class="action-btn" onclick="clearLogs()"><i class="fas fa-trash-alt"></i> CLEAR LOG</button>
-        <button class="action-btn copy" onclick="copyAllCode()"><i class="fas fa-copy"></i> COPY ALL CODE</button>
-        <button class="action-btn danger" onclick="clearCodeOnly()"><i class="fas fa-times-circle"></i> CLEAR DATA (Code only)</button>
-    </div>
-
-    <div class="tab-bar">
-        <button class="tab active" onclick="switchTab('java', this)">MainActivity.java</button>
-        <button class="tab" onclick="switchTab('xml', this)">activity_main.xml</button>
-        <button class="tab" onclick="switchTab('manifest', this)">AndroidManifest.xml</button>
-        <button class="tab" onclick="switchTab('resources', this)">🎨 All Resources</button>
-        <button class="tab" onclick="switchTab('ai', this)">🤖 AI Assistant (Puter.js)</button>
-        <button class="tab" onclick="switchTab('icon', this)">App Icon</button>
-        <button class="tab" onclick="switchTab('history', this)">History</button>
-    </div>
-
-    <div class="editor-container">
-        <div id="javaEditor" class="editor active"><textarea id="javaCode" placeholder="MainActivity.java (empty)"></textarea></div>
-        <div id="xmlEditor" class="editor"><textarea id="xmlCode" placeholder="activity_main.xml (empty)"></textarea></div>
-        <div id="manifestEditor" class="editor"><textarea id="manifestCode" placeholder="AndroidManifest.xml (empty)"></textarea></div>
-        <div id="resourcesTab" class="resource-subtabs">
-            <div class="section"><h3>🎨 colors.xml</h3><textarea id="colorsXml" placeholder="colors.xml"></textarea></div>
-            <div class="section"><h3>📝 styles.xml</h3><textarea id="stylesXml" placeholder="styles.xml"></textarea></div>
-            <div class="section"><h3>🎭 themes.xml</h3><textarea id="themesXml" placeholder="themes.xml"></textarea></div>
-            <div class="section"><h3>📐 dimens.xml</h3><textarea id="dimensXml" placeholder="dimens.xml"></textarea></div>
-            <div class="section"><h3>📜 strings.xml</h3><textarea id="stringsXml" placeholder="strings.xml"></textarea></div>
-            <div class="section"><h3>🖌️ button_gradient.xml</h3><textarea id="buttonGradientXml" placeholder="button_gradient.xml"></textarea></div>
-            <div class="section"><h3>💡 ic_torch_on.xml</h3><textarea id="icTorchOnXml" placeholder="ic_torch_on.xml"></textarea></div>
-            <div class="section"><h3>💡 ic_torch_off.xml</h3><textarea id="icTorchOffXml" placeholder="ic_torch_off.xml"></textarea></div>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>🔐 SystemPro Access</h2>
+            <input type="text" id="loginUser" placeholder="Username" autocomplete="off">
+            <input type="password" id="loginPass" placeholder="Password">
+            <button onclick="checkLogin()">Login</button>
+            <div id="loginMsg" class="login-error"></div>
         </div>
-        <div id="aiAssistantArea" class="ai-assistant">
-            <textarea id="aiPromptArea" placeholder="Describe your app... e.g., 'A simple To-Do List app with add, delete, and complete functionality.'"></textarea>
-            <div class="ai-controls">
-                <button onclick="generateWithPuter()">⚡ Generate Code (Puter.js - Free)</button>
+    </div>
+
+    <div class="app-container" id="mainApp" style="display: none;">
+        <div class="main-title"><h1>⚡ SystemPro AI – Final (Permanent Instructions)</h1></div>
+        
+        <div class="action-row">
+            <button class="action-btn" onclick="saveAllData()"><i class="fas fa-save"></i> SAVE ALL</button>
+            <button class="action-btn" onclick="toggleModal(true)"><i class="fas fa-cog"></i> SETTINGS</button>
+            <button class="action-btn" onclick="clearLogs()"><i class="fas fa-trash-alt"></i> CLEAR LOG</button>
+            <button class="action-btn copy" onclick="copyAllCode()"><i class="fas fa-copy"></i> COPY ALL CODE</button>
+            <button class="action-btn danger" onclick="clearCodeOnly()"><i class="fas fa-times-circle"></i> CLEAR DATA (Code only)</button>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab active" onclick="switchTab('java', this)">MainActivity.java</button>
+            <button class="tab" onclick="switchTab('xml', this)">activity_main.xml</button>
+            <button class="tab" onclick="switchTab('manifest', this)">AndroidManifest.xml</button>
+            <button class="tab" onclick="switchTab('resources', this)">🎨 All Resources</button>
+            <button class="tab" onclick="switchTab('ai', this)">🤖 AI Assistant (Puter.js)</button>
+            <button class="tab" onclick="switchTab('icon', this)">App Icon</button>
+            <button class="tab" onclick="switchTab('history', this)">History</button>
+        </div>
+
+        <div class="editor-container">
+            <div id="javaEditor" class="editor active"><textarea id="javaCode" placeholder="MainActivity.java (empty)"></textarea></div>
+            <div id="xmlEditor" class="editor"><textarea id="xmlCode" placeholder="activity_main.xml (empty)"></textarea></div>
+            <div id="manifestEditor" class="editor"><textarea id="manifestCode" placeholder="AndroidManifest.xml (empty)"></textarea></div>
+            <div id="resourcesTab" class="resource-subtabs">
+                <div class="section"><h3>🎨 colors.xml</h3><textarea id="colorsXml" placeholder="colors.xml"></textarea></div>
+                <div class="section"><h3>📝 styles.xml</h3><textarea id="stylesXml" placeholder="styles.xml"></textarea></div>
+                <div class="section"><h3>🎭 themes.xml</h3><textarea id="themesXml" placeholder="themes.xml"></textarea></div>
+                <div class="section"><h3>📐 dimens.xml</h3><textarea id="dimensXml" placeholder="dimens.xml"></textarea></div>
+                <div class="section"><h3>📜 strings.xml</h3><textarea id="stringsXml" placeholder="strings.xml"></textarea></div>
+                <div class="section"><h3>🖌️ button_gradient.xml</h3><textarea id="buttonGradientXml" placeholder="button_gradient.xml"></textarea></div>
+                <div class="section"><h3>💡 ic_torch_on.xml</h3><textarea id="icTorchOnXml" placeholder="ic_torch_on.xml"></textarea></div>
+                <div class="section"><h3>💡 ic_torch_off.xml</h3><textarea id="icTorchOffXml" placeholder="ic_torch_off.xml"></textarea></div>
             </div>
-            <div class="instructions-box">
-                <label>✏️ System Instructions (ultra precise – do not change unless needed):</label>
-                <textarea id="systemInstructionsText" rows="6"></textarea>
-                <button class="small-btn" onclick="resetInstructionsToDefault()">Reset to Precise Instructions</button>
+            <div id="aiAssistantArea" class="ai-assistant">
+                <textarea id="aiPromptArea" placeholder="Describe your app... e.g., 'A simple To-Do List app with add, delete, and complete functionality.'"></textarea>
+                <div class="ai-controls">
+                    <button onclick="generateWithPuter()">⚡ Generate Code (Puter.js - Free)</button>
+                </div>
+                <div class="instructions-box">
+                    <label>✏️ System Instructions (permanent – edit as needed, no reset button):</label>
+                    <textarea id="systemInstructionsText" rows="8"></textarea>
+                </div>
+                <div id="aiStatus" class="ai-status"></div>
             </div>
-            <div id="aiStatus" class="ai-status"></div>
+            <div id="iconTabArea">
+                <input type="file" id="iconInput" accept="image/png" style="display:none" onchange="processIcon(this)">
+                <button class="action-btn" onclick="document.getElementById('iconInput').click()">Upload PNG Icon (96x96)</button>
+                <center><img id="iconPreview" class="icon-preview" style="display:none"></center>
+            </div>
+            <div id="historyTabArea"><div id="historyList"></div></div>
         </div>
-        <div id="iconTabArea">
-            <input type="file" id="iconInput" accept="image/png" style="display:none" onchange="processIcon(this)">
-            <button class="action-btn" onclick="document.getElementById('iconInput').click()">Upload PNG Icon (96x96)</button>
-            <center><img id="iconPreview" class="icon-preview" style="display:none"></center>
+
+        <div class="status-card" id="statusCard">
+            <div class="progress-bar"><div id="fill"></div></div>
+            <div class="log" id="logs">Ready. No reset button – your instructions are permanent.</div>
+            <div id="downloadLinkBox" class="download-link"></div>
         </div>
-        <div id="historyTabArea"><div id="historyList"></div></div>
+
+        <div class="build-row">
+            <button class="btn-primary" onclick="startFullProcess()">🚀 Upload & Build</button>
+            <button class="btn-secondary" onclick="downloadLatestApk()">📥 DOWNLOAD APK</button>
+        </div>
     </div>
 
-    <div class="status-card" id="statusCard">
-        <div class="progress-bar"><div id="fill"></div></div>
-        <div class="log" id="logs">Ready. Using Puter.js – free, no API key needed.</div>
-        <div id="downloadLinkBox" class="download-link"></div>
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal">
+            <h3>⚙️ Settings</h3>
+            <input type="text" id="pkgName" placeholder="Package name (e.g., com.systempro.todolist)">
+            <input type="password" id="ghToken" placeholder="GitHub Token (repo + actions)">
+            <input type="text" id="ghRepo" placeholder="owner/repo">
+            <button class="btn-primary" onclick="saveSettings()">SAVE SETTINGS</button>
+        </div>
     </div>
+    <div id="toastMsg" class="toast-msg"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        // ======================= LOGIN SYSTEM =======================
+        function checkLogin() {
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value.trim();
+            if (user === 'faisal' && pass === '123456') {
+                localStorage.setItem('syspro_logged_in', 'true');
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+            } else {
+                document.getElementById('loginMsg').innerText = 'Invalid username or password.';
+            }
+        }
+        // Check if already logged in
+        if (localStorage.getItem('syspro_logged_in') === 'true') {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'flex';
+        }
 
-    <div class="build-row">
-        <button class="btn-primary" onclick="startFullProcess()">🚀 Upload & Build</button>
-        <button class="btn-secondary" onclick="downloadLatestApk()">📥 DOWNLOAD APK</button>
-    </div>
-</div>
+        // ======================= GLOBALS =======================
+        let processedIconB64 = "";
+        let pollingInterval = null;
+        let lastClickTime = 0;
 
-<div id="settingsModal" class="modal-overlay">
-    <div class="modal">
-        <h3>⚙️ Settings</h3>
-        <input type="text" id="pkgName" placeholder="Package name (e.g., com.systempro.todolist)">
-        <input type="password" id="ghToken" placeholder="GitHub Token (repo + actions)">
-        <input type="text" id="ghRepo" placeholder="owner/repo">
-        <button class="btn-primary" onclick="saveSettings()">SAVE SETTINGS</button>
-    </div>
-</div>
-<div id="toastMsg" class="toast-msg"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script>
-    // ======================= GLOBALS =======================
-    let processedIconB64 = "";
-    let pollingInterval = null;
-    let lastClickTime = 0;
+        // ULTRA PRECISE SYSTEM INSTRUCTIONS – NO PACKAGE NAME FORWARDING, AI GENERATES ITS OWN
+        const ULTRA_PRECISE_INSTRUCTIONS = `You are an expert Android developer. Generate a COMPLETE, WORKING Android app based EXACTLY on the user's request. You MUST output exactly THREE files: MainActivity.java, activity_main.xml, and AndroidManifest.xml. No other files.
 
-    // ULTRA PRECISE SYSTEM INSTRUCTIONS – same as before
-    const ULTRA_PRECISE_INSTRUCTIONS = `You are an expert Android developer. Generate a COMPLETE, WORKING Android app based EXACTLY on the user's request. You MUST output exactly THREE files: MainActivity.java, activity_main.xml, and AndroidManifest.xml. No other files.
-
-**CRITICAL RULES – SELF-CONTAINED CODE:**
+**CRITICAL RULES:**
+- DO NOT expect or ask for a package name from the user. Generate your OWN package name based on the app type. Use "com.systempro.appname" format (e.g., for To-Do List use "com.systempro.todolist", for Calculator use "com.systempro.calculator").
 - The Java file MUST be self-contained. Include ALL necessary classes (DatabaseHelper, Adapter, Model) as INNER CLASSES inside MainActivity.java.
 - For RecyclerView items, create the item view PROGRAMMATICALLY inside the adapter's onCreateViewHolder. Use LinearLayout with LayoutParams (width = MATCH_PARENT, height = WRAP_CONTENT). Add child views (CheckBox, TextView, ImageButton, etc.) with proper LayoutParams. NEVER create a separate XML file for the item layout.
-- Include ALL required imports: android.view.ViewGroup, android.database.Cursor, android.database.sqlite.SQLiteDatabase, android.database.sqlite.SQLiteOpenHelper, android.graphics.Paint, android.widget.*, androidx.recyclerview.widget.*, and any other needed. Do NOT rely on the workflow to add missing imports.
+- When creating views programmatically, DO NOT use findViewById(). Instead, store the views as member variables in the ViewHolder. Set IDs using View.generateViewId() if needed, but direct reference is better.
+- Include ALL required imports: android.view.ViewGroup, android.database.Cursor, android.database.sqlite.SQLiteDatabase, android.database.sqlite.SQLiteOpenHelper, android.graphics.Paint, android.widget.*, androidx.recyclerview.widget.*, and any other needed.
 - The layout XML must contain only the main layout (EditText, Button, RecyclerView). No item layout.
-- The manifest MUST NOT contain a package attribute (e.g., package="com.example.app") in the <manifest> tag. The workflow will add it. Also add android:exported="true" for the launcher activity. Use a standard theme like @style/Theme.AppCompat.Light.DarkActionBar – do not invent custom theme names.
+- The manifest MUST NOT contain a package attribute. Also add android:exported="true" for the launcher activity. Use a standard theme like @style/Theme.AppCompat.Light.DarkActionBar.
 - Do NOT add any extra features beyond what the user asked for.
-- Data persistence (if needed): Load existing data from database when app starts (in onCreate). Use SQLite with unique id column for updates/deletions. Never use title or name for updates.
+- Data persistence (if needed): Load existing data from database when app starts. Use SQLite with unique id column for updates/deletions.
 - SQL CREATE TABLE: Write as a single line string to avoid syntax errors.
 - Model class: Include constructor(s), getters, and setters (e.g., setCompleted).
-- Delete functionality: When deleting an item, first get its position in the list, then remove from the list, then call notifyItemRemoved(position). Do NOT remove before getting position.
+- Delete functionality: When deleting an item, first get its position in the list, then remove from the list, then call notifyItemRemoved(position).
 - Checkbox toggle (strikethrough): Update the database and refresh the item's appearance using notifyItemChanged(position). In onBindViewHolder, set initial paint flags based on task.isCompleted().
 - Error handling: Show Toast for empty input, database errors, etc.
 - Prevent adding empty tasks.
@@ -171,360 +226,342 @@
 Return ONLY a valid JSON array with exactly three objects. DO NOT include any extra text, markdown, or code fences outside the JSON.
 Example:
 [
-  {"path":"app/src/main/java/{pkg_path}/MainActivity.java","content":"package ...;"},
+  {"path":"app/src/main/java/com/systempro/todolist/MainActivity.java","content":"package com.systempro.todolist; ..."},
   {"path":"app/src/main/res/layout/activity_main.xml","content":"<?xml...?>"},
   {"path":"app/src/main/AndroidManifest.xml","content":"<?xml...?>"}
 ]
-Replace {pkg_path} with the actual package path (dots replaced by slashes). The user will provide the package name in the request.
+Replace the package path with the package name you generated.
 
-**REMEMBER: Follow the user's request exactly. Generate fresh code for each new app. Do not mix features. Ensure all imports and layout parameters are correct.**`;
+**REMEMBER: Generate your own package name. Do not ask the user for it. Follow exactly. Generate fresh code for each new app.**`;
 
-    function getStorage() { return JSON.parse(localStorage.getItem('syspro_data')) || {}; }
-    function showToast(msg) { let t = document.getElementById('toastMsg'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
-    function addLog(msg, color="#a8b2d1") { let l = document.getElementById('logs'); let t = new Date().toLocaleTimeString(); l.innerHTML += `<div><span style="color:#00FFCC">[${t}]</span> <span style="color:${color}">${msg}</span></div>`; l.scrollTop = l.scrollHeight; }
-    function clearLogs() { document.getElementById('logs').innerHTML = ''; addLog("Logs cleared."); }
-    function toggleModal(show) {
-        const modal = document.getElementById('settingsModal');
-        if (show) {
-            const saved = getStorage();
-            document.getElementById('pkgName').value = saved.pkg || '';
-            document.getElementById('ghToken').value = saved.token || '';
-            document.getElementById('ghRepo').value = saved.repo || '';
-            modal.style.display = 'flex';
-        } else {
-            modal.style.display = 'none';
+        function getStorage() { return JSON.parse(localStorage.getItem('syspro_data')) || {}; }
+        function showToast(msg) { let t = document.getElementById('toastMsg'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
+        function addLog(msg, color="#a8b2d1") { let l = document.getElementById('logs'); let t = new Date().toLocaleTimeString(); l.innerHTML += `<div><span style="color:#00FFCC">[${t}]</span> <span style="color:${color}">${msg}</span></div>`; l.scrollTop = l.scrollHeight; }
+        function clearLogs() { document.getElementById('logs').innerHTML = ''; addLog("Logs cleared."); }
+        function toggleModal(show) {
+            const modal = document.getElementById('settingsModal');
+            if (show) {
+                const saved = getStorage();
+                document.getElementById('pkgName').value = saved.pkg || '';
+                document.getElementById('ghToken').value = saved.token || '';
+                document.getElementById('ghRepo').value = saved.repo || '';
+                modal.style.display = 'flex';
+            } else {
+                modal.style.display = 'none';
+            }
         }
-    }
-    
-    // ========== TAB SWITCHING ==========
-    function switchTab(tabId, btn) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        btn.classList.add('active');
-        const panels = ['.editor', '.ai-assistant', '#iconTabArea', '#historyTabArea', '.resource-subtabs'];
-        panels.forEach(selector => {
-            document.querySelectorAll(selector).forEach(panel => panel.classList.remove('active'));
-        });
-        if (tabId === 'java') document.getElementById('javaEditor').classList.add('active');
-        else if (tabId === 'xml') document.getElementById('xmlEditor').classList.add('active');
-        else if (tabId === 'manifest') document.getElementById('manifestEditor').classList.add('active');
-        else if (tabId === 'resources') document.getElementById('resourcesTab').classList.add('active');
-        else if (tabId === 'ai') document.getElementById('aiAssistantArea').classList.add('active');
-        else if (tabId === 'icon') document.getElementById('iconTabArea').classList.add('active');
-        else if (tabId === 'history') document.getElementById('historyTabArea').classList.add('active');
-        const statusCard = document.getElementById('statusCard');
-        if (tabId === 'ai') statusCard.classList.add('hide-log');
-        else statusCard.classList.remove('hide-log');
-    }
-    
-    function copyAllCode() {
-        let java = document.getElementById('javaCode').value;
-        let xml = document.getElementById('xmlCode').value;
-        let manifest = document.getElementById('manifestCode').value;
-        navigator.clipboard.writeText(java + "\n\n" + xml + "\n\n" + manifest);
-        showToast("Copied all code!");
-    }
-    
-    // ========== CLEAR ONLY CODE (preserve settings & instructions) ==========
-    function clearCodeOnly() {
-        document.getElementById('javaCode').value = "";
-        document.getElementById('xmlCode').value = "";
-        document.getElementById('manifestCode').value = "";
-        document.getElementById('colorsXml').value = "";
-        document.getElementById('stylesXml').value = "";
-        document.getElementById('themesXml').value = "";
-        document.getElementById('dimensXml').value = "";
-        document.getElementById('stringsXml').value = "";
-        document.getElementById('buttonGradientXml').value = "";
-        document.getElementById('icTorchOnXml').value = "";
-        document.getElementById('icTorchOffXml').value = "";
-        processedIconB64 = "";
-        document.getElementById('iconPreview').style.display = 'none';
-        document.getElementById('iconPreview').src = "";
-        const saved = getStorage();
-        saved.java = ""; saved.xml = ""; saved.manifest = "";
-        saved.colors = ""; saved.styles = ""; saved.themes = ""; saved.dimens = ""; saved.strings = "";
-        saved.buttonGradient = ""; saved.icTorchOn = ""; saved.icTorchOff = "";
-        saved.iconB64 = "";
-        localStorage.setItem('syspro_data', JSON.stringify(saved));
-        showToast("Code and resources cleared. Settings and instructions preserved.");
-        addLog("Cleared Java, XML, Manifest, Resources, Icon. Settings unchanged.");
-    }
-    
-    function processIcon(input) {
-        let file = input.files[0];
-        if (!file) return;
-        let reader = new FileReader();
-        reader.onload = e => {
-            let img = new Image();
-            img.onload = () => {
-                let canvas = document.createElement('canvas');
-                canvas.width = 96; canvas.height = 96;
-                let ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, 96, 96);
-                let b64 = canvas.toDataURL('image/png').split(',')[1];
-                if (b64 && b64.startsWith('iVBORw0KGgo')) {
-                    processedIconB64 = b64;
-                    document.getElementById('iconPreview').src = canvas.toDataURL();
-                    document.getElementById('iconPreview').style.display = 'block';
-                    addLog("Icon processed (96x96 PNG)");
-                    showToast("Icon uploaded!");
-                } else addLog("Invalid PNG");
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
-    
-    function resetInstructionsToDefault() { 
-        document.getElementById('systemInstructionsText').value = ULTRA_PRECISE_INSTRUCTIONS; 
-        showToast("Instructions reset to ultra-precise version"); 
-    }
-    
-    // ========== AI FUNCTION USING PUTER.JS (FREE, NO API KEY) ==========
-    function extractJSONArray(text) {
-        let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-        let start = cleaned.indexOf('[');
-        let end = cleaned.lastIndexOf(']');
-        if (start === -1 || end === -1) return null;
-        try { return JSON.parse(cleaned.substring(start, end+1)); } catch(e) { return null; }
-    }
-    
-    async function generateWithPuter() {
-        const prompt = document.getElementById('aiPromptArea').value.trim();
-        if (!prompt) { addLog("⚠️ Please describe your app.", "#ffcc00"); return; }
-        let pkg = document.getElementById('pkgName').value.trim();
-        if (!pkg) pkg = "com.systempro.app";
-        let sys = document.getElementById('systemInstructionsText').value || ULTRA_PRECISE_INSTRUCTIONS;
-        sys = sys.replace(/\{pkg_path\}/g, pkg.replace(/\./g, '/'));
-        const fullPrompt = `${sys}\n\nUser request: ${prompt}\nPackage name: ${pkg}`;
         
-        const statusDiv = document.getElementById('aiStatus');
-        statusDiv.innerText = "⏳ Generating with Puter.js (free AI)...";
-        addLog("Calling Puter.js API (Claude 3.5 Haiku)...");
-        
-        try {
-            // Puter.js chat function - no API key required
-            const response = await puter.ai.chat(fullPrompt, { 
-                model: 'claude-3.5-haiku'  // You can also use 'gpt-4o', 'llama-3.1-70b', etc.
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            const panels = ['.editor', '.ai-assistant', '#iconTabArea', '#historyTabArea', '.resource-subtabs'];
+            panels.forEach(selector => {
+                document.querySelectorAll(selector).forEach(panel => panel.classList.remove('active'));
             });
-            
-            // Response is a string? Actually puter.ai.chat returns an object with message/content
-            const raw = response.message?.content || response;
-            addLog("Raw response received, parsing JSON...", "#a8b2d1");
-            
-            const files = extractJSONArray(raw);
-            if (!files) { 
-                addLog("❌ AI response not valid JSON. Please try again.", "#ff4444"); 
-                statusDiv.innerText = "❌ Invalid response format";
-                return; 
-            }
-            for (let f of files) {
-                if (f.path.endsWith("MainActivity.java")) document.getElementById('javaCode').value = f.content;
-                else if (f.path.endsWith("activity_main.xml")) document.getElementById('xmlCode').value = f.content;
-                else if (f.path.endsWith("AndroidManifest.xml")) document.getElementById('manifestCode').value = f.content;
-            }
-            addLog("✅ Puter.js generated code successfully!", "#00FFCC");
-            statusDiv.innerText = "✅ Done. Check your code tabs.";
-        } catch(e) {
-            addLog(`❌ Puter.js error: ${e.message}`, "#ff4444");
-            statusDiv.innerText = "❌ API call failed";
+            if (tabId === 'java') document.getElementById('javaEditor').classList.add('active');
+            else if (tabId === 'xml') document.getElementById('xmlEditor').classList.add('active');
+            else if (tabId === 'manifest') document.getElementById('manifestEditor').classList.add('active');
+            else if (tabId === 'resources') document.getElementById('resourcesTab').classList.add('active');
+            else if (tabId === 'ai') document.getElementById('aiAssistantArea').classList.add('active');
+            else if (tabId === 'icon') document.getElementById('iconTabArea').classList.add('active');
+            else if (tabId === 'history') document.getElementById('historyTabArea').classList.add('active');
+            const statusCard = document.getElementById('statusCard');
+            if (tabId === 'ai') statusCard.classList.add('hide-log');
+            else statusCard.classList.remove('hide-log');
         }
-    }
-    
-    // ========== GITHUB UPLOAD & BUILD (with auto-clean) ==========
-    async function deleteOldPackageFolders(token, owner, repo, currentPkgPath) {
-        const comDirPath = "build_assets/app/src/main/java/com";
-        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${comDirPath}`;
-        try {
-            const res = await fetch(url, { headers: { Authorization: `token ${token}` } });
-            if (!res.ok) return;
-            const items = await res.json();
-            const currentBase = currentPkgPath.split('/')[0];
-            for (const item of items) {
-                if (item.type === "dir" && item.name !== currentBase) {
-                    addLog(`Deleting old package folder: ${item.name}`, "#ffaa33");
-                    const deleteUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${comDirPath}/${item.name}`;
-                    const getRes = await fetch(deleteUrl, { headers: { Authorization: `token ${token}` } });
-                    if (getRes.ok) {
-                        const data = await getRes.json();
-                        const sha = data.sha;
-                        await fetch(deleteUrl, {
-                            method: "DELETE",
-                            headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
-                            body: JSON.stringify({ message: `Delete ${item.name}`, sha: sha, branch: "main" })
-                        });
-                        addLog(`Deleted: ${item.name}`, "#ffaa33");
-                    }
-                }
-            }
-        } catch(e) { addLog(`Cleanup error: ${e.message}`, "#ffcc00"); }
-    }
-    
-    async function uploadFileToRepo(path, content, token, owner, repo) {
-        let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-        let encoded = (typeof content === 'string' && content.startsWith('iVBORw0KGgo')) ? content : btoa(unescape(encodeURIComponent(content)));
-        let sha = null;
-        try { let r = await fetch(`${url}?ref=main`, { headers: { Authorization: `token ${token}` } }); if (r.status === 200) { let d = await r.json(); sha = d.sha; } } catch(e) {}
-        let body = { message: `Update ${path}`, content: encoded, branch: "main" };
-        if (sha) body.sha = sha;
-        let res = await fetch(url, { method: "PUT", headers: { Authorization: `token ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        return res.status === 200 || res.status === 201;
-    }
-    
-    async function startFullProcess() {
-        if (Date.now() - lastClickTime < 5000) { addLog("Please wait 5s"); return; }
-        lastClickTime = Date.now();
-        let saved = getStorage();
-        if (!saved.token || !saved.repo || !saved.pkg) { addLog("Missing GitHub settings", "#ff4444"); return; }
-        let [owner, repo] = saved.repo.split('/');
-        if (pollingInterval) clearInterval(pollingInterval);
-        document.getElementById('fill').style.width = "5%";
         
-        addLog("Cleaning old package folders...");
-        await deleteOldPackageFolders(saved.token, owner, repo, saved.pkg.replace(/\./g, '/'));
+        function copyAllCode() {
+            let java = document.getElementById('javaCode').value;
+            let xml = document.getElementById('xmlCode').value;
+            let manifest = document.getElementById('manifestCode').value;
+            navigator.clipboard.writeText(java + "\n\n" + xml + "\n\n" + manifest);
+            showToast("Copied all code!");
+        }
         
-        addLog("Uploading files...");
-        let pkgPath = saved.pkg.replace(/\./g, '/');
-        let resourceFiles = [];
-        const resMap = {
-            colorsXml: 'build_assets/app/src/main/res/values/colors.xml',
-            stylesXml: 'build_assets/app/src/main/res/values/styles.xml',
-            themesXml: 'build_assets/app/src/main/res/values/themes.xml',
-            dimensXml: 'build_assets/app/src/main/res/values/dimens.xml',
-            stringsXml: 'build_assets/app/src/main/res/values/strings.xml',
-            buttonGradientXml: 'build_assets/app/src/main/res/drawable/button_gradient.xml',
-            icTorchOnXml: 'build_assets/app/src/main/res/drawable/ic_torch_on.xml',
-            icTorchOffXml: 'build_assets/app/src/main/res/drawable/ic_torch_off.xml'
-        };
-        for (const [id, path] of Object.entries(resMap)) {
-            let val = document.getElementById(id).value.trim();
-            if (val) resourceFiles.push({ path: path, content: val });
+        function clearCodeOnly() {
+            document.getElementById('javaCode').value = "";
+            document.getElementById('xmlCode').value = "";
+            document.getElementById('manifestCode').value = "";
+            document.getElementById('colorsXml').value = "";
+            document.getElementById('stylesXml').value = "";
+            document.getElementById('themesXml').value = "";
+            document.getElementById('dimensXml').value = "";
+            document.getElementById('stringsXml').value = "";
+            document.getElementById('buttonGradientXml').value = "";
+            document.getElementById('icTorchOnXml').value = "";
+            document.getElementById('icTorchOffXml').value = "";
+            processedIconB64 = "";
+            document.getElementById('iconPreview').style.display = 'none';
+            document.getElementById('iconPreview').src = "";
+            const saved = getStorage();
+            saved.java = ""; saved.xml = ""; saved.manifest = "";
+            saved.colors = ""; saved.styles = ""; saved.themes = ""; saved.dimens = ""; saved.strings = "";
+            saved.buttonGradient = ""; saved.icTorchOn = ""; saved.icTorchOff = "";
+            saved.iconB64 = "";
+            localStorage.setItem('syspro_data', JSON.stringify(saved));
+            showToast("Code and resources cleared. Settings and instructions preserved.");
+            addLog("Cleared Java, XML, Manifest, Resources, Icon. Settings unchanged.");
         }
-        let files = [
-            { path: `build_assets/app/src/main/java/${pkgPath}/MainActivity.java`, content: document.getElementById('javaCode').value },
-            { path: `build_assets/app/src/main/res/layout/activity_main.xml`, content: document.getElementById('xmlCode').value },
-            { path: `build_assets/AndroidManifest.xml`, content: document.getElementById('manifestCode').value },
-            ...resourceFiles
-        ];
-        if (processedIconB64) files.push({ path: `build_assets/app_icon.png`, content: processedIconB64 });
-        for (let f of files) {
-            let ok = await uploadFileToRepo(f.path, f.content, saved.token, owner, repo);
-            if (!ok) { addLog(`Upload failed: ${f.path}`); return; }
-            addLog(`Uploaded: ${f.path}`);
-            await new Promise(r => setTimeout(r, 200));
+        
+        function processIcon(input) {
+            let file = input.files[0];
+            if (!file) return;
+            let reader = new FileReader();
+            reader.onload = e => {
+                let img = new Image();
+                img.onload = () => {
+                    let canvas = document.createElement('canvas');
+                    canvas.width = 96; canvas.height = 96;
+                    let ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 96, 96);
+                    let b64 = canvas.toDataURL('image/png').split(',')[1];
+                    if (b64 && b64.startsWith('iVBORw0KGgo')) {
+                        processedIconB64 = b64;
+                        document.getElementById('iconPreview').src = canvas.toDataURL();
+                        document.getElementById('iconPreview').style.display = 'block';
+                        addLog("Icon processed (96x96 PNG)");
+                        showToast("Icon uploaded!");
+                    } else addLog("Invalid PNG");
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
-        addLog("Triggering workflow...");
-        let dispatch = await fetch(`https://api.github.com/repos/${owner}/${repo}/dispatches`, {
-            method: "POST", headers: { Authorization: `token ${saved.token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ event_type: "trigger_b64_build", client_payload: { package_name: saved.pkg } })
-        });
-        if (dispatch.ok) { addLog("Workflow triggered, monitoring..."); document.getElementById('fill').style.width = "50%"; monitorBuild(owner, repo, saved.token); }
-        else addLog("Dispatch failed");
-    }
-    
-    async function monitorBuild(owner, repo, token) {
-        let lastRunId = null;
-        const linkDiv = document.getElementById('downloadLinkBox');
-        pollingInterval = setInterval(async () => {
+        
+        // ========== AI FUNCTION USING PUTER.JS ==========
+        function extractJSONArray(text) {
+            let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+            let start = cleaned.indexOf('[');
+            let end = cleaned.lastIndexOf(']');
+            if (start === -1 || end === -1) return null;
+            try { return JSON.parse(cleaned.substring(start, end+1)); } catch(e) { return null; }
+        }
+        
+        async function generateWithPuter() {
+            const prompt = document.getElementById('aiPromptArea').value.trim();
+            if (!prompt) { addLog("⚠️ Please describe your app.", "#ffcc00"); return; }
+            let sys = document.getElementById('systemInstructionsText').value || ULTRA_PRECISE_INSTRUCTIONS;
+            const fullPrompt = `${sys}\n\nUser request: ${prompt}`;
+            const statusDiv = document.getElementById('aiStatus');
+            statusDiv.innerText = "⏳ Generating with Puter.js...";
+            addLog("Calling Puter.js API (free AI)...");
             try {
-                const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=1`, { headers: { Authorization: `token ${token}` } });
-                const data = await res.json();
-                const run = data.workflow_runs?.[0];
-                if (run && run.id !== lastRunId) {
-                    lastRunId = run.id;
-                    if (run.status === 'completed' && run.conclusion === 'success') {
-                        clearInterval(pollingInterval);
-                        document.getElementById('fill').style.width = "100%";
-                        addLog("✅ Build successful!", "#00FFCC");
-                        const releaseUrl = `https://github.com/${owner}/${repo}/releases/download/latest-build/app-debug.apk`;
-                        linkDiv.innerHTML = `<strong>📦 Download APK:</strong> <a href="${releaseUrl}" target="_blank">${releaseUrl}</a> <button class="copy-link-btn" onclick="copyToClipboard('${releaseUrl}')">Copy</button>`;
-                        linkDiv.style.display = 'block';
-                    } else if (run.status === 'completed' && run.conclusion !== 'success') {
-                        clearInterval(pollingInterval);
-                        addLog(`❌ Build failed: ${run.conclusion}`, "#ff4444");
+                const response = await puter.ai.chat(fullPrompt, { model: 'claude-3.5-haiku' });
+                const raw = response.message?.content || response;
+                addLog("Raw response received, parsing JSON...", "#a8b2d1");
+                const files = extractJSONArray(raw);
+                if (!files) { addLog("❌ AI response not valid JSON. Please try again.", "#ff4444"); statusDiv.innerText = "❌ Invalid response format"; return; }
+                for (let f of files) {
+                    if (f.path.endsWith("MainActivity.java")) document.getElementById('javaCode').value = f.content;
+                    else if (f.path.endsWith("activity_main.xml")) document.getElementById('xmlCode').value = f.content;
+                    else if (f.path.endsWith("AndroidManifest.xml")) document.getElementById('manifestCode').value = f.content;
+                }
+                addLog("✅ Puter.js generated code successfully!", "#00FFCC");
+                statusDiv.innerText = "✅ Done. Check your code tabs.";
+                // Optionally show the generated package name
+                const firstLine = document.getElementById('javaCode').value.split('\n')[0];
+                if (firstLine.startsWith('package ')) {
+                    addLog(`Suggested package name: ${firstLine.substring(8).replace(';','')}`, "#00FFCC");
+                }
+            } catch(e) {
+                addLog(`❌ Puter.js error: ${e.message}`, "#ff4444");
+                statusDiv.innerText = "❌ API call failed";
+            }
+        }
+        
+        // ========== GITHUB UPLOAD & BUILD ==========
+        async function deleteOldPackageFolders(token, owner, repo, currentPkgPath) {
+            const comDirPath = "build_assets/app/src/main/java/com";
+            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${comDirPath}`;
+            try {
+                const res = await fetch(url, { headers: { Authorization: `token ${token}` } });
+                if (!res.ok) return;
+                const items = await res.json();
+                const currentBase = currentPkgPath.split('/')[0];
+                for (const item of items) {
+                    if (item.type === "dir" && item.name !== currentBase) {
+                        addLog(`Deleting old package folder: ${item.name}`, "#ffaa33");
+                        const deleteUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${comDirPath}/${item.name}`;
+                        const getRes = await fetch(deleteUrl, { headers: { Authorization: `token ${token}` } });
+                        if (getRes.ok) {
+                            const data = await getRes.json();
+                            const sha = data.sha;
+                            await fetch(deleteUrl, {
+                                method: "DELETE",
+                                headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
+                                body: JSON.stringify({ message: `Delete ${item.name}`, sha: sha, branch: "main" })
+                            });
+                            addLog(`Deleted: ${item.name}`, "#ffaa33");
+                        }
                     }
                 }
-            } catch(e) {}
-        }, 8000);
-    }
-    
-    async function downloadLatestApk() {
-        const saved = getStorage();
-        if (!saved.repo) return;
-        const [owner, repo] = saved.repo.split('/');
-        const url = `https://github.com/${owner}/${repo}/releases/download/latest-build/app-debug.apk`;
-        window.open(url, '_blank');
-    }
-    
-    function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => showToast("Copied!")); }
-    
-    function saveAllData() {
-        const data = {
-            java: document.getElementById('javaCode').value,
-            xml: document.getElementById('xmlCode').value,
-            manifest: document.getElementById('manifestCode').value,
-            colors: document.getElementById('colorsXml').value,
-            styles: document.getElementById('stylesXml').value,
-            themes: document.getElementById('themesXml').value,
-            dimens: document.getElementById('dimensXml').value,
-            strings: document.getElementById('stringsXml').value,
-            buttonGradient: document.getElementById('buttonGradientXml').value,
-            icTorchOn: document.getElementById('icTorchOnXml').value,
-            icTorchOff: document.getElementById('icTorchOffXml').value,
-            pkg: document.getElementById('pkgName').value,
-            token: document.getElementById('ghToken').value,
-            repo: document.getElementById('ghRepo').value,
-            iconB64: processedIconB64,
-            systemInstructions: document.getElementById('systemInstructionsText').value
-        };
-        localStorage.setItem('syspro_data', JSON.stringify(data));
-        showToast("✅ All data saved!");
-        addLog("All data saved to localStorage.");
-    }
-    
-    function saveSettings() {
-        saveAllData();
-        toggleModal(false);
-        showToast("Settings saved!");
-    }
-    
-    window.onload = () => {
-        const saved = getStorage();
-        if (saved && Object.keys(saved).length > 0) {
-            document.getElementById('javaCode').value = saved.java || "";
-            document.getElementById('xmlCode').value = saved.xml || "";
-            document.getElementById('manifestCode').value = saved.manifest || "";
-            document.getElementById('colorsXml').value = saved.colors || "";
-            document.getElementById('stylesXml').value = saved.styles || "";
-            document.getElementById('themesXml').value = saved.themes || "";
-            document.getElementById('dimensXml').value = saved.dimens || "";
-            document.getElementById('stringsXml').value = saved.strings || "";
-            document.getElementById('buttonGradientXml').value = saved.buttonGradient || "";
-            document.getElementById('icTorchOnXml').value = saved.icTorchOn || "";
-            document.getElementById('icTorchOffXml').value = saved.icTorchOff || "";
-            document.getElementById('pkgName').value = saved.pkg || "";
-            document.getElementById('ghToken').value = saved.token || "";
-            document.getElementById('ghRepo').value = saved.repo || "";
-            if (saved.systemInstructions) document.getElementById('systemInstructionsText').value = saved.systemInstructions;
-            else document.getElementById('systemInstructionsText').value = ULTRA_PRECISE_INSTRUCTIONS;
-            if (saved.iconB64) {
-                processedIconB64 = saved.iconB64;
-                document.getElementById('iconPreview').src = "data:image/png;base64,"+saved.iconB64;
-                document.getElementById('iconPreview').style.display = 'block';
-            }
-            addLog("Previous data loaded from localStorage.", "#00FFCC");
-        } else {
-            document.getElementById('systemInstructionsText').value = ULTRA_PRECISE_INSTRUCTIONS;
-            addLog("First time – ultra-precise instructions loaded. No API key needed for AI.", "#a8b2d1");
+            } catch(e) { addLog(`Cleanup error: ${e.message}`, "#ffcc00"); }
         }
-        addLog("UI ready. Using Puter.js – free, unlimited, no API key required.", "#00FFCC");
-    };
-    
-    window.saveAllData = saveAllData; window.clearCodeOnly = clearCodeOnly; window.switchTab = switchTab;
-    window.processIcon = processIcon; window.generateWithPuter = generateWithPuter;
-    window.startFullProcess = startFullProcess; window.downloadLatestApk = downloadLatestApk;
-    window.saveSettings = saveSettings; window.toggleModal = toggleModal; window.clearLogs = clearLogs;
-    window.copyToClipboard = copyToClipboard; window.copyAllCode = copyAllCode; window.resetInstructionsToDefault = resetInstructionsToDefault;
-</script>
+        
+        async function uploadFileToRepo(path, content, token, owner, repo) {
+            let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+            let encoded = (typeof content === 'string' && content.startsWith('iVBORw0KGgo')) ? content : btoa(unescape(encodeURIComponent(content)));
+            let sha = null;
+            try { let r = await fetch(`${url}?ref=main`, { headers: { Authorization: `token ${token}` } }); if (r.status === 200) { let d = await r.json(); sha = d.sha; } } catch(e) {}
+            let body = { message: `Update ${path}`, content: encoded, branch: "main" };
+            if (sha) body.sha = sha;
+            let res = await fetch(url, { method: "PUT", headers: { Authorization: `token ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            return res.status === 200 || res.status === 201;
+        }
+        
+        async function startFullProcess() {
+            if (Date.now() - lastClickTime < 5000) { addLog("Please wait 5s"); return; }
+            lastClickTime = Date.now();
+            let saved = getStorage();
+            if (!saved.token || !saved.repo || !saved.pkg) { addLog("Missing GitHub settings", "#ff4444"); return; }
+            let [owner, repo] = saved.repo.split('/');
+            if (pollingInterval) clearInterval(pollingInterval);
+            document.getElementById('fill').style.width = "5%";
+            addLog("Cleaning old package folders...");
+            await deleteOldPackageFolders(saved.token, owner, repo, saved.pkg.replace(/\./g, '/'));
+            addLog("Uploading files...");
+            let pkgPath = saved.pkg.replace(/\./g, '/');
+            let resourceFiles = [];
+            const resMap = {
+                colorsXml: 'build_assets/app/src/main/res/values/colors.xml',
+                stylesXml: 'build_assets/app/src/main/res/values/styles.xml',
+                themesXml: 'build_assets/app/src/main/res/values/themes.xml',
+                dimensXml: 'build_assets/app/src/main/res/values/dimens.xml',
+                stringsXml: 'build_assets/app/src/main/res/values/strings.xml',
+                buttonGradientXml: 'build_assets/app/src/main/res/drawable/button_gradient.xml',
+                icTorchOnXml: 'build_assets/app/src/main/res/drawable/ic_torch_on.xml',
+                icTorchOffXml: 'build_assets/app/src/main/res/drawable/ic_torch_off.xml'
+            };
+            for (const [id, path] of Object.entries(resMap)) {
+                let val = document.getElementById(id).value.trim();
+                if (val) resourceFiles.push({ path: path, content: val });
+            }
+            let files = [
+                { path: `build_assets/app/src/main/java/${pkgPath}/MainActivity.java`, content: document.getElementById('javaCode').value },
+                { path: `build_assets/app/src/main/res/layout/activity_main.xml`, content: document.getElementById('xmlCode').value },
+                { path: `build_assets/AndroidManifest.xml`, content: document.getElementById('manifestCode').value },
+                ...resourceFiles
+            ];
+            if (processedIconB64) files.push({ path: `build_assets/app_icon.png`, content: processedIconB64 });
+            for (let f of files) {
+                let ok = await uploadFileToRepo(f.path, f.content, saved.token, owner, repo);
+                if (!ok) { addLog(`Upload failed: ${f.path}`); return; }
+                addLog(`Uploaded: ${f.path}`);
+                await new Promise(r => setTimeout(r, 200));
+            }
+            addLog("Triggering workflow...");
+            let dispatch = await fetch(`https://api.github.com/repos/${owner}/${repo}/dispatches`, {
+                method: "POST", headers: { Authorization: `token ${saved.token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ event_type: "trigger_b64_build", client_payload: { package_name: saved.pkg } })
+            });
+            if (dispatch.ok) { addLog("Workflow triggered, monitoring..."); document.getElementById('fill').style.width = "50%"; monitorBuild(owner, repo, saved.token); }
+            else addLog("Dispatch failed");
+        }
+        
+        async function monitorBuild(owner, repo, token) {
+            let lastRunId = null;
+            const linkDiv = document.getElementById('downloadLinkBox');
+            pollingInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=1`, { headers: { Authorization: `token ${token}` } });
+                    const data = await res.json();
+                    const run = data.workflow_runs?.[0];
+                    if (run && run.id !== lastRunId) {
+                        lastRunId = run.id;
+                        if (run.status === 'completed' && run.conclusion === 'success') {
+                            clearInterval(pollingInterval);
+                            document.getElementById('fill').style.width = "100%";
+                            addLog("✅ Build successful!", "#00FFCC");
+                            const releaseUrl = `https://github.com/${owner}/${repo}/releases/download/latest-build/app-debug.apk`;
+                            linkDiv.innerHTML = `<strong>📦 Download APK:</strong> <a href="${releaseUrl}" target="_blank">${releaseUrl}</a> <button class="copy-link-btn" onclick="copyToClipboard('${releaseUrl}')">Copy</button>`;
+                            linkDiv.style.display = 'block';
+                        } else if (run.status === 'completed' && run.conclusion !== 'success') {
+                            clearInterval(pollingInterval);
+                            addLog(`❌ Build failed: ${run.conclusion}`, "#ff4444");
+                        }
+                    }
+                } catch(e) {}
+            }, 8000);
+        }
+        
+        async function downloadLatestApk() {
+            const saved = getStorage();
+            if (!saved.repo) return;
+            const [owner, repo] = saved.repo.split('/');
+            const url = `https://github.com/${owner}/${repo}/releases/download/latest-build/app-debug.apk`;
+            window.open(url, '_blank');
+        }
+        
+        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => showToast("Copied!")); }
+        
+        function saveAllData() {
+            const data = {
+                java: document.getElementById('javaCode').value,
+                xml: document.getElementById('xmlCode').value,
+                manifest: document.getElementById('manifestCode').value,
+                colors: document.getElementById('colorsXml').value,
+                styles: document.getElementById('stylesXml').value,
+                themes: document.getElementById('themesXml').value,
+                dimens: document.getElementById('dimensXml').value,
+                strings: document.getElementById('stringsXml').value,
+                buttonGradient: document.getElementById('buttonGradientXml').value,
+                icTorchOn: document.getElementById('icTorchOnXml').value,
+                icTorchOff: document.getElementById('icTorchOffXml').value,
+                pkg: document.getElementById('pkgName').value,
+                token: document.getElementById('ghToken').value,
+                repo: document.getElementById('ghRepo').value,
+                iconB64: processedIconB64,
+                systemInstructions: document.getElementById('systemInstructionsText').value
+            };
+            localStorage.setItem('syspro_data', JSON.stringify(data));
+            showToast("✅ All data saved!");
+            addLog("All data saved to localStorage.");
+        }
+        
+        function saveSettings() {
+            saveAllData();
+            toggleModal(false);
+            showToast("Settings saved!");
+        }
+        
+        // ========== LOAD ON START – NO DEFAULT RESET BUTTON ==========
+        window.onload = () => {
+            const saved = getStorage();
+            if (saved && Object.keys(saved).length > 0) {
+                document.getElementById('javaCode').value = saved.java || "";
+                document.getElementById('xmlCode').value = saved.xml || "";
+                document.getElementById('manifestCode').value = saved.manifest || "";
+                document.getElementById('colorsXml').value = saved.colors || "";
+                document.getElementById('stylesXml').value = saved.styles || "";
+                document.getElementById('themesXml').value = saved.themes || "";
+                document.getElementById('dimensXml').value = saved.dimens || "";
+                document.getElementById('stringsXml').value = saved.strings || "";
+                document.getElementById('buttonGradientXml').value = saved.buttonGradient || "";
+                document.getElementById('icTorchOnXml').value = saved.icTorchOn || "";
+                document.getElementById('icTorchOffXml').value = saved.icTorchOff || "";
+                document.getElementById('pkgName').value = saved.pkg || "";
+                document.getElementById('ghToken').value = saved.token || "";
+                document.getElementById('ghRepo').value = saved.repo || "";
+                if (saved.systemInstructions) document.getElementById('systemInstructionsText').value = saved.systemInstructions;
+                else document.getElementById('systemInstructionsText').value = ULTRA_PRECISE_INSTRUCTIONS;
+                if (saved.iconB64) {
+                    processedIconB64 = saved.iconB64;
+                    document.getElementById('iconPreview').src = "data:image/png;base64,"+saved.iconB64;
+                    document.getElementById('iconPreview').style.display = 'block';
+                }
+                addLog("Previous data loaded from localStorage.", "#00FFCC");
+            } else {
+                document.getElementById('systemInstructionsText').value = ULTRA_PRECISE_INSTRUCTIONS;
+                addLog("First time – ultra-precise instructions loaded. No reset button available.", "#a8b2d1");
+            }
+            addLog("UI ready. Instructions are permanent. Reset button removed.", "#00FFCC");
+        };
+        
+        window.saveAllData = saveAllData; window.clearCodeOnly = clearCodeOnly; window.switchTab = switchTab;
+        window.processIcon = processIcon; window.generateWithPuter = generateWithPuter;
+        window.startFullProcess = startFullProcess; window.downloadLatestApk = downloadLatestApk;
+        window.saveSettings = saveSettings; window.toggleModal = toggleModal; window.clearLogs = clearLogs;
+        window.copyToClipboard = copyToClipboard; window.copyAllCode = copyAllCode;
+    </script>
 </body>
 </html>
