@@ -3,6 +3,13 @@ name: System Pro Titan Master Build
 on:
   repository_dispatch:
     types: [trigger_b64_build]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name (e.g., com.systempro.webview)'
+        required: false
+        default: 'com.systempro.webview'
+        type: string
 
 permissions:
   contents: write
@@ -24,9 +31,14 @@ jobs:
       - name: Prepare Package Name
         id: pkg
         run: |
+          # First priority: from repository_dispatch payload
           RAW_PKG="${{ github.event.client_payload.package_name }}"
+          # Second priority: from workflow_dispatch input
+          if [ -z "$RAW_PKG" ]; then
+            RAW_PKG="${{ github.event.inputs.package_name }}"
+          fi
           CLEAN_PKG=$(echo "$RAW_PKG" | sed 's/[^a-zA-Z0-9._]/./g' | sed 's/\.\.*/./g' | sed 's/^\.//;s/\.$//')
-          PKG_NAME=${CLEAN_PKG:-"com.systempro.torch"}
+          PKG_NAME=${CLEAN_PKG:-"com.systempro.webview"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           APP_NAME=$(echo "$PKG_NAME" | awk -F'.' '{print $NF}')
           echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
@@ -56,7 +68,6 @@ jobs:
           TARGET_JAVA_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           mkdir -p "$TARGET_JAVA_DIR"
           
-          # 1. Java files: only from the exact current package folder
           SRC_JAVA_DIR="build_assets/app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$SRC_JAVA_DIR" ]; then
             cp -f "$SRC_JAVA_DIR"/*.java "$TARGET_JAVA_DIR/" 2>/dev/null || true
@@ -64,13 +75,11 @@ jobs:
             echo "⚠️ No Java folder found for current package at $SRC_JAVA_DIR"
           fi
           
-          # 2. Layout: only if exists
           if [ -f "build_assets/app/src/main/res/layout/activity_main.xml" ]; then
             mkdir -p app/src/main/res/layout
             cp -f "build_assets/app/src/main/res/layout/activity_main.xml" app/src/main/res/layout/
           fi
           
-          # 3. Values and drawable: copy all (colors, styles, strings, etc.)
           if [ -d "build_assets/app/src/main/res/values" ]; then
             cp -rf build_assets/app/src/main/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
@@ -78,7 +87,6 @@ jobs:
             cp -rf build_assets/app/src/main/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
           
-          # 4. Icon
           if [ -f "build_assets/app_icon.png" ]; then
             for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p app/src/main/res/mipmap-$d
@@ -87,7 +95,6 @@ jobs:
             done
           fi
           
-          # 5. Manifest
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp -f "build_assets/AndroidManifest.xml" app/src/main/AndroidManifest.xml
           fi
@@ -103,7 +110,7 @@ jobs:
             echo "✅ MainActivity.java found"
           fi
 
-      - name: Move mis‑placed drawable XML files (from values to drawable)
+      - name: Move mis‑placed drawable XML files
         run: |
           if [ -d "app/src/main/res/values" ]; then
             for file in app/src/main/res/values/*.xml; do
@@ -114,7 +121,7 @@ jobs:
             done
           fi
 
-      - name: Fix package name and import R (preserve all other code)
+      - name: Fix package name and import R
         run: |
           TARGET_DIR="app/src/main/java/${{ env.TARGET_PATH }}"
           if [ -d "$TARGET_DIR" ]; then
