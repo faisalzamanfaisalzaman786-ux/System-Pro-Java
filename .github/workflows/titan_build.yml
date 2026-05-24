@@ -20,7 +20,7 @@ jobs:
           gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
 
-      - name: Decode payload
+      - name: Decode payload (package name, app name, icon matrix)
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             echo "CUSTOM_PACKAGE=$(echo '${{ github.event.client_payload.package_name }}' | base64 --decode)" >> $GITHUB_ENV
@@ -28,8 +28,11 @@ jobs:
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             echo "CUSTOM_APPNAME=$(echo '${{ github.event.client_payload.app_name }}' | base64 --decode)" >> $GITHUB_ENV
           fi
+          if [ -n "${{ github.event.client_payload.icon_matrix }}" ]; then
+            echo "ICON_MATRIX=${{ github.event.client_payload.icon_matrix }}" >> $GITHUB_ENV
+          fi
 
-      - name: Set default package if missing
+      - name: Set defaults
         run: |
           if [ -z "$CUSTOM_PACKAGE" ]; then
             echo "CUSTOM_PACKAGE=com.systempro.app" >> $GITHUB_ENV
@@ -38,21 +41,24 @@ jobs:
             echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      - name: Create full Android project structure
+      - name: Create Android project with icons
         run: |
-          # Ensure directories exist
-          mkdir -p app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')
-          mkdir -p app/src/main/res/layout app/src/main/res/values
+          PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-          # Create AndroidManifest.xml
+          # AndroidManifest.xml with internet permission (for WebView)
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="$CUSTOM_PACKAGE">
+              <uses-permission android:name="android.permission.INTERNET" />
               <application
                   android:allowBackup="true"
                   android:label="$CUSTOM_APPNAME"
-                  android:icon="@mipmap/ic_launcher">
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round">
                   <activity android:name=".MainActivity"
                       android:exported="true">
                       <intent-filter>
@@ -64,67 +70,91 @@ jobs:
           </manifest>
           EOF
 
-          # Create MainActivity.java with proper R import
-          cat > app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')/MainActivity.java << EOF
+          # MainActivity with WebView (so it doesn't crash)
+          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
           package $CUSTOM_PACKAGE;
 
           import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
           import androidx.appcompat.app.AppCompatActivity;
-          import android.widget.TextView;
-          import $CUSTOM_PACKAGE.R;
 
           public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  TextView tv = findViewById(R.id.textView);
-                  tv.setText("Hello from $CUSTOM_APPNAME");
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("https://www.google.com");
+                  setContentView(webView);
               }
           }
           EOF
 
-          # Create activity_main.xml layout
+          # Basic layout (not used by WebView but needed to avoid errors)
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:gravity="center"
-              android:orientation="vertical">
-              <TextView android:id="@+id/textView"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Hello World!"
-                  android:textSize="24sp" />
-          </LinearLayout>
+              android:layout_height="match_parent" />
           EOF
 
-          # Create strings.xml
+          # Strings
           cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">$CUSTOM_APPNAME</string>
           </resources>
           EOF
 
-          # Create colors.xml
+          # Colors and themes (minimal)
           cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="purple">#6200EE</color>
-          </resources>
+          <resources><color name="purple">#6200EE</color></resources>
           EOF
-
-          # Create themes.xml
           cat > app/src/main/res/values/themes.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" />
-          </resources>
+          <resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" /></resources>
           EOF
 
-      - name: Create proper app/build.gradle with all required fields
+      - name: Decode and install icons
+        run: |
+          if [ -n "$ICON_MATRIX" ]; then
+            echo "$ICON_MATRIX" > /tmp/icon_matrix.json
+            # Use python3 to parse JSON and write icons
+            python3 << 'PYSCRIPT'
+            import json, base64, os
+            icon_json = os.environ.get('ICON_MATRIX', '{}')
+            try:
+                icons = json.loads(icon_json)
+                for density, b64 in icons.items():
+                    dir_path = f"app/src/main/res/mipmap-{density}"
+                    os.makedirs(dir_path, exist_ok=True)
+                    img_data = base64.b64decode(b64)
+                    with open(f"{dir_path}/ic_launcher.png", "wb") as f:
+                        f.write(img_data)
+                    with open(f"{dir_path}/ic_launcher_round.png", "wb") as f:
+                        f.write(img_data)
+                    print(f"Icon written for {density}")
+            except Exception as e:
+                print(f"Icon processing error: {e}")
+                # create dummy icons
+                for density in ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']:
+                    os.makedirs(f"app/src/main/res/mipmap-{density}", exist_ok=True)
+                    dummy = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                    with open(f"app/src/main/res/mipmap-{density}/ic_launcher.png", "wb") as f:
+                        f.write(base64.b64decode(dummy))
+                    with open(f"app/src/main/res/mipmap-{density}/ic_launcher_round.png", "wb") as f:
+                        f.write(base64.b64decode(dummy))
+            PYSCRIPT
+          else
+            # No icons, create dummy ones
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p app/src/main/res/mipmap-$density
+              echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
+              cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+          fi
+
+      - name: Create app/build.gradle
         run: |
           cat > app/build.gradle << EOF
           plugins {
@@ -160,34 +190,24 @@ jobs:
           }
           EOF
 
-      - name: Create project-level build.gradle (AGP 8.3.2)
+      - name: Create project build.gradle (AGP 8.3.2)
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.3.2'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-      - name: Create settings.gradle (minimal)
+      - name: Create settings.gradle
         run: |
           cat > settings.gradle << 'EOF'
           rootProject.name = "SystemPro"
           include ':app'
           EOF
 
-      - name: Remove any conflicting files
+      - name: Remove potential version conflicts
         run: |
           rm -f gradle/libs.versions.toml 2>/dev/null || true
           sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
