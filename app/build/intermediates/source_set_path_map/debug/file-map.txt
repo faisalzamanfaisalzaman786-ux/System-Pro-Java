@@ -1,7 +1,0 @@
-com.system.pro.app-pngs-0 /home/runner/work/System-Pro-v2/System-Pro-v2/app/build/generated/res/pngs/debug
-com.system.pro.app-resValues-1 /home/runner/work/System-Pro-v2/System-Pro-v2/app/build/generated/res/resValues/debug
-com.system.pro.app-packageDebugResources-2 /home/runner/work/System-Pro-v2/System-Pro-v2/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
-com.system.pro.app-packageDebugResources-3 /home/runner/work/System-Pro-v2/System-Pro-v2/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
-com.system.pro.app-merged_res-4 /home/runner/work/System-Pro-v2/System-Pro-v2/app/build/intermediates/merged_res/debug
-com.system.pro.app-debug-5 /home/runner/work/System-Pro-v2/System-Pro-v2/app/src/debug/res
-com.system.pro.app-main-6 /home/runner/work/System-Pro-v2/System-Pro-v2/app/src/main/res
