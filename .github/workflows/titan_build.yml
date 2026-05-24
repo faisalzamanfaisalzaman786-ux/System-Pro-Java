@@ -29,42 +29,169 @@ jobs:
             echo "CUSTOM_APPNAME=$(echo '${{ github.event.client_payload.app_name }}' | base64 --decode)" >> $GITHUB_ENV
           fi
 
-      - name: Update package and app name in Android files
+      - name: Set default package if missing
         run: |
-          if [ -n "$CUSTOM_PACKAGE" ]; then
-            sed -i "s/package=\".*\"/package=\"$CUSTOM_PACKAGE\"/" app/src/main/AndroidManifest.xml
-            sed -i "s/namespace \".*\"/namespace \"$CUSTOM_PACKAGE\"/" app/build.gradle
-            sed -i "s/applicationId \".*\"/applicationId \"$CUSTOM_PACKAGE\"/" app/build.gradle
+          if [ -z "$CUSTOM_PACKAGE" ]; then
+            echo "CUSTOM_PACKAGE=com.systempro.app" >> $GITHUB_ENV
           fi
-          if [ -n "$CUSTOM_APPNAME" ]; then
-            sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$CUSTOM_APPNAME<\/string>/" app/src/main/res/values/strings.xml
+          if [ -z "$CUSTOM_APPNAME" ]; then
+            echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      - name: Force AGP 8.3.2 (compatible with Gradle 8.5)
+      - name: Create full Android project structure
+        run: |
+          # Ensure directories exist
+          mkdir -p app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')
+          mkdir -p app/src/main/res/layout app/src/main/res/values
+
+          # Create AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$CUSTOM_PACKAGE">
+              <application
+                  android:allowBackup="true"
+                  android:label="$CUSTOM_APPNAME"
+                  android:icon="@mipmap/ic_launcher">
+                  <activity android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Create a simple MainActivity.java
+          cat > app/src/main/java/$(echo $CUSTOM_PACKAGE | tr '.' '/')/MainActivity.java << 'EOF'
+          package $CUSTOM_PACKAGE;
+
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          import android.widget.TextView;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  TextView tv = findViewById(R.id.textView);
+                  tv.setText("Hello from $CUSTOM_APPNAME");
+              }
+          }
+          EOF
+
+          # Create activity_main.xml layout
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:orientation="vertical">
+              <TextView android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Hello World!"
+                  android:textSize="24sp" />
+          </LinearLayout>
+          EOF
+
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$CUSTOM_APPNAME</string>
+          </resources>
+          EOF
+
+          # Create colors.xml and themes.xml (minimal)
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="purple">#6200EE</color>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" />
+          </resources>
+          EOF
+
+      - name: Create proper app/build.gradle with all required fields
+        run: |
+          cat > app/build.gradle << EOF
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace '$CUSTOM_PACKAGE'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId '$CUSTOM_PACKAGE'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+      - name: Create project-level build.gradle (AGP 8.3.2)
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.2'
+              }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           EOF
 
-      - name: Clean any pluginManagement or version catalogs
+      - name: Create settings.gradle (minimal)
         run: |
-          # Remove any existing pluginManagement block from settings.gradle
-          sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
-          # Remove libs.versions.toml if exists (to avoid forcing higher AGP)
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
+      - name: Remove any conflicting files
+        run: |
           rm -f gradle/libs.versions.toml 2>/dev/null || true
+          # Ensure no pluginManagement block in settings.gradle
+          sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
 
-      - name: Clean and fix app/build.gradle plugin block
-        run: |
-          # Remove any existing plugins block
-          sed -i '/^plugins {/,/^}/d' app/build.gradle
-          # Insert correct plugin block at top
-          sed -i '1i plugins {\n    id "com.android.application"\n}\n' app/build.gradle
-
-      - name: Build APK with Gradle 8.5
+      - name: Build APK
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
