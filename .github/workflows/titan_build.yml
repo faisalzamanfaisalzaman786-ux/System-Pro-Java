@@ -1,9 +1,19 @@
+# .github/workflows/titan_build.yml
 name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
     types: [android_full_build]
   workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name'
+        required: true
+        default: 'com.systempro.app'
+      app_name:
+        description: 'App display name'
+        required: true
+        default: 'SystemProApp'
 
 jobs:
   build:
@@ -18,7 +28,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Decode payload from UI
+      # Decode payload from UI
+      - name: Decode payload
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             DECODED_PKG=$(echo "${{ github.event.client_payload.package_name }}" | base64 --decode)
@@ -32,7 +43,7 @@ jobs:
             echo "ICON_MATRIX=${{ github.event.client_payload.icon_matrix }}" >> $GITHUB_ENV
           fi
 
-      - name: Set default values
+      - name: Set defaults
         run: |
           if [ -z "$CUSTOM_PACKAGE" ]; then
             echo "CUSTOM_PACKAGE=com.systempro.app" >> $GITHUB_ENV
@@ -41,24 +52,23 @@ jobs:
             echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      # Clean old files if any
-      - name: Remove any previous Android project files
+      # Clean previous build artifacts
+      - name: Clean old files
         run: |
           rm -rf app build.gradle settings.gradle gradle gradlew
 
-      # Create simple Android project structure
-      - name: Create project directories
+      # Create directory structure
+      - name: Create directories
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p app/src/main/res/mipmap-$density
+          done
 
+      # AndroidManifest.xml with correct AppCompat theme
       - name: Create AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << EOF
@@ -70,7 +80,8 @@ jobs:
                   android:allowBackup="true"
                   android:label="$CUSTOM_APPNAME"
                   android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round">
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity"
                       android:exported="true">
                       <intent-filter>
@@ -82,6 +93,7 @@ jobs:
           </manifest>
           EOF
 
+      # MainActivity (WebView)
       - name: Create MainActivity.java
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
@@ -106,7 +118,8 @@ jobs:
           }
           EOF
 
-      - name: Create layout file
+      # Empty layout (required)
+      - name: Create activity_main.xml
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -115,6 +128,7 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
+      # strings.xml
       - name: Create strings.xml
         run: |
           cat > app/src/main/res/values/strings.xml << EOF
@@ -123,23 +137,32 @@ jobs:
           </resources>
           EOF
 
+      # colors.xml
       - name: Create colors.xml
         run: |
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <resources>
-              <color name="purple">#6200EE</color>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
           </resources>
           EOF
 
+      # themes.xml (AppCompat theme)
       - name: Create themes.xml
         run: |
           cat > app/src/main/res/values/themes.xml << 'EOF'
           <resources>
-              <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" />
+              <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
           </resources>
           EOF
 
-      - name: Setup dummy icons if no custom icon provided
+      # Dummy icons (transparent 1x1) – will be replaced by custom icons if provided
+      - name: Create dummy icons
         run: |
           DUMMY_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
@@ -147,8 +170,8 @@ jobs:
             cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
           done
 
-      # If custom icon matrix is sent, override dummy icons
-      - name: Override with custom icons if provided
+      # Override with custom icons if present
+      - name: Apply custom icons
         if: env.ICON_MATRIX != ''
         run: |
           echo "$ICON_MATRIX" > /tmp/icons.json
@@ -160,18 +183,28 @@ jobs:
             fi
           done
 
-      # Create minimal build.gradle (project level)
+      # Project build.gradle (AGP 8.3.2)
       - name: Create project build.gradle
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.2'
+              }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           EOF
 
-      # Create settings.gradle
+      # settings.gradle
       - name: Create settings.gradle
         run: |
           cat > settings.gradle << 'EOF'
@@ -179,7 +212,7 @@ jobs:
           include ':app'
           EOF
 
-      # Create app/build.gradle
+      # app/build.gradle
       - name: Create app/build.gradle
         run: |
           cat > app/build.gradle << EOF
