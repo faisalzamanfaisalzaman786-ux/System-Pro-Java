@@ -1,19 +1,9 @@
-# .github/workflows/titan_build.yml
 name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
     types: [android_full_build]
   workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package name'
-        required: true
-        default: 'com.systempro.app'
-      app_name:
-        description: 'App display name'
-        required: true
-        default: 'SystemProApp'
 
 jobs:
   build:
@@ -68,7 +58,7 @@ jobs:
             mkdir -p app/src/main/res/mipmap-$density
           done
 
-      # AndroidManifest.xml with correct AppCompat theme
+      # AndroidManifest.xml
       - name: Create AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << EOF
@@ -93,7 +83,7 @@ jobs:
           </manifest>
           EOF
 
-      # MainActivity (WebView)
+      # MainActivity.java (WebView)
       - name: Create MainActivity.java
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
@@ -118,7 +108,7 @@ jobs:
           }
           EOF
 
-      # Empty layout (required)
+      # activity_main.xml (empty layout)
       - name: Create activity_main.xml
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
@@ -148,7 +138,7 @@ jobs:
           </resources>
           EOF
 
-      # themes.xml (AppCompat theme)
+      # themes.xml
       - name: Create themes.xml
         run: |
           cat > app/src/main/res/values/themes.xml << 'EOF'
@@ -161,7 +151,7 @@ jobs:
           </resources>
           EOF
 
-      # Dummy icons (transparent 1x1) – will be replaced by custom icons if provided
+      # Dummy icons (overwritten by custom if present)
       - name: Create dummy icons
         run: |
           DUMMY_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -170,7 +160,6 @@ jobs:
             cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
           done
 
-      # Override with custom icons if present
       - name: Apply custom icons
         if: env.ICON_MATRIX != ''
         run: |
@@ -183,7 +172,7 @@ jobs:
             fi
           done
 
-      # Project build.gradle (AGP 8.3.2)
+      # Project build.gradle
       - name: Create project build.gradle
         run: |
           cat > build.gradle << 'EOF'
@@ -245,9 +234,24 @@ jobs:
           }
           EOF
 
-      # Build APK using system gradle (no wrapper needed)
+      # gradle.properties (fix AndroidX)
+      - name: Create gradle.properties
+        run: |
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+      # Setup Gradle wrapper (version 8.5)
+      - name: Setup Gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
+          chmod +x gradlew
+
+      # Build APK using wrapper
       - name: Build APK
-        run: gradle assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
