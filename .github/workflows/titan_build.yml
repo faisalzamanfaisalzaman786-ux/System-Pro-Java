@@ -1,46 +1,24 @@
-# .github/workflows/titan_build.yml
 name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
     types: [android_full_build]
   workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package name (e.g., com.example.app)'
-        required: true
-        default: 'com.systempro.app'
-      app_name:
-        description: 'App display name'
-        required: true
-        default: 'SystemProApp'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'   # more stable than zulu
+          distribution: 'temurin'
           java-version: '17'
 
-      # ---------- Gradle cache (speeds up build significantly) ----------
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      # ---------- Decode payload from UI ----------
-      - name: Decode client payload
+      - name: Decode payload from UI
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             DECODED_PKG=$(echo "${{ github.event.client_payload.package_name }}" | base64 --decode)
@@ -54,7 +32,7 @@ jobs:
             echo "ICON_MATRIX=${{ github.event.client_payload.icon_matrix }}" >> $GITHUB_ENV
           fi
 
-      - name: Set default values if not provided
+      - name: Set default values
         run: |
           if [ -z "$CUSTOM_PACKAGE" ]; then
             echo "CUSTOM_PACKAGE=com.systempro.app" >> $GITHUB_ENV
@@ -63,20 +41,25 @@ jobs:
             echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      # ---------- Generate Gradle wrapper (version 8.5) ----------
-      - name: Setup Gradle wrapper (8.5)
+      # Clean old files if any
+      - name: Remove any previous Android project files
         run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type bin
-          chmod +x gradlew
+          rm -rf app build.gradle settings.gradle gradle gradlew
 
-      # ---------- Create full Android project structure (if missing) ----------
-      - name: Prepare Android project directories
+      # Create simple Android project structure
+      - name: Create project directories
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Write AndroidManifest.xml
+      - name: Create AndroidManifest.xml
         run: |
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -99,7 +82,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Write MainActivity.java (WebView based, crash‑proof)
+      - name: Create MainActivity.java
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
           cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
@@ -123,7 +106,7 @@ jobs:
           }
           EOF
 
-      - name: Write basic resource files
+      - name: Create layout file
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -132,59 +115,72 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
+      - name: Create strings.xml
+        run: |
           cat > app/src/main/res/values/strings.xml << EOF
           <resources>
               <string name="app_name">$CUSTOM_APPNAME</string>
           </resources>
           EOF
 
+      - name: Create colors.xml
+        run: |
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <resources>
               <color name="purple">#6200EE</color>
           </resources>
           EOF
 
+      - name: Create themes.xml
+        run: |
           cat > app/src/main/res/values/themes.xml << 'EOF'
           <resources>
               <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" />
           </resources>
           EOF
 
-      # ---------- Handle icons (base64 matrix from UI) ----------
-      - name: Decode and install icons (uses jq and base64)
+      - name: Setup dummy icons if no custom icon provided
         run: |
-          # Dummy icon (1x1 transparent png)
           DUMMY_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-          # Create icon directories
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p app/src/main/res/mipmap-$density
+            echo "$DUMMY_ICON_B64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
+            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
           done
 
-          if [ -n "$ICON_MATRIX" ]; then
-            echo "$ICON_MATRIX" > /tmp/icons.json
-            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              b64=$(jq -r ".\"$density\"" /tmp/icons.json 2>/dev/null)
-              if [ -n "$b64" ] && [ "$b64" != "null" ]; then
-                echo "$b64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-                cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-                echo "✅ Icon written for $density"
-              else
-                # Fallback to dummy
-                echo "$DUMMY_ICON_B64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-                cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-              fi
-            done
-          else
-            # No icon matrix: use dummy for all densities
-            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              echo "$DUMMY_ICON_B64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
+      # If custom icon matrix is sent, override dummy icons
+      - name: Override with custom icons if provided
+        if: env.ICON_MATRIX != ''
+        run: |
+          echo "$ICON_MATRIX" > /tmp/icons.json
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            b64=$(jq -r ".\"$density\"" /tmp/icons.json 2>/dev/null)
+            if [ -n "$b64" ] && [ "$b64" != "null" ]; then
+              echo "$b64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
               cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-            done
-          fi
+            fi
+          done
 
-      # ---------- Create Gradle build files (clean and standard) ----------
-      - name: Write app/build.gradle
+      # Create minimal build.gradle (project level)
+      - name: Create project build.gradle
+        run: |
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+      # Create settings.gradle
+      - name: Create settings.gradle
+        run: |
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
+      # Create app/build.gradle
+      - name: Create app/build.gradle
         run: |
           cat > app/build.gradle << EOF
           plugins {
@@ -209,10 +205,6 @@ jobs:
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
           }
 
           dependencies {
@@ -220,64 +212,13 @@ jobs:
           }
           EOF
 
-      - name: Write project-level build.gradle (AGP 8.3.2 – compatible with Gradle 8.5)
-        run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.3.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+      # Build APK using system gradle (no wrapper needed)
+      - name: Build APK
+        run: gradle assembleDebug
 
-      - name: Write settings.gradle
-        run: |
-          cat > settings.gradle << 'EOF'
-          rootProject.name = "SystemPro"
-          include ':app'
-          EOF
-
-      - name: Remove any potential version lock files
-        run: |
-          rm -f gradle/libs.versions.toml 2>/dev/null || true
-          sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
-
-      # ---------- Build the APK ----------
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Locate generated APK
-        id: find_apk
-        run: |
-          APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "No APK found!"
-            exit 1
-          fi
-          echo "APK_FILE=$APK_PATH" >> $GITHUB_ENV
-          echo "APK_SIZE=$(stat -c%s "$APK_PATH")" >> $GITHUB_ENV
-
-      - name: Upload APK as artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-APK
-          path: ${{ env.APK_FILE }}
+          path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
-
-      - name: Build summary
-        if: always()
-        run: |
-          echo "Build completed at $(date)" >> build_summary.txt
-          echo "APK size: ${{ env.APK_SIZE }} bytes" >> build_summary.txt
-          echo "Package: ${CUSTOM_PACKAGE}" >> build_summary.txt
-          cat build_summary.txt
