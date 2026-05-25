@@ -20,7 +20,7 @@ jobs:
           gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
 
-      - name: Decode payload (package name, app name, icon matrix)
+      - name: Decode payload
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             echo "CUSTOM_PACKAGE=$(echo '${{ github.event.client_payload.package_name }}' | base64 --decode)" >> $GITHUB_ENV
@@ -41,14 +41,13 @@ jobs:
             echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      - name: Create Android project with icons
+      - name: Create Android project structure
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout app/src/main/res/values
 
-          # AndroidManifest.xml with internet permission (for WebView)
+          # AndroidManifest.xml with internet permission
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -70,8 +69,8 @@ jobs:
           </manifest>
           EOF
 
-          # MainActivity with WebView (so it doesn't crash)
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
+          # MainActivity with WebView (stable)
+          cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
           package $CUSTOM_PACKAGE;
 
           import android.os.Bundle;
@@ -92,7 +91,7 @@ jobs:
           }
           EOF
 
-          # Basic layout (not used by WebView but needed to avoid errors)
+          # Empty layout (not used but required)
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -107,7 +106,7 @@ jobs:
           </resources>
           EOF
 
-          # Colors and themes (minimal)
+          # Minimal colors and themes
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <resources><color name="purple">#6200EE</color></resources>
           EOF
@@ -115,42 +114,35 @@ jobs:
           <resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar" /></resources>
           EOF
 
-      - name: Decode and install icons
+      - name: Handle icons (using jq and base64)
         run: |
+          # Create dummy icon function
+          create_dummy_icon() {
+            local density=$1
+            mkdir -p app/src/main/res/mipmap-$density
+            # 1x1 transparent PNG base64
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
+            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+          }
+
           if [ -n "$ICON_MATRIX" ]; then
-            echo "$ICON_MATRIX" > /tmp/icon_matrix.json
-            # Use python3 to parse JSON and write icons
-            python3 << 'PYSCRIPT'
-            import json, base64, os
-            icon_json = os.environ.get('ICON_MATRIX', '{}')
-            try:
-                icons = json.loads(icon_json)
-                for density, b64 in icons.items():
-                    dir_path = f"app/src/main/res/mipmap-{density}"
-                    os.makedirs(dir_path, exist_ok=True)
-                    img_data = base64.b64decode(b64)
-                    with open(f"{dir_path}/ic_launcher.png", "wb") as f:
-                        f.write(img_data)
-                    with open(f"{dir_path}/ic_launcher_round.png", "wb") as f:
-                        f.write(img_data)
-                    print(f"Icon written for {density}")
-            except Exception as e:
-                print(f"Icon processing error: {e}")
-                # create dummy icons
-                for density in ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']:
-                    os.makedirs(f"app/src/main/res/mipmap-{density}", exist_ok=True)
-                    dummy = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-                    with open(f"app/src/main/res/mipmap-{density}/ic_launcher.png", "wb") as f:
-                        f.write(base64.b64decode(dummy))
-                    with open(f"app/src/main/res/mipmap-{density}/ic_launcher_round.png", "wb") as f:
-                        f.write(base64.b64decode(dummy))
-            PYSCRIPT
-          else
-            # No icons, create dummy ones
+            echo "$ICON_MATRIX" > /tmp/icons.json
+            # Use jq to iterate over keys and base64 decode
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p app/src/main/res/mipmap-$density
-              echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-              cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+              b64=$(jq -r ".\"$density\"" /tmp/icons.json 2>/dev/null)
+              if [ -n "$b64" ] && [ "$b64" != "null" ]; then
+                mkdir -p app/src/main/res/mipmap-$density
+                echo "$b64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
+                cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
+                echo "Icon written for $density"
+              else
+                create_dummy_icon $density
+              fi
+            done
+          else
+            # No icon matrix: create dummy icons for all densities
+            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              create_dummy_icon $density
             done
           fi
 
@@ -207,7 +199,7 @@ jobs:
           include ':app'
           EOF
 
-      - name: Remove potential version conflicts
+      - name: Clean up any version conflicts
         run: |
           rm -f gradle/libs.versions.toml 2>/dev/null || true
           sed -i '/pluginManagement {/,/}/d' settings.gradle 2>/dev/null || true
