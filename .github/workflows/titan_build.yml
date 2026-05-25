@@ -18,7 +18,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Decode payload from UI
+      # Decode payload (only package name and app name, no icon)
       - name: Decode payload
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
@@ -28,9 +28,6 @@ jobs:
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             DECODED_APP=$(echo "${{ github.event.client_payload.app_name }}" | base64 --decode)
             echo "CUSTOM_APPNAME=$DECODED_APP" >> $GITHUB_ENV
-          fi
-          if [ -n "${{ github.event.client_payload.icon_matrix }}" ]; then
-            echo "ICON_MATRIX=${{ github.event.client_payload.icon_matrix }}" >> $GITHUB_ENV
           fi
 
       - name: Set defaults
@@ -42,8 +39,8 @@ jobs:
             echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
           fi
 
-      # Clean previous build artifacts
-      - name: Clean old files
+      # Clean old files
+      - name: Clean old project
         run: |
           rm -rf app build.gradle settings.gradle gradle gradlew
 
@@ -83,7 +80,7 @@ jobs:
           </manifest>
           EOF
 
-      # MainActivity.java (WebView)
+      # MainActivity.java (simple TextView to avoid WebView crashes)
       - name: Create MainActivity.java
         run: |
           PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
@@ -91,24 +88,22 @@ jobs:
           package $CUSTOM_PACKAGE;
 
           import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
+          import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("https://www.google.com");
-                  setContentView(webView);
+                  TextView tv = new TextView(this);
+                  tv.setText("Hello from $CUSTOM_APPNAME!");
+                  tv.setTextSize(24);
+                  setContentView(tv);
               }
           }
           EOF
 
-      # activity_main.xml (empty layout)
+      # Empty layout (not used, but required)
       - name: Create activity_main.xml
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
@@ -118,7 +113,7 @@ jobs:
               android:layout_height="match_parent" />
           EOF
 
-      # strings.xml
+      # Resource files
       - name: Create strings.xml
         run: |
           cat > app/src/main/res/values/strings.xml << EOF
@@ -127,7 +122,6 @@ jobs:
           </resources>
           EOF
 
-      # colors.xml
       - name: Create colors.xml
         run: |
           cat > app/src/main/res/values/colors.xml << 'EOF'
@@ -138,7 +132,6 @@ jobs:
           </resources>
           EOF
 
-      # themes.xml
       - name: Create themes.xml
         run: |
           cat > app/src/main/res/values/themes.xml << 'EOF'
@@ -151,49 +144,24 @@ jobs:
           </resources>
           EOF
 
-      # Dummy icons (overwritten by custom if present)
-      - name: Create dummy icons
+      # Icons: if you have pre-committed icons in the repo under app/src/main/res/mipmap-*, they will be used.
+      # No automatic dummy icons – if missing, user must add them via file explorer.
+      - name: List icon directories (for debugging)
         run: |
-          DUMMY_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            echo "$DUMMY_ICON_B64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-          done
+          echo "Checking icon files:"
+          ls -R app/src/main/res/mipmap-* || echo "No icons found"
 
-      - name: Apply custom icons
-        if: env.ICON_MATRIX != ''
-        run: |
-          echo "$ICON_MATRIX" > /tmp/icons.json
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            b64=$(jq -r ".\"$density\"" /tmp/icons.json 2>/dev/null)
-            if [ -n "$b64" ] && [ "$b64" != "null" ]; then
-              echo "$b64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-              cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-            fi
-          done
-
-      # Project build.gradle
+      # Gradle files
       - name: Create project build.gradle
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.3.2'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-      # settings.gradle
       - name: Create settings.gradle
         run: |
           cat > settings.gradle << 'EOF'
@@ -201,7 +169,6 @@ jobs:
           include ':app'
           EOF
 
-      # app/build.gradle
       - name: Create app/build.gradle
         run: |
           cat > app/build.gradle << EOF
@@ -234,8 +201,7 @@ jobs:
           }
           EOF
 
-      # gradle.properties (fix AndroidX)
-      - name: Create gradle.properties
+      - name: Create gradle.properties (AndroidX fix)
         run: |
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m
@@ -243,15 +209,15 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      # Setup Gradle wrapper (version 8.5)
+      # Setup Gradle wrapper
       - name: Setup Gradle wrapper
         run: |
           gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
 
-      # Build APK using wrapper
+      # Build with stacktrace for debugging
       - name: Build APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
