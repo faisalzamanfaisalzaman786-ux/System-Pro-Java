@@ -1,18 +1,16 @@
 package com.systempro.helloworld;
 
 import android.os.Bundle;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        WebView webView = new WebView(this);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl("https://www.google.com");
-        setContentView(webView);
+        TextView tv = new TextView(this);
+        tv.setText("Hello from helloworld!");
+        tv.setTextSize(24);
+        setContentView(tv);
     }
 }
