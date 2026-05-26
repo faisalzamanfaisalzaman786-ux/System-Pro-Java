@@ -1,4 +1,4 @@
-package com.systempro.myapp;
+package {{PACKAGE_NAME}};
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -9,7 +9,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         TextView tv = new TextView(this);
-        tv.setText("Hello from Testing !");
+        tv.setText("Hello from {{APP_NAME}}!");
         tv.setTextSize(24);
         setContentView(tv);
     }
