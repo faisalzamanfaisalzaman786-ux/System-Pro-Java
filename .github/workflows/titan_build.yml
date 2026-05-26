@@ -28,14 +28,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Setup Gradle wrapper (version 8.7)
+      - name: Force Gradle wrapper to version 8.5
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.7 --distribution-type bin
-            chmod +x gradlew
-          else
-            chmod +x gradlew
+          # Overwrite gradle-wrapper.properties to use 8.5
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          # Download the wrapper jar if missing
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
           fi
+          chmod +x gradlew 2>/dev/null || true
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
