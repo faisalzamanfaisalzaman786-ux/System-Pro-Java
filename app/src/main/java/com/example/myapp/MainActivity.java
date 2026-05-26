@@ -1,4 +1,4 @@
-package {{PACKAGE_NAME}};
+package com.faisal.zaman;
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -9,7 +9,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         TextView tv = new TextView(this);
-        tv.setText("Hello from {{APP_NAME}}!");
+        tv.setText("Hello from ZAMAN!");
         tv.setTextSize(24);
         setContentView(tv);
     }

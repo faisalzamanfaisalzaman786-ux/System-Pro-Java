@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace '{{PACKAGE_NAME}}'
+    namespace 'com.faisal.zaman'
     compileSdk 34
 
     defaultConfig {
-        applicationId '{{PACKAGE_NAME}}'
+        applicationId 'com.faisal.zaman'
         minSdk 21
         targetSdk 34
         versionCode 1

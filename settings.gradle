@@ -1,2 +1,2 @@
-rootProject.name = "{{APP_NAME}}"
+rootProject.name = "ZAMAN"
 include ':app'
