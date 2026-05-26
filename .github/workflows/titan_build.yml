@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build
+name: System Pro Build APK
 
 on:
   repository_dispatch:
@@ -18,214 +18,28 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Decode payload
-      - name: Decode payload
-        run: |
-          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
-            DECODED_PKG=$(echo "${{ github.event.client_payload.package_name }}" | base64 --decode)
-            echo "CUSTOM_PACKAGE=$DECODED_PKG" >> $GITHUB_ENV
-          fi
-          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
-            DECODED_APP=$(echo "${{ github.event.client_payload.app_name }}" | base64 --decode)
-            echo "CUSTOM_APPNAME=$DECODED_APP" >> $GITHUB_ENV
-          fi
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Set defaults
+      - name: Setup Gradle wrapper (version 8.7)
         run: |
-          if [ -z "$CUSTOM_PACKAGE" ]; then
-            echo "CUSTOM_PACKAGE=com.systempro.app" >> $GITHUB_ENV
-          fi
-          if [ -z "$CUSTOM_APPNAME" ]; then
-            echo "CUSTOM_APPNAME=SystemProApp" >> $GITHUB_ENV
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.7 --distribution-type bin
+            chmod +x gradlew
+          else
+            chmod +x gradlew
           fi
 
-      # Clean old files
-      - name: Clean old project
-        run: |
-          rm -rf app build.gradle settings.gradle gradle gradlew
-
-      # Create directories
-      - name: Create directories
-        run: |
-          PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p app/src/main/res/mipmap-$density
-          done
-
-      # AndroidManifest.xml
-      - name: Create AndroidManifest.xml
-        run: |
-          cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$CUSTOM_PACKAGE">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:allowBackup="true"
-                  android:label="$CUSTOM_APPNAME"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      # MainActivity.java (simple TextView to avoid WebView crashes)
-      - name: Create MainActivity.java
-        run: |
-          PKG_PATH=$(echo $CUSTOM_PACKAGE | tr '.' '/')
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
-          package $CUSTOM_PACKAGE;
-
-          import android.os.Bundle;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  TextView tv = new TextView(this);
-                  tv.setText("Hello from $CUSTOM_APPNAME!");
-                  tv.setTextSize(24);
-                  setContentView(tv);
-              }
-          }
-          EOF
-
-      # Empty layout (required)
-      - name: Create activity_main.xml
-        run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent" />
-          EOF
-
-      # Resource files
-      - name: Create strings.xml
-        run: |
-          cat > app/src/main/res/values/strings.xml << EOF
-          <resources>
-              <string name="app_name">$CUSTOM_APPNAME</string>
-          </resources>
-          EOF
-
-      - name: Create colors.xml
-        run: |
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
-          </resources>
-          EOF
-
-      - name: Create themes.xml
-        run: |
-          cat > app/src/main/res/values/themes.xml << 'EOF'
-          <resources>
-              <style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          EOF
-
-      # ========== FIX: CREATE DUMMY ICONS IF NONE EXIST ==========
-      - name: Create dummy icons
-        run: |
-          DUMMY_PNG_BASE64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            echo "$DUMMY_PNG_BASE64" | base64 -d > app/src/main/res/mipmap-$density/ic_launcher.png
-            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-          done
-          echo "Dummy icons created (1x1 transparent PNG)."
-
-      # (Optional) If you have pre-committed icons in the repo, they will overwrite these dummies.
-      # No need for extra steps - the existing files remain.
-
-      # Gradle files
-      - name: Create project build.gradle
-        run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.3.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-      - name: Create settings.gradle
-        run: |
-          cat > settings.gradle << 'EOF'
-          rootProject.name = "SystemPro"
-          include ':app'
-          EOF
-
-      - name: Create app/build.gradle
-        run: |
-          cat > app/build.gradle << EOF
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace '$CUSTOM_PACKAGE'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId '$CUSTOM_PACKAGE'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-      # Setup Gradle wrapper (version 8.5)
-      - name: Setup Gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5 --distribution-type bin
-          chmod +x gradlew
-
-      # Build APK
-      - name: Build APK
+      - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      # Upload APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

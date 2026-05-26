@@ -1,1 +1,3 @@
-<resources><string name="app_name">helloworld</string></resources>
+<resources>
+    <string name="app_name">Testing </string>
+</resources>
