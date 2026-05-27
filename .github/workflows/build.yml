@@ -23,11 +23,8 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-          # Update manifest package
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          # Update Java files
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
-          # Update app/build.gradle
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
             sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
@@ -122,8 +119,10 @@ jobs:
           echo '    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' >> build.gradle
           echo '}' >> build.gradle
           echo 'allprojects { repositories { google(); mavenCentral() } }' >> build.gradle
-          # gradle.properties
-          echo 'android.suppressUnsupportedCompileSdk=34' > gradle.properties
+          # 🟢 CRITICAL FIX: Enable AndroidX in gradle.properties
+          echo 'android.useAndroidX=true' > gradle.properties
+          echo 'android.enableJetifier=true' >> gradle.properties
+          echo 'android.suppressUnsupportedCompileSdk=34' >> gradle.properties
           # app/build.gradle
           cat > app/build.gradle << 'APPGRADLE'
           apply plugin: 'com.android.application'
