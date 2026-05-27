@@ -16,27 +16,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Replace Package Name in All Files
+      # پہلے سے موجود تمام فائلوں کو مکمل صاف کریں
+      - name: Clean everything
         run: |
-          NEW_PKG="${{ github.event.client_payload.package_name }}"
-          echo "Using Package Name: $NEW_PKG"
-          if [ -z "$NEW_PKG" ]; then
-            NEW_PKG="com.systempro.app"
-          fi
-          # Update manifest package
-          sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          # Update Java files
-          find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
-          # Update build.gradle
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
-          sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
-
-      - name: Clean old Java sources
-        run: |
-          rm -rf app/src/main/java/com
+          rm -rf app build.gradle settings.gradle gradle.properties gradlew gradle
           mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Setup Gradle Wrapper (locked to 8.5)
+      # Gradle Wrapper 8.5
+      - name: Setup Gradle Wrapper
         run: |
           mkdir -p gradle/wrapper
           wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
@@ -50,64 +40,52 @@ jobs:
           echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Create simple working Android app
+      # سب سے آسان Android App (بغیر AppCompat کے)
+      - name: Create minimal app
         run: |
-          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-
-          # MainActivity.java - very simple
+          # MainActivity - plain Activity
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
           package com.systempro.app;
+          import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  TextView text = findViewById(R.id.helloText);
-                  text.setText("CodeForge Pro is running!");
+                  TextView tv = findViewById(R.id.textView);
+                  tv.setText("CodeForge Pro is working!");
               }
           }
           JAVAEOF
 
-          # activity_main.xml
+          # Layout
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp">
+              android:gravity="center">
               <TextView
-                  android:id="@+id/helloText"
+                  android:id="@+id/textView"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello from CodeForge"
+                  android:text="Hello CodeForge Pro"
                   android:textSize="28sp"
                   android:textColor="#00FFCC" />
           </LinearLayout>
           XMLEOF
 
-          # strings.xml
+          # Strings
           cat > app/src/main/res/values/strings.xml << 'STRXML'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
 
-          # colors.xml - required for theme
-          cat > app/src/main/res/values/colors.xml << 'COLORSXML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
-          </resources>
-          COLORSXML
-
-          # AndroidManifest.xml with icon and correct theme
+          # AndroidManifest (بغیر theme کے)
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -115,13 +93,8 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
-                  android:usesCleartextTraffic="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:configChanges="orientation|screenSize">
+                  android:label="@string/app_name">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -131,6 +104,7 @@ jobs:
           </manifest>
           MANIFEST
 
+      # Gradle فائلیں
       - name: Create Gradle files
         run: |
           echo 'include ":app"' > settings.gradle
@@ -162,43 +136,56 @@ jobs:
                   release { minifyEnabled false }
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
+          // No dependencies - pure Android
           APPGRADLE
 
-      - name: Generate default icon if user icon not provided
-        if: hashFiles('build_assets/app_icon.png') == ''
-        run: |
-          # Create a simple blue square as default icon
-          echo "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjAuMTM0A1t6AAAAI0lEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAAAAAAAIC3AS3AAAG/ugZRAAAAAElFTkSuQmCC" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-      - name: Generate user icon if provided
-        if: hashFiles('build_assets/app_icon.png') != ''
+      # آئیکن بنائیں (اگر صارف نے اپ لوڈ کیا ہے تو وہ استعمال ہو گا)
+      - name: Generate app icon
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
-          convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          if [ -f build_assets/app_icon.png ]; then
+            convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            # Default green icon
+            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          fi
 
-      - name: Build APK with Gradle
+      # پیکیج نیم تبدیل کریں (اگر ضرورت ہو)
+      - name: Replace package name
+        run: |
+          NEW_PKG="${{ github.event.client_payload.package_name }}"
+          if [ -z "$NEW_PKG" ]; then
+            NEW_PKG="com.systempro.app"
+          fi
+          echo "Setting package to: $NEW_PKG"
+          sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
+          sed -i "s/package .*;/package $NEW_PKG;/" app/src/main/java/com/systempro/app/MainActivity.java
+          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
+          sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
+
+      # APK بلڈ کریں
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK as Artifact
+      # APK اپ لوڈ کریں
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Create Release and Attach APK
+      # Release بنائیں
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-build
