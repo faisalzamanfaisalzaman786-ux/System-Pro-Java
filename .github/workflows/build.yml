@@ -23,19 +23,16 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-          # Update manifest
           if [ -f app/src/main/AndroidManifest.xml ]; then
             sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
           fi
-          # Update Java files (if any exist)
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \; 2>/dev/null || true
-          # Update build.gradle
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
             sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
           fi
 
-      - name: Clean old Java sources to avoid duplicates
+      - name: Clean old Java sources
         run: |
           rm -rf app/src/main/java/com
           mkdir -p app/src/main/java/com/systempro/app
@@ -56,10 +53,8 @@ jobs:
 
       - name: Create fresh Android source files
         run: |
-          # Ensure directories
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          # Create MainActivity.java (no duplicate now)
+          mkdir -p app/src/main/res/layout app/src/main/res/values
+          # MainActivity.java
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
           package com.systempro.app;
           import android.os.Bundle;
@@ -71,11 +66,11 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   TextView tv = findViewById(R.id.textView);
-                  tv.setText("CodeForge Pro Build Success!");
+                  tv.setText("CodeForge Pro - Success!");
               }
           }
           JAVAEOF
-          # Create activity_main.xml
+          # activity_main.xml
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -89,17 +84,17 @@ jobs:
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="CodeForge Pro"
-                  android:textSize="24sp"
+                  android:textSize="28sp"
                   android:textColor="#00FFCC" />
           </LinearLayout>
           XMLEOF
-          # Create strings.xml
+          # strings.xml
           cat > app/src/main/res/values/strings.xml << 'STRXML'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
-          # Create colors.xml
+          # colors.xml
           cat > app/src/main/res/values/colors.xml << 'COLORSXML'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -108,13 +103,14 @@ jobs:
               <color name="colorAccent">#03DAC5</color>
           </resources>
           COLORSXML
-          # Create AndroidManifest.xml
+          # AndroidManifest.xml with ICON and proper theme
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.systempro.app">
               <application
                   android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
                   android:label="@string/app_name"
                   android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
