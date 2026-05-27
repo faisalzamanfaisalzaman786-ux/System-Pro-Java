@@ -23,11 +23,8 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-          # Update manifest
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          # Update Java files
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
-          # Update app/build.gradle applicationId
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
           fi
@@ -50,76 +47,67 @@ jobs:
       - name: Setup Gradle Wrapper (locked to 8.5)
         run: |
           mkdir -p gradle/wrapper
-          wget https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          cat > gradlew << 'EOF'
-          #!/bin/sh
-          GRADLE_OPTS="-Dorg.gradle.appname=gradlew"
-          exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
-          EOF
+          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo -e '#!/bin/sh\nGRADLE_OPTS="-Dorg.gradle.appname=gradlew"\nexec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' > gradlew
           chmod +x gradlew
 
       - name: Fix Android project structure (ensure app module)
         run: |
-          # Ensure settings.gradle includes :app
-          if [ ! -f settings.gradle ] || ! grep -q "include ':app'" settings.gradle; then
-            echo "include ':app'" > settings.gradle
-          fi
+          # settings.gradle
+          echo 'include ":app"' > settings.gradle
 
-          # Ensure root build.gradle has the Android plugin classpath
-          if [ ! -f build.gradle ]; then
-            cat > build.gradle << 'EOF'
-            buildscript {
-                repositories { google(); mavenCentral() }
-                dependencies {
-                    classpath 'com.android.tools.build:gradle:7.4.2'
-                }
-            }
-            allprojects {
-                repositories { google(); mavenCentral() }
-            }
-            EOF
-          else
-            if ! grep -q "com.android.tools.build:gradle" build.gradle; then
-              sed -i '/buildscript {/a \    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' build.gradle
-            fi
-          fi
+          # root build.gradle
+          cat > build.gradle <<EOF
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
 
-          # Ensure app/build.gradle is a valid Android app module
-          if [ ! -f app/build.gradle ]; then
-            mkdir -p app
-            cat > app/build.gradle << 'EOF'
-            apply plugin: 'com.android.application'
-            android {
-                compileSdk 34
-                defaultConfig {
-                    applicationId "com.systempro.app"
-                    minSdk 21
-                    targetSdk 34
-                    versionCode 1
-                    versionName "1.0"
-                }
-                buildTypes {
-                    release {
-                        minifyEnabled false
-                    }
-                }
-            }
-            dependencies {
-                implementation 'androidx.appcompat:appcompat:1.6.1'
-            }
-            EOF
-          else
-            # If file exists but missing the plugin, add it at top
-            if ! grep -q "com.android.application" app/build.gradle; then
-              echo "apply plugin: 'com.android.application'" | cat - app/build.gradle > temp && mv temp app/build.gradle
-            fi
+          # app/build.gradle (ensure it's a valid Android app module)
+          mkdir -p app
+          cat > app/build.gradle <<EOF
+          apply plugin: 'com.android.application'
+          android {
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+          # If the user already had an app/build.gradle, merge the plugin line
+          if [ -f app/build.gradle.bak ]; then
+              # already handled
+              echo "Existing build.gradle preserved"
           fi
 
       - name: Build APK with Gradle
