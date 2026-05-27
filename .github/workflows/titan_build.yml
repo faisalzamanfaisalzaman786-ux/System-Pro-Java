@@ -23,36 +23,101 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-          # Fix manifest and package
-          sed -i 's/<?xml version="1.0" encoding="utf-8"?>/<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' app/src/main/AndroidManifest.xml
+          # Update manifest package
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          # Update Java files
+          # Update Java package declarations
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
           # Update app/build.gradle
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
+            sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
           fi
 
       - name: Setup Gradle Wrapper (locked to 8.5)
         run: |
           mkdir -p gradle/wrapper
           wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          printf "distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n" > gradle/wrapper/gradle-wrapper.properties
-          printf '#!/bin/sh\nGRADLE_OPTS="-Dorg.gradle.appname=gradlew"\nexec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"\n' > gradlew
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo '#!/bin/sh' > gradlew
+          echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
+          echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Generate App Icon (if present)
-        if: hashFiles('build_assets/app_icon.png') != ''
+      - name: Create complete Android source files
         run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-          convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # Create directory structure
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-      - name: Create correct Android project files
+          # Create MainActivity.java
+          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
+          package com.systempro.app;
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  TextView tv = findViewById(R.id.textView);
+                  tv.setText("Hello from CodeForge Pro!");
+              }
+          }
+          JAVAEOF
+
+          # Create activity_main.xml layout
+          cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="16dp">
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="CodeForge Pro"
+                  android:textSize="24sp"
+                  android:textColor="#00FFCC" />
+          </LinearLayout>
+          XMLEOF
+
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << 'STRXML'
+          <resources>
+              <string name="app_name">CodeForge Pro</string>
+          </resources>
+          STRXML
+
+          # Create AndroidManifest.xml if missing or fix it
+          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.app">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST
+
+      - name: Create Gradle project files
         run: |
           # settings.gradle
           echo 'include ":app"' > settings.gradle
@@ -64,42 +129,43 @@ jobs:
           echo '}' >> build.gradle
           echo 'allprojects { repositories { google(); mavenCentral() } }' >> build.gradle
 
-          # gradle.properties (suppress warning)
+          # gradle.properties
           echo 'android.suppressUnsupportedCompileSdk=34' > gradle.properties
 
           # app/build.gradle with namespace
-          mkdir -p app
-          echo "apply plugin: 'com.android.application'" > app/build.gradle
-          echo 'android {' >> app/build.gradle
-          echo '    compileSdk 34' >> app/build.gradle
-          echo "    namespace 'com.systempro.app'" >> app/build.gradle
-          echo '    defaultConfig {' >> app/build.gradle
-          echo '        applicationId "com.systempro.app"' >> app/build.gradle
-          echo '        minSdk 21' >> app/build.gradle
-          echo '        targetSdk 34' >> app/build.gradle
-          echo '        versionCode 1' >> app/build.gradle
-          echo '        versionName "1.0"' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '    buildTypes { release { minifyEnabled false } }' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo 'dependencies { implementation "androidx.appcompat:appcompat:1.6.1" }' >> app/build.gradle
+          cat > app/build.gradle << 'APPGRADLE'
+          apply plugin: 'com.android.application'
+          android {
+              compileSdk 34
+              namespace 'com.systempro.app'
+              defaultConfig {
+                  applicationId "com.systempro.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          APPGRADLE
 
-          # Ensure a valid AndroidManifest.xml exists
-          mkdir -p app/src/main
-          if [ ! -f app/src/main/AndroidManifest.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-            echo '    package="com.systempro.app">' >> app/src/main/AndroidManifest.xml
-            echo '    <application android:label="CodeForge App">' >> app/src/main/AndroidManifest.xml
-            echo '        <activity android:name=".MainActivity" android:exported="true">' >> app/src/main/AndroidManifest.xml
-            echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-            echo '                <action android:name="android.intent.action.MAIN"/>' >> app/src/main/AndroidManifest.xml
-            echo '                <category android:name="android.intent.category.LAUNCHER"/>' >> app/src/main/AndroidManifest.xml
-            echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-            echo '        </activity>' >> app/src/main/AndroidManifest.xml
-            echo '    </application>' >> app/src/main/AndroidManifest.xml
-            echo '</manifest>' >> app/src/main/AndroidManifest.xml
-          fi
+      - name: Generate App Icon (if present)
+        if: hashFiles('build_assets/app_icon.png') != ''
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
       - name: Build APK with Gradle
         run: |
