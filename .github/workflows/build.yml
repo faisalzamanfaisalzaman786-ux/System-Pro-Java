@@ -23,12 +23,22 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-          sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
+          # Update manifest
+          if [ -f app/src/main/AndroidManifest.xml ]; then
+            sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
+          fi
+          # Update Java files (if any exist)
+          find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \; 2>/dev/null || true
+          # Update build.gradle
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
             sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
           fi
+
+      - name: Clean old Java sources to avoid duplicates
+        run: |
+          rm -rf app/src/main/java/com
+          mkdir -p app/src/main/java/com/systempro/app
 
       - name: Setup Gradle Wrapper (locked to 8.5)
         run: |
@@ -44,13 +54,12 @@ jobs:
           echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Create complete Android source files
+      - name: Create fresh Android source files
         run: |
-          # Create directories
-          mkdir -p app/src/main/java/com/systempro/app
+          # Ensure directories
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          # Create MainActivity.java
+          # Create MainActivity.java (no duplicate now)
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
           package com.systempro.app;
           import android.os.Bundle;
@@ -90,7 +99,7 @@ jobs:
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
-          # 🟢 CRITICAL: Create colors.xml to fix missing color resources
+          # Create colors.xml
           cat > app/src/main/res/values/colors.xml << 'COLORSXML'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -120,19 +129,19 @@ jobs:
 
       - name: Create Gradle project files
         run: |
-          # settings.gradle
           echo 'include ":app"' > settings.gradle
-          # root build.gradle
-          echo 'buildscript {' > build.gradle
-          echo '    repositories { google(); mavenCentral() }' >> build.gradle
-          echo '    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' >> build.gradle
-          echo '}' >> build.gradle
-          echo 'allprojects { repositories { google(); mavenCentral() } }' >> build.gradle
-          # Enable AndroidX and suppress compileSdk warning
-          echo 'android.useAndroidX=true' > gradle.properties
-          echo 'android.enableJetifier=true' >> gradle.properties
-          echo 'android.suppressUnsupportedCompileSdk=34' >> gradle.properties
-          # app/build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
+          EOF
           cat > app/build.gradle << 'APPGRADLE'
           apply plugin: 'com.android.application'
           android {
@@ -146,9 +155,7 @@ jobs:
                   versionName "1.0"
               }
               buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
+                  release { minifyEnabled false }
               }
           }
           dependencies {
