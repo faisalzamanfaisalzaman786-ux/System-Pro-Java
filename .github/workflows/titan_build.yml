@@ -23,8 +23,12 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
+          # Fix manifest namespace and package
+          sed -i 's/<?xml version="1.0" encoding="utf-8"?>/<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' app/src/main/AndroidManifest.xml
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
+          # Update Java files
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
+          # Update app/build.gradle applicationId
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
           fi
@@ -56,7 +60,7 @@ jobs:
           echo -e '#!/bin/sh\nGRADLE_OPTS="-Dorg.gradle.appname=gradlew"\nexec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' > gradlew
           chmod +x gradlew
 
-      - name: Fix Android project structure (ensure app module)
+      - name: Fix Android project structure (ensure app module and manifest)
         run: |
           # settings.gradle
           echo 'include ":app"' > settings.gradle
@@ -80,12 +84,16 @@ jobs:
           }
           EOF
 
-          # app/build.gradle (ensure it's a valid Android app module)
+          # gradle.properties to suppress compileSdk warning
+          echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
+
+          # app/build.gradle with namespace
           mkdir -p app
           cat > app/build.gradle <<EOF
           apply plugin: 'com.android.application'
           android {
               compileSdk 34
+              namespace 'com.systempro.app'
               defaultConfig {
                   applicationId "com.systempro.app"
                   minSdk 21
@@ -104,10 +112,29 @@ jobs:
           }
           EOF
 
-          # If the user already had an app/build.gradle, merge the plugin line
-          if [ -f app/build.gradle.bak ]; then
-              # already handled
-              echo "Existing build.gradle preserved"
+          # Ensure AndroidManifest.xml has proper xmlns
+          if [ -f app/src/main/AndroidManifest.xml ]; then
+            # If manifest exists but missing namespace, inject it
+            if ! grep -q 'xmlns:android' app/src/main/AndroidManifest.xml; then
+              sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' app/src/main/AndroidManifest.xml
+            fi
+          else
+            # Create minimal valid manifest
+            mkdir -p app/src/main
+            cat > app/src/main/AndroidManifest.xml <<EOF
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="com.systempro.app">
+                <application android:label="CodeForge App">
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN"/>
+                            <category android:name="android.intent.category.LAUNCHER"/>
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            EOF
           fi
 
       - name: Build APK with Gradle
