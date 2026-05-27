@@ -8,58 +8,60 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. ریپو سے کوڈ چیک کریں
       - uses: actions/checkout@v4
 
-      # 2. JDK 17 سیٹ اپ کریں
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. ڈائنامک پیکج نیم کو تمام جگہوں پر تبدیل کریں
       - name: Replace Package Name in All Files
         run: |
-          # صارف کا دیا ہوا پیکج نیم client_payload سے حاصل کریں
           NEW_PKG="${{ github.event.client_payload.package_name }}"
           echo "Using Package Name: $NEW_PKG"
-
-          # اگر کوئی پیکج نیم نہ دیا ہو تو ڈیفالٹ استعمال کریں
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
-
-          # مینی فیسٹ میں پیکج نیم تبدیل کریں
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-
-          # MainActivity.java میں پیکج اسٹیٹمنٹ تبدیل کریں
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
+          if [ -f app/build.gradle ]; then
+            sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
+          fi
 
-      # 4. لے آؤٹ فائلز میں تھیم اور آئیکن ریفرنسز چیک کریں
       - name: Validate Layout References
         run: |
-          # چیک کریں کہ کوئی بھی لے آؤٹ کسی غیر موجود ڈراایبل یا آئیکن کو تو ریفرنس نہیں کر رہا
           if grep -r "ic_torch_on" app/src/main/res/layout/; then
             echo "Layout uses torch icons, ensuring drawables exist..."
           fi
 
-      # 5. App Icon کو mipmap فولڈرز میں ریسائز کریں
+      # Fixed: replaced non‑existent action with ImageMagick script
       - name: Generate App Icon in All Densities
         if: hashFiles('build_assets/app_icon.png') != ''
-        uses: maaslalani/android-resize-icon@v1
-        with:
-          icon: build_assets/app_icon.png
-          output: app/src/main/res
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # Also create a round icon if needed (optional)
+          convert build_assets/app_icon.png -resize 192x192 -background none -gravity center -extent 192x192 \
+            app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-      # 6. gradle-wrapper.jar کو یقینی بنائیں (اگر موجود نہ ہو تو ڈاؤن لوڈ کریں)
       - name: Setup Gradle Wrapper
         run: |
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            mkdir -p gradle/wrapper
             wget https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.2-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           fi
 
-      # 7. ڈیپنڈنسیز اور SDK ورژنز کو اپ ڈیٹ کریں (اگر build.gradle موجود ہے)
       - name: Update Dependencies in build.gradle
         run: |
           if [ -f app/build.gradle ]; then
@@ -68,20 +70,17 @@ jobs:
             sed -i "s/compileSdk .*/compileSdk 34/" app/build.gradle
           fi
 
-      # 8. Gradle کے ساتھ APK بلڈ کریں
       - name: Build APK with Gradle
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      # 9. اگر APK تیار ہو گیا ہے تو اسے اپ لوڈ کریں
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      # 10. GitHub Release تخلیق کریں اور APK منسلک کریں
       - name: Create Release and Attach APK
         uses: softprops/action-gh-release@v1
         with:
