@@ -25,7 +25,7 @@ jobs:
           fi
           # Update manifest
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          # Update all Java files
+          # Update Java files
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
           # Update app/build.gradle applicationId
           if [ -f app/build.gradle ]; then
@@ -47,12 +47,10 @@ jobs:
           convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Setup Gradle Wrapper (version 8.5)
+      - name: Setup Gradle Wrapper (locked to 8.5)
         run: |
           mkdir -p gradle/wrapper
-          # Download gradle-wrapper.jar for 8.5
           wget https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          # Create properties with 8.5 distribution
           cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -60,7 +58,6 @@ jobs:
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
-          # Create gradlew script
           cat > gradlew << 'EOF'
           #!/bin/sh
           GRADLE_OPTS="-Dorg.gradle.appname=gradlew"
@@ -68,17 +65,61 @@ jobs:
           EOF
           chmod +x gradlew
 
-      - name: Fix Android Gradle files (ensure app plugin is applied)
+      - name: Fix Android project structure (ensure app module)
         run: |
-          # If app/build.gradle doesn't apply the Android plugin, fix it
-          if ! grep -q "com.android.application" app/build.gradle; then
-            echo "Fixing app/build.gradle: adding Android application plugin"
-            sed -i '1i apply plugin: "com.android.application"' app/build.gradle
+          # Ensure settings.gradle includes :app
+          if [ ! -f settings.gradle ] || ! grep -q "include ':app'" settings.gradle; then
+            echo "include ':app'" > settings.gradle
           fi
-          # Ensure root build.gradle has the Android Gradle plugin classpath
-          if ! grep -q "com.android.tools.build:gradle" build.gradle; then
-            echo "Fixing root build.gradle: adding Android Gradle plugin dependency"
-            sed -i '/dependencies {/a \        classpath "com.android.tools.build:gradle:7.4.2"' build.gradle
+
+          # Ensure root build.gradle has the Android plugin classpath
+          if [ ! -f build.gradle ]; then
+            cat > build.gradle << 'EOF'
+            buildscript {
+                repositories { google(); mavenCentral() }
+                dependencies {
+                    classpath 'com.android.tools.build:gradle:7.4.2'
+                }
+            }
+            allprojects {
+                repositories { google(); mavenCentral() }
+            }
+            EOF
+          else
+            if ! grep -q "com.android.tools.build:gradle" build.gradle; then
+              sed -i '/buildscript {/a \    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' build.gradle
+            fi
+          fi
+
+          # Ensure app/build.gradle is a valid Android app module
+          if [ ! -f app/build.gradle ]; then
+            mkdir -p app
+            cat > app/build.gradle << 'EOF'
+            apply plugin: 'com.android.application'
+            android {
+                compileSdk 34
+                defaultConfig {
+                    applicationId "com.systempro.app"
+                    minSdk 21
+                    targetSdk 34
+                    versionCode 1
+                    versionName "1.0"
+                }
+                buildTypes {
+                    release {
+                        minifyEnabled false
+                    }
+                }
+            }
+            dependencies {
+                implementation 'androidx.appcompat:appcompat:1.6.1'
+            }
+            EOF
+          else
+            # If file exists but missing the plugin, add it at top
+            if ! grep -q "com.android.application" app/build.gradle; then
+              echo "apply plugin: 'com.android.application'" | cat - app/build.gradle > temp && mv temp app/build.gradle
+            fi
           fi
 
       - name: Build APK with Gradle
