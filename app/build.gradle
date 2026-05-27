@@ -1,2 +1,0 @@
-apply plugin: 'com.android.application'
-android { compileSdk 33 defaultConfig { applicationId "com.systempro.app" minSdk 21 targetSdk 33 } }
