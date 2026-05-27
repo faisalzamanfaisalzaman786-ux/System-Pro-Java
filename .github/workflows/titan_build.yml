@@ -23,19 +23,16 @@ jobs:
           if [ -z "$NEW_PKG" ]; then
             NEW_PKG="com.systempro.app"
           fi
+          # Update manifest
           sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
+          # Update all Java files
           find app/src/main/java -name "*.java" -exec sed -i "s/package .*;/package $NEW_PKG;/g" {} \;
+          # Update app/build.gradle applicationId
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
           fi
 
-      - name: Validate Layout References
-        run: |
-          if grep -r "ic_torch_on" app/src/main/res/layout/; then
-            echo "Layout uses torch icons, ensuring drawables exist..."
-          fi
-
-      - name: Generate App Icon in All Densities
+      - name: Generate App Icon (if present)
         if: hashFiles('build_assets/app_icon.png') != ''
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
@@ -50,20 +47,19 @@ jobs:
           convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      # FIXED: Create a complete Gradle wrapper (gradlew + gradle-wrapper.jar)
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle Wrapper (version 8.5)
         run: |
           mkdir -p gradle/wrapper
-          # Download gradle-wrapper.jar if missing
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            wget https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          fi
-          # Create gradle-wrapper.properties if missing
-          if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
-            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.2-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          fi
-          # Download a standard gradlew script from Gradle's official GitHub
-          wget https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar?raw=true -O gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+          # Download gradle-wrapper.jar for 8.5
+          wget https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          # Create properties with 8.5 distribution
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
           # Create gradlew script
           cat > gradlew << 'EOF'
           #!/bin/sh
@@ -71,25 +67,18 @@ jobs:
           exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
           EOF
           chmod +x gradlew
-          # Create gradlew.bat for Windows (optional)
-          cat > gradlew.bat << 'EOF'
-          @if "%DEBUG%" == "" @echo off
-          @rem ##########################################################################
-          @rem Gradle startup script for Windows
-          @rem ##########################################################################
-          set DIRNAME=%~dp0
-          set APP_BASE_NAME=%~n0
-          set CLASSPATH=%DIRNAME%gradle\wrapper\gradle-wrapper.jar
-          java -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
-          EOF
-          ls -la gradlew
 
-      - name: Update Dependencies in build.gradle
+      - name: Fix Android Gradle files (ensure app plugin is applied)
         run: |
-          if [ -f app/build.gradle ]; then
-            sed -i "s/minSdk .*/minSdk 21/" app/build.gradle
-            sed -i "s/targetSdk .*/targetSdk 34/" app/build.gradle
-            sed -i "s/compileSdk .*/compileSdk 34/" app/build.gradle
+          # If app/build.gradle doesn't apply the Android plugin, fix it
+          if ! grep -q "com.android.application" app/build.gradle; then
+            echo "Fixing app/build.gradle: adding Android application plugin"
+            sed -i '1i apply plugin: "com.android.application"' app/build.gradle
+          fi
+          # Ensure root build.gradle has the Android Gradle plugin classpath
+          if ! grep -q "com.android.tools.build:gradle" build.gradle; then
+            echo "Fixing root build.gradle: adding Android Gradle plugin dependency"
+            sed -i '/dependencies {/a \        classpath "com.android.tools.build:gradle:7.4.2"' build.gradle
           fi
 
       - name: Build APK with Gradle
