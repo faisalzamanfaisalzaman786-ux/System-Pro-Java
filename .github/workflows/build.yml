@@ -90,6 +90,15 @@ jobs:
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
+          # 🟢 CRITICAL: Create colors.xml to fix missing color resources
+          cat > app/src/main/res/values/colors.xml << 'COLORSXML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          COLORSXML
           # Create AndroidManifest.xml
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
@@ -119,7 +128,7 @@ jobs:
           echo '    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' >> build.gradle
           echo '}' >> build.gradle
           echo 'allprojects { repositories { google(); mavenCentral() } }' >> build.gradle
-          # 🟢 CRITICAL FIX: Enable AndroidX in gradle.properties
+          # Enable AndroidX and suppress compileSdk warning
           echo 'android.useAndroidX=true' > gradle.properties
           echo 'android.enableJetifier=true' >> gradle.properties
           echo 'android.suppressUnsupportedCompileSdk=34' >> gradle.properties
