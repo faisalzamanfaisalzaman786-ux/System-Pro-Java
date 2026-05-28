@@ -26,9 +26,9 @@ jobs:
           echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
           echo "Using package: $NEW_PKG"
 
-      - name: Clean old Java sources completely
+      - name: Clean everything (remove old manifests, resources, java)
         run: |
-          rm -rf app/src/main/java
+          rm -rf app/src/main
           PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
@@ -80,7 +80,7 @@ jobs:
           </resources>
           STRXML
 
-      - name: Create AndroidManifest.xml
+      - name: Create AndroidManifest.xml (no theme)
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           cat > app/src/main/AndroidManifest.xml << MANIFEST
@@ -115,7 +115,7 @@ jobs:
           echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Create Gradle files
+      - name: Create Gradle build files
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           echo 'include ":app"' > settings.gradle
@@ -129,6 +129,7 @@ jobs:
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
           EOF
           cat > app/build.gradle << APPGRADLE
           apply plugin: 'com.android.application'
@@ -146,9 +147,10 @@ jobs:
                   release { minifyEnabled false }
               }
           }
+          // No dependencies - pure Android
           APPGRADLE
 
-      - name: Generate app icon
+      - name: Generate app icon (user provided or default)
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           if [ -f build_assets/app_icon.png ]; then
