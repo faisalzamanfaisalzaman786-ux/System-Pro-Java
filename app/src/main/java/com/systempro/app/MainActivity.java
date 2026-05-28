@@ -1,11 +1,7 @@
 package com.systempro.app;
-
-import androidx.appcompat.app.AppCompatActivity;
+import android.app.Activity;
 import android.os.Bundle;
-
-public class MainActivity extends AppCompatActivity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+import android.widget.TextView;
+public class MainActivity extends Activity {
+    @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.textView); tv.setText("CodeForge Pro Works!"); }
 }
