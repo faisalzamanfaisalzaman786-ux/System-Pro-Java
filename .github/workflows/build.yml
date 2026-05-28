@@ -26,15 +26,16 @@ jobs:
           echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
           echo "Using package: $NEW_PKG"
 
-      - name: Clean and prepare directories
+      - name: Clean and create correct directories
         run: |
           rm -rf app build.gradle settings.gradle gradle.properties gradlew gradle
           PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          echo "Package path: ${PKG_PATH}"
 
-      - name: Create MainActivity
+      - name: Create MainActivity.java
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
@@ -48,14 +49,14 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  TextView textView = findViewById(R.id.helloText);
-                  textView.setText("CodeForge Pro is running!");
+                  TextView tv = findViewById(R.id.helloText);
+                  tv.setText("CodeForge Pro is working!");
               }
           }
           JAVAEOF
           sed -i "s/__PACKAGE__/${PKG}/g" "app/src/main/java/${PKG_PATH}/MainActivity.java"
 
-      - name: Create layout files
+      - name: Create layout and string resources
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -69,7 +70,7 @@ jobs:
                   android:id="@+id/helloText"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello CodeForge Pro"
+                  android:text="Hello CodeForge"
                   android:textSize="28sp"
                   android:textColor="#00FFCC" />
           </LinearLayout>
@@ -80,7 +81,7 @@ jobs:
           </resources>
           STRXML
 
-      - name: Create AndroidManifest
+      - name: Create AndroidManifest.xml
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           cat > app/src/main/AndroidManifest.xml << MANIFEST
@@ -101,7 +102,7 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle Wrapper (8.5)
         run: |
           mkdir -p gradle/wrapper
           wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
@@ -115,7 +116,7 @@ jobs:
           echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Create Gradle files
+      - name: Create Gradle build files
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           echo 'include ":app"' > settings.gradle
@@ -146,10 +147,9 @@ jobs:
                   release { minifyEnabled false }
               }
           }
-          // No dependencies - pure Android
           APPGRADLE
 
-      - name: Generate app icon
+      - name: Generate app icon (user or default)
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           if [ -f build_assets/app_icon.png ]; then
