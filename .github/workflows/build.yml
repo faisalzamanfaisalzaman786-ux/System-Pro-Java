@@ -12,73 +12,65 @@ jobs:
       - name: Create root build.gradle if missing
         run: |
           if [ ! -f build.gradle ]; then
-            cat > build.gradle << 'EOF'
-            buildscript {
-                repositories { google(); mavenCentral() }
-                dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-            }
-            allprojects { repositories { google(); mavenCentral() } }
-            tasks.register('clean', Delete) { delete rootProject.buildDir }
-            EOF
+            echo 'buildscript {' > build.gradle
+            echo '    repositories { google(); mavenCentral() }' >> build.gradle
+            echo '    dependencies { classpath "com.android.tools.build:gradle:7.4.2" }' >> build.gradle
+            echo '}' >> build.gradle
+            echo 'allprojects { repositories { google(); mavenCentral() } }' >> build.gradle
+            echo "tasks.register('clean', Delete) { delete rootProject.buildDir }" >> build.gradle
           fi
 
       - name: Create settings.gradle if missing
         run: |
           if [ ! -f settings.gradle ]; then
-            cat > settings.gradle << 'EOF'
-            pluginManagement {
-                repositories { google(); mavenCentral(); gradlePluginPortal() }
-            }
-            dependencyResolutionManagement {
-                repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-                repositories { google(); mavenCentral() }
-            }
-            rootProject.name = "CodeForgePro"
-            include ':app'
-            EOF
+            echo 'pluginManagement {' > settings.gradle
+            echo '    repositories { google(); mavenCentral(); gradlePluginPortal() }' >> settings.gradle
+            echo '}' >> settings.gradle
+            echo 'dependencyResolutionManagement {' >> settings.gradle
+            echo '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' >> settings.gradle
+            echo '    repositories { google(); mavenCentral() }' >> settings.gradle
+            echo '}' >> settings.gradle
+            echo 'rootProject.name = "CodeForgePro"' >> settings.gradle
+            echo 'include ":app"' >> settings.gradle
           fi
 
       - name: Create gradle.properties if missing
         run: |
           if [ ! -f gradle.properties ]; then
-            cat > gradle.properties << 'EOF'
-            org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-            android.useAndroidX=true
-            android.enableJetifier=true
-            android.suppressUnsupportedCompileSdk=34
-            EOF
+            echo 'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' > gradle.properties
+            echo 'android.useAndroidX=true' >> gradle.properties
+            echo 'android.enableJetifier=true' >> gradle.properties
+            echo 'android.suppressUnsupportedCompileSdk=34' >> gradle.properties
           fi
 
       - name: Create app/build.gradle if missing
         run: |
           if [ ! -f app/build.gradle ]; then
             mkdir -p app
-            cat > app/build.gradle << 'EOF'
-            plugins { id 'com.android.application' }
-            android {
-                compileSdk 34
-                namespace 'com.systempro.app'
-                defaultConfig {
-                    applicationId 'com.systempro.app'
-                    minSdk 21
-                    targetSdk 34
-                    versionCode 1
-                    versionName '1.0'
-                }
-                buildTypes { release { minifyEnabled false } }
-                compileOptions {
-                    sourceCompatibility JavaVersion.VERSION_17
-                    targetCompatibility JavaVersion.VERSION_17
-                }
-            }
-            dependencies { }
-            EOF
+            echo "plugins { id 'com.android.application' }" > app/build.gradle
+            echo 'android {' >> app/build.gradle
+            echo '    compileSdk 34' >> app/build.gradle
+            echo "    namespace 'com.systempro.app'" >> app/build.gradle
+            echo '    defaultConfig {' >> app/build.gradle
+            echo "        applicationId 'com.systempro.app'" >> app/build.gradle
+            echo '        minSdk 21' >> app/build.gradle
+            echo '        targetSdk 34' >> app/build.gradle
+            echo '        versionCode 1' >> app/build.gradle
+            echo "        versionName '1.0'" >> app/build.gradle
+            echo '    }' >> app/build.gradle
+            echo '    buildTypes { release { minifyEnabled false } }' >> app/build.gradle
+            echo '    compileOptions {' >> app/build.gradle
+            echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+            echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+            echo '    }' >> app/build.gradle
+            echo '}' >> app/build.gradle
+            echo 'dependencies { }' >> app/build.gradle
           fi
 
-      - name: Commit and push
+      - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add build.gradle settings.gradle gradle.properties app/build.gradle
-          git diff --staged --quiet || git commit -m "Add missing Gradle files"
+          git diff --staged --quiet || git commit -m "Add missing Gradle files (no heredoc)"
           git push
