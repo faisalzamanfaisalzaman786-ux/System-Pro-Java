@@ -26,14 +26,13 @@ jobs:
           echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
           echo "Using package: $NEW_PKG"
 
-      - name: Clean source directories (keep Gradle files)
+      - name: Clean and create source directories
         run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          mkdir -p app/src/main/res/layout app/src/main/res/values
+          rm -rf app/src/main/java app/src/main/res
           PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/${PKG_PATH}"
-          echo "Package path: ${PKG_PATH}"
+          mkdir -p app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
       - name: Create MainActivity.java
         run: |
@@ -50,13 +49,13 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   TextView tv = findViewById(R.id.helloText);
-                  tv.setText("CodeForge Pro - Gradle 8.5 Locked!");
+                  tv.setText("CodeForge Pro - Gradle 8.5 Success!");
               }
           }
           JAVAEOF
           sed -i "s/__PACKAGE__/${PKG}/g" "app/src/main/java/${PKG_PATH}/MainActivity.java"
 
-      - name: Create layout and resources
+      - name: Create layout and string resources
         run: |
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -70,7 +69,7 @@ jobs:
                   android:id="@+id/helloText"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello CodeForge"
+                  android:text="Hello from CodeForge"
                   android:textSize="28sp"
                   android:textColor="#00FFCC" />
           </LinearLayout>
@@ -102,16 +101,9 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Update namespace and applicationId in app/build.gradle
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          sed -i "s/namespace \".*\"/namespace \"${PKG}\"/" app/build.gradle
-          sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/" app/build.gradle
-
-      - name: Generate app icon
+      - name: Create default app icon
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
           if [ -f build_assets/app_icon.png ]; then
             convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
@@ -126,50 +118,63 @@ jobs:
             convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      - name: Upload source files to GitHub
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: 'app/src/main/'
-          message: 'Update source code and resources'
-          push: true
-          committer_name: 'github-actions[bot]'
-          committer_email: 'github-actions[bot]@users.noreply.github.com'
+      - name: Update app/build.gradle with correct namespace and applicationId
+        run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          # Ensure app/build.gradle exists
+          if [ ! -f app/build.gradle ]; then
+            echo "Error: app/build.gradle not found. Please run setup first." && exit 1
+          fi
+          sed -i "s/namespace \".*\"/namespace \"${PKG}\"/" app/build.gradle
+          sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/" app/build.gradle
+          # Also ensure sourceSets point to the correct Java directory
+          if ! grep -q "sourceSets" app/build.gradle; then
+            echo '' >> app/build.gradle
+            echo 'android {' >> app/build.gradle
+            echo '    sourceSets {' >> app/build.gradle
+            echo '        main {' >> app/build.gradle
+            echo '            java.srcDirs = ["src/main/java"]' >> app/build.gradle
+            echo '        }' >> app/build.gradle
+            echo '    }' >> app/build.gradle
+            echo '}' >> app/build.gradle
+          fi
 
-      - name: Upload icon if provided
-        if: hashFiles('build_assets/app_icon.png') != ''
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: 'build_assets/app_icon.png'
-          message: 'Update app icon'
-          push: true
-
-      - name: Create gradlew script if missing
+      - name: Create gradlew if missing
         run: |
           if [ ! -f gradlew ]; then
             echo '#!/bin/sh' > gradlew
             echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
             echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
             chmod +x gradlew
-            # Commit gradlew to repo so it persists
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add gradlew
-            git diff --staged --quiet || git commit -m "Add gradlew script for Gradle 8.5"
+            git diff --staged --quiet || git commit -m "Add gradlew script"
             git push
+          else
+            chmod +x gradlew
           fi
 
-      - name: Build APK using locked Gradle 8.5
+      - name: Verify Java source file exists
         run: |
-          chmod +x gradlew
+          PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
+          if [ ! -f "app/src/main/java/${PKG_PATH}/MainActivity.java" ]; then
+            echo "ERROR: MainActivity.java not found at app/src/main/java/${PKG_PATH}/MainActivity.java"
+            exit 1
+          fi
+          echo "Java source file found, proceeding to build."
+
+      - name: Build APK
+        run: |
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Create GitHub Release and attach APK
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-build
