@@ -1,4 +1,4 @@
-name: Build Android APK (Fresh Setup, Gradle 8.5 Locked)
+name: Build Android APK (Gradle 8.5 Locked)
 
 on:
   repository_dispatch:
@@ -26,24 +26,25 @@ jobs:
           echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
           echo "Using package: $NEW_PKG"
 
-      - name: Clean everything (remove old project files)
+      # ✅ پہلے پرانی Java اور Resource فائلیں مکمل حذف کریں
+      - name: Clean old source folders
         run: |
-          rm -rf app build.gradle settings.gradle gradle.properties gradlew gradle
-
-      - name: Create fresh directory structure
-        run: |
+          rm -rf app/src/main/java
+          rm -rf app/src/main/res
+          # نئی ڈائریکٹریز بنائیں
           PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
-          mkdir -p app/src/main/java/${PKG_PATH}
+          mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
-          mkdir -p gradle/wrapper
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          echo "Package path: ${PKG_PATH}"
 
+      # ✅ اب Java فائل براہ راست درست پیکیج کے ساتھ بنائیں (کوئی sed نہیں)
       - name: Create MainActivity.java
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          cat > "app/src/main/java/${PKG_PATH}/MainActivity.java" << 'JAVAEOF'
-          package __PACKAGE__;
+          cat > "app/src/main/java/${PKG_PATH}/MainActivity.java" << EOF
+          package ${PKG};
           import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
@@ -53,15 +54,15 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   TextView tv = findViewById(R.id.helloText);
-                  tv.setText("CodeForge Pro - Fresh Build!");
+                  tv.setText("CodeForge Pro - Correct Order!");
               }
           }
-          JAVAEOF
-          sed -i "s/__PACKAGE__/${PKG}/g" "app/src/main/java/${PKG_PATH}/MainActivity.java"
+          EOF
+          echo "✅ MainActivity.java created with package ${PKG}"
 
       - name: Create layout and string resources
         run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
+          cat > app/src/main/res/layout/activity_main.xml << 'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -77,12 +78,12 @@ jobs:
                   android:textSize="28sp"
                   android:textColor="#00FFCC" />
           </LinearLayout>
-          XMLEOF
-          cat > app/src/main/res/values/strings.xml << 'STRXML'
+          XML
+          cat > app/src/main/res/values/strings.xml << 'STR'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
-          STRXML
+          STR
 
       - name: Create AndroidManifest.xml
         run: |
@@ -105,7 +106,7 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Generate app icon
+      - name: Generate app icon (user or default)
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           if [ -f build_assets/app_icon.png ]; then
@@ -122,103 +123,130 @@ jobs:
             convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      - name: Create root build.gradle
+      # Gradle فائلیں (اگر پہلے سے موجود نہ ہوں تو بنا دیں)
+      - name: Ensure Gradle files exist
         run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
-          EOF
+          # Root build.gradle
+          if [ ! -f build.gradle ]; then
+            cat > build.gradle << 'EOF'
+            buildscript {
+                repositories { google(); mavenCentral() }
+                dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+            }
+            allprojects { repositories { google(); mavenCentral() } }
+            tasks.register('clean', Delete) { delete rootProject.buildDir }
+            EOF
+          fi
+          # settings.gradle
+          if [ ! -f settings.gradle ]; then
+            cat > settings.gradle << 'EOF'
+            rootProject.name = "CodeForgePro"
+            include ':app'
+            EOF
+          fi
+          # gradle.properties
+          if [ ! -f gradle.properties ]; then
+            cat > gradle.properties << 'EOF'
+            org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+            android.useAndroidX=true
+            android.enableJetifier=true
+            android.suppressUnsupportedCompileSdk=34
+            EOF
+          fi
+          # gradle wrapper
+          mkdir -p gradle/wrapper
+          if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
+            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+            distributionBase=GRADLE_USER_HOME
+            distributionPath=wrapper/dists
+            distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+            zipStoreBase=GRADLE_USER_HOME
+            zipStorePath=wrapper/dists
+            EOF
+          fi
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          fi
+          if [ ! -f gradlew ]; then
+            cat > gradlew << 'EOF'
+            #!/bin/sh
+            GRADLE_OPTS="-Dorg.gradle.appname=gradlew"
+            exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
+            EOF
+            chmod +x gradlew
+          fi
 
-      - name: Create settings.gradle
-        run: |
-          cat > settings.gradle << 'EOF'
-          rootProject.name = "CodeForgePro"
-          include ':app'
-          EOF
-
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
-          EOF
-
-      - name: Create gradle-wrapper.properties
-        run: |
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-      - name: Download gradle-wrapper.jar
-        run: |
-          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-
-      - name: Create gradlew script
-        run: |
-          cat > gradlew << 'EOF'
-          #!/bin/sh
-          GRADLE_OPTS="-Dorg.gradle.appname=gradlew"
-          exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
-          EOF
-          chmod +x gradlew
-
-      - name: Create app/build.gradle with correct namespace
+      - name: Update app/build.gradle with correct namespace and applicationId
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > app/build.gradle << APPGRADLE
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              compileSdk 34
-              namespace '${PKG}'
-              defaultConfig {
-                  applicationId '${PKG}'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          dependencies {
-              // No dependencies to keep it minimal
-          }
-          APPGRADLE
+          # اگر app/build.gradle موجود نہ ہو تو بنا دیں
+          if [ ! -f app/build.gradle ]; then
+            mkdir -p app
+            cat > app/build.gradle << APPGRADLE
+            plugins { id 'com.android.application' }
+            android {
+                compileSdk 34
+                namespace '${PKG}'
+                defaultConfig {
+                    applicationId '${PKG}'
+                    minSdk 21
+                    targetSdk 34
+                    versionCode 1
+                    versionName '1.0'
+                }
+                buildTypes { release { minifyEnabled false } }
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                sourceSets {
+                    main {
+                        java.srcDirs = ['src/main/java']
+                        res.srcDirs = ['src/main/res']
+                        manifest.srcFile 'src/main/AndroidManifest.xml'
+                    }
+                }
+            }
+            dependencies {}
+            APPGRADLE
+          else
+            # موجودہ فائل میں namespace اور applicationId تبدیل کریں
+            sed -i "s/namespace \".*\"/namespace \"${PKG}\"/" app/build.gradle
+            sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/" app/build.gradle
+          fi
 
-      - name: Verify Java source file exists
+      - name: Verify Java file exists and has correct package
         run: |
           PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
-          ls -la app/src/main/java/${PKG_PATH}/
-          cat app/src/main/java/${PKG_PATH}/MainActivity.java | head -5
-          echo "Java file verified."
+          if [ ! -f "app/src/main/java/${PKG_PATH}/MainActivity.java" ]; then
+            echo "❌ ERROR: MainActivity.java not found!"
+            exit 1
+          fi
+          head -n 3 "app/src/main/java/${PKG_PATH}/MainActivity.java"
+          echo "✅ Java file OK"
 
       - name: Build APK
         run: |
+          chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: Check APK size
+      - name: Check APK size and content
         run: |
-          ls -la app/build/outputs/apk/debug/*.apk || echo "APK not found"
-          du -h app/build/outputs/apk/debug/*.apk || true
+          APK=$(ls app/build/outputs/apk/debug/*.apk 2>/dev/null | head -1)
+          if [ -f "$APK" ]; then
+            SIZE=$(du -k "$APK" | cut -f1)
+            echo "APK size: ${SIZE} KB"
+            if [ "$SIZE" -lt 100 ]; then
+              echo "❌ ERROR: APK too small, compilation likely failed"
+              exit 1
+            else
+              echo "✅ APK size looks good"
+            fi
+            unzip -l "$APK" | grep classes.dex || echo "⚠️ classes.dex not found"
+          else
+            echo "❌ ERROR: No APK generated"
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
