@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="${{ steps.pkg.outputs.package_name }}">
+    package="com.systempro.app">
 
     <application
         android:allowBackup="true"
@@ -8,7 +8,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="SystemPro"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
-        android:supportsRtl="true">
+        android:exported="true">
         
         <activity 
             android:name=".MainActivity" 
