@@ -1,45 +1,97 @@
-name: Build Android APK (with Dynamic Package Name)
+name: Setup Repository with All Missing Files
 
 on:
-  repository_dispatch:
-    types: [trigger_b64_build]
+  workflow_dispatch:   # manual trigger
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set package name
-        id: pkg
+      - name: Create directory structure
         run: |
-          NEW_PKG="${{ github.event.client_payload.package_name }}"
-          if [ -z "$NEW_PKG" ]; then
-            NEW_PKG="com.systempro.app"
-          fi
-          echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
-          echo "Using package: $NEW_PKG"
+          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-      - name: Clean everything (remove old manifests, resources, java)
+      - name: Create gradle-wrapper.properties
         run: |
-          rm -rf app/src/main
-          PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
-          mkdir -p "app/src/main/java/${PKG_PATH}"
-          mkdir -p app/src/main/res/layout app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
 
-      - name: Create MainActivity.java
+      - name: Download gradle-wrapper.jar
         run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          cat > "app/src/main/java/${PKG_PATH}/MainActivity.java" << 'JAVAEOF'
-          package __PACKAGE__;
+          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+
+      - name: Create root build.gradle
+        run: |
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
+          EOF
+
+      - name: Create settings.gradle
+        run: |
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "CodeForgePro"
+          include ':app'
+          EOF
+
+      - name: Create gradle.properties
+        run: |
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
+          EOF
+
+      - name: Create app/build.gradle
+        run: |
+          cat > app/build.gradle << 'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              compileSdk 34
+              namespace 'com.systempro.app'
+              defaultConfig {
+                  applicationId 'com.systempro.app'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes { release { minifyEnabled false } }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies { }
+          EOF
+
+      - name: Create minimal working app (MainActivity, layout, manifest)
+        run: |
+          # MainActivity.java
+          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
+          package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
@@ -49,14 +101,12 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   TextView tv = findViewById(R.id.helloText);
-                  tv.setText("CodeForge Pro is running!");
+                  tv.setText("CodeForge Pro - Ready!");
               }
           }
           JAVAEOF
-          sed -i "s/__PACKAGE__/${PKG}/g" "app/src/main/java/${PKG_PATH}/MainActivity.java"
 
-      - name: Create layout and resources
-        run: |
+          # activity_main.xml
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -74,19 +124,19 @@ jobs:
                   android:textColor="#00FFCC" />
           </LinearLayout>
           XMLEOF
+
+          # strings.xml
           cat > app/src/main/res/values/strings.xml << 'STRXML'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
 
-      - name: Create AndroidManifest.xml (no theme)
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > app/src/main/AndroidManifest.xml << MANIFEST
+          # AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${PKG}">
+              package="com.systempro.app">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -101,85 +151,19 @@ jobs:
           </manifest>
           MANIFEST
 
-      - name: Setup Gradle Wrapper (8.5)
-        run: |
-          mkdir -p gradle/wrapper
-          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo '#!/bin/sh' > gradlew
-          echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
-          echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
-          chmod +x gradlew
-
-      - name: Create Gradle build files
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          echo 'include ":app"' > settings.gradle
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
-          EOF
-          cat > app/build.gradle << APPGRADLE
-          apply plugin: 'com.android.application'
-          android {
-              compileSdk 34
-              namespace '${PKG}'
-              defaultConfig {
-                  applicationId '${PKG}'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes {
-                  release { minifyEnabled false }
-              }
-          }
-          // No dependencies - pure Android
-          APPGRADLE
-
-      - name: Generate app icon (user provided or default)
-        run: |
+          # Create a default icon (green square)
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
           sudo apt-get update && sudo apt-get install -y imagemagick
-          if [ -f build_assets/app_icon.png ]; then
-            convert build_assets/app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          else
-            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
+          convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Build APK
+      - name: Commit and push all created files
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest-build
-          files: app/build/outputs/apk/debug/*.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradle/ app/ build.gradle settings.gradle gradle.properties
+          git diff --staged --quiet || git commit -m "Add complete Gradle setup and minimal working app"
+          git push
