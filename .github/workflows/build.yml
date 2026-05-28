@@ -16,36 +16,30 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # پوری پرانی پروجیکٹ صاف کریں
-      - name: Clean previous build
+      - name: Set package name
+        id: pkg
+        run: |
+          NEW_PKG="${{ github.event.client_payload.package_name }}"
+          if [ -z "$NEW_PKG" ]; then
+            NEW_PKG="com.systempro.app"
+          fi
+          echo "package_name=$NEW_PKG" >> $GITHUB_OUTPUT
+          echo "Using package: $NEW_PKG"
+
+      - name: Clean and prepare directories
         run: |
           rm -rf app build.gradle settings.gradle gradle.properties gradlew gradle
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          PKG_PATH=$(echo "${{ steps.pkg.outputs.package_name }}" | tr '.' '/')
+          mkdir -p "app/src/main/java/${PKG_PATH}"
+          mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      # Gradle Wrapper 8.5
-      - name: Setup Gradle Wrapper
+      - name: Create MainActivity
         run: |
-          mkdir -p gradle/wrapper
-          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo '#!/bin/sh' > gradlew
-          echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
-          echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
-          chmod +x gradlew
-
-      # 100% Pure Android App (No AppCompat, No Themes)
-      - name: Create simple app without any theme
-        run: |
-          # MainActivity - Plain Activity
-          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
-          package com.systempro.app;
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          cat > "app/src/main/java/${PKG_PATH}/MainActivity.java" << 'JAVAEOF'
+          package __PACKAGE__;
           import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
@@ -55,12 +49,14 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   TextView textView = findViewById(R.id.helloText);
-                  textView.setText("CodeForge Pro is working fine!");
+                  textView.setText("CodeForge Pro is running!");
               }
           }
           JAVAEOF
+          sed -i "s/__PACKAGE__/${PKG}/g" "app/src/main/java/${PKG_PATH}/MainActivity.java"
 
-          # activity_main.xml - simple layout
+      - name: Create layout files
+        run: |
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -78,19 +74,19 @@ jobs:
                   android:textColor="#00FFCC" />
           </LinearLayout>
           XMLEOF
-
-          # strings.xml
           cat > app/src/main/res/values/strings.xml << 'STRXML'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
 
-          # AndroidManifest.xml - No theme, only icon and label
-          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
+      - name: Create AndroidManifest
+        run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          cat > app/src/main/AndroidManifest.xml << MANIFEST
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.app">
+              package="${PKG}">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -105,9 +101,23 @@ jobs:
           </manifest>
           MANIFEST
 
-      # Gradle files (no AppCompat dependency)
+      - name: Setup Gradle Wrapper
+        run: |
+          mkdir -p gradle/wrapper
+          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo '#!/bin/sh' > gradlew
+          echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
+          echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
+          chmod +x gradlew
+
       - name: Create Gradle files
         run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
           echo 'include ":app"' > settings.gradle
           cat > build.gradle << 'EOF'
           buildscript {
@@ -120,13 +130,13 @@ jobs:
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
-          cat > app/build.gradle << 'APPGRADLE'
+          cat > app/build.gradle << APPGRADLE
           apply plugin: 'com.android.application'
           android {
               compileSdk 34
-              namespace 'com.systempro.app'
+              namespace '${PKG}'
               defaultConfig {
-                  applicationId "com.systempro.app"
+                  applicationId '${PKG}'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -139,7 +149,6 @@ jobs:
           // No dependencies - pure Android
           APPGRADLE
 
-      # آئیکن بنائیں (اگر صارف نے اپ لوڈ کیا ہے تو وہ استعمال ہو گا)
       - name: Generate app icon
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
@@ -150,7 +159,6 @@ jobs:
             convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           else
-            # Default green square icon
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -158,33 +166,17 @@ jobs:
             convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           fi
 
-      # پیکیج نیم تبدیل کریں (اگر ضرورت ہو)
-      - name: Replace package name
-        run: |
-          NEW_PKG="${{ github.event.client_payload.package_name }}"
-          if [ -z "$NEW_PKG" ]; then
-            NEW_PKG="com.systempro.app"
-          fi
-          echo "Setting package to: $NEW_PKG"
-          sed -i "s/package=\"[^\"]*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-          sed -i "s/package .*;/package $NEW_PKG;/" app/src/main/java/com/systempro/app/MainActivity.java
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
-          sed -i "s/namespace \".*\"/namespace \"$NEW_PKG\"/" app/build.gradle
-
-      # APK بلڈ کریں
       - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      # APK اپ لوڈ کریں
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      # Release بنائیں
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
