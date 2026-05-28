@@ -1,9 +1,33 @@
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdk 34
+    namespace 'com.systempro.app'   // will be replaced by workflow
+    defaultConfig {
+        applicationId "com.systempro.app"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets {
+        main {
+            java.srcDirs = ["src/main/java"]
+        }
     }
 }
-rootProject.name = "CodeForgePro"
-include ':app'
+
+dependencies {
+    // No extra dependencies
+}
