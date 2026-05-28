@@ -16,8 +16,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # پہلے سے موجود تمام فائلوں کو مکمل صاف کریں
-      - name: Clean everything
+      # پوری پرانی پروجیکٹ صاف کریں
+      - name: Clean previous build
         run: |
           rm -rf app build.gradle settings.gradle gradle.properties gradlew gradle
           mkdir -p app/src/main/java/com/systempro/app
@@ -40,10 +40,10 @@ jobs:
           echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      # سب سے آسان Android App (بغیر AppCompat کے)
-      - name: Create minimal app
+      # 100% Pure Android App (No AppCompat, No Themes)
+      - name: Create simple app without any theme
         run: |
-          # MainActivity - plain Activity
+          # MainActivity - Plain Activity
           cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
           package com.systempro.app;
           import android.app.Activity;
@@ -54,22 +54,23 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  TextView tv = findViewById(R.id.textView);
-                  tv.setText("CodeForge Pro is working!");
+                  TextView textView = findViewById(R.id.helloText);
+                  textView.setText("CodeForge Pro is working fine!");
               }
           }
           JAVAEOF
 
-          # Layout
+          # activity_main.xml - simple layout
           cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:gravity="center">
+              android:gravity="center"
+              android:padding="24dp">
               <TextView
-                  android:id="@+id/textView"
+                  android:id="@+id/helloText"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="Hello CodeForge Pro"
@@ -78,14 +79,14 @@ jobs:
           </LinearLayout>
           XMLEOF
 
-          # Strings
+          # strings.xml
           cat > app/src/main/res/values/strings.xml << 'STRXML'
           <resources>
               <string name="app_name">CodeForge Pro</string>
           </resources>
           STRXML
 
-          # AndroidManifest (بغیر theme کے)
+          # AndroidManifest.xml - No theme, only icon and label
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -104,7 +105,7 @@ jobs:
           </manifest>
           MANIFEST
 
-      # Gradle فائلیں
+      # Gradle files (no AppCompat dependency)
       - name: Create Gradle files
         run: |
           echo 'include ":app"' > settings.gradle
@@ -118,7 +119,6 @@ jobs:
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
           EOF
           cat > app/build.gradle << 'APPGRADLE'
           apply plugin: 'com.android.application'
@@ -150,7 +150,7 @@ jobs:
             convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           else
-            # Default green icon
+            # Default green square icon
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
