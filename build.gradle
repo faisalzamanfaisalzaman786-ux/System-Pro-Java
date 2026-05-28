@@ -4,18 +4,15 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Android Gradle Plugin 7.4.2 works with Gradle 8.5
         classpath 'com.android.tools.build:gradle:7.4.2'
     }
 }
-
 allprojects {
     repositories {
         google()
         mavenCentral()
     }
 }
-
 tasks.register('clean', Delete) {
     delete rootProject.buildDir
 }
