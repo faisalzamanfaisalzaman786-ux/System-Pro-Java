@@ -1,169 +1,84 @@
-name: Setup Repository with All Missing Files
+name: Add Missing Gradle Files
 
 on:
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:
 
 jobs:
-  setup:
+  add-files:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create directory structure
+      - name: Create root build.gradle if missing
         run: |
-          mkdir -p gradle/wrapper
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          if [ ! -f build.gradle ]; then
+            cat > build.gradle << 'EOF'
+            buildscript {
+                repositories { google(); mavenCentral() }
+                dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+            }
+            allprojects { repositories { google(); mavenCentral() } }
+            tasks.register('clean', Delete) { delete rootProject.buildDir }
+            EOF
+          fi
 
-      - name: Create gradle-wrapper.properties
+      - name: Create settings.gradle if missing
         run: |
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
+          if [ ! -f settings.gradle ]; then
+            cat > settings.gradle << 'EOF'
+            pluginManagement {
+                repositories { google(); mavenCentral(); gradlePluginPortal() }
+            }
+            dependencyResolutionManagement {
+                repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                repositories { google(); mavenCentral() }
+            }
+            rootProject.name = "CodeForgePro"
+            include ':app'
+            EOF
+          fi
 
-      - name: Download gradle-wrapper.jar
+      - name: Create gradle.properties if missing
         run: |
-          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          if [ ! -f gradle.properties ]; then
+            cat > gradle.properties << 'EOF'
+            org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+            android.useAndroidX=true
+            android.enableJetifier=true
+            android.suppressUnsupportedCompileSdk=34
+            EOF
+          fi
 
-      - name: Create root build.gradle
+      - name: Create app/build.gradle if missing
         run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
-          EOF
+          if [ ! -f app/build.gradle ]; then
+            mkdir -p app
+            cat > app/build.gradle << 'EOF'
+            plugins { id 'com.android.application' }
+            android {
+                compileSdk 34
+                namespace 'com.systempro.app'
+                defaultConfig {
+                    applicationId 'com.systempro.app'
+                    minSdk 21
+                    targetSdk 34
+                    versionCode 1
+                    versionName '1.0'
+                }
+                buildTypes { release { minifyEnabled false } }
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+            dependencies { }
+            EOF
+          fi
 
-      - name: Create settings.gradle
-        run: |
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = "CodeForgePro"
-          include ':app'
-          EOF
-
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
-          EOF
-
-      - name: Create app/build.gradle
-        run: |
-          cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
-          android {
-              compileSdk 34
-              namespace 'com.systempro.app'
-              defaultConfig {
-                  applicationId 'com.systempro.app'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              buildTypes { release { minifyEnabled false } }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          dependencies { }
-          EOF
-
-      - name: Create minimal working app (MainActivity, layout, manifest)
-        run: |
-          # MainActivity.java
-          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'JAVAEOF'
-          package com.systempro.app;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  TextView tv = findViewById(R.id.helloText);
-                  tv.setText("CodeForge Pro - Ready!");
-              }
-          }
-          JAVAEOF
-
-          # activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp">
-              <TextView
-                  android:id="@+id/helloText"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Hello CodeForge"
-                  android:textSize="28sp"
-                  android:textColor="#00FFCC" />
-          </LinearLayout>
-          XMLEOF
-
-          # strings.xml
-          cat > app/src/main/res/values/strings.xml << 'STRXML'
-          <resources>
-              <string name="app_name">CodeForge Pro</string>
-          </resources>
-          STRXML
-
-          # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.app">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          MANIFEST
-
-          # Create a default icon (green square)
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-      - name: Commit and push all created files
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add gradle/ app/ build.gradle settings.gradle gradle.properties
-          git diff --staged --quiet || git commit -m "Add complete Gradle setup and minimal working app"
+          git add build.gradle settings.gradle gradle.properties app/build.gradle
+          git diff --staged --quiet || git commit -m "Add missing Gradle files"
           git push
