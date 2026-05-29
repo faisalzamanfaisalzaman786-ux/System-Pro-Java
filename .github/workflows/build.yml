@@ -86,7 +86,6 @@ jobs:
               clean_path = path.strip("/")
               if clean_path.endswith(".java"):
                   java_found = True
-                  # Only fix package line, DO NOT replace AppCompatActivity
                   content = re.sub(
                       r'^package .*?;',
                       'package ' + pkg + ';',
@@ -95,19 +94,12 @@ jobs:
                   )
                   filename = os.path.basename(clean_path)
                   new_path = "app/src/main/java/" + pkg_path + "/" + filename
-
               elif clean_path.endswith(".xml"):
                   if "layout" in clean_path:
                       layout_found = True
                   if "AndroidManifest.xml" in clean_path:
                       manifest_found = True
                       new_path = "app/src/main/AndroidManifest.xml"
-                      # Keep original manifest, but ensure theme is compatible
-                      if "Theme.AppCompat" not in content:
-                          content = content.replace(
-                              "Theme.DeviceDefault.Light.NoActionBar",
-                              "Theme.AppCompat.Light.DarkActionBar"
-                          )
                   else:
                       filename = os.path.basename(clean_path)
                       if "layout" in clean_path:
@@ -124,7 +116,7 @@ jobs:
                   out.write(content)
               print("Written:", new_path)
 
-          # Provide default layout if missing
+          # Default layout if missing
           if not layout_found:
               with open("app/src/main/res/layout/activity_main.xml", "w") as f:
                   f.write("""<?xml version="1.0" encoding="utf-8"?>
@@ -140,7 +132,7 @@ jobs:
                   android:textSize="22sp"/>
           </LinearLayout>""")
 
-          # Provide default MainActivity if no Java file provided
+          # Default MainActivity
           if not java_found:
               java_dir = "app/src/main/java/" + pkg_path
               os.makedirs(java_dir, exist_ok=True)
@@ -159,12 +151,11 @@ jobs:
           }}
           ''')
 
-          # Provide default manifest if missing
+          # Default manifest if missing
           if not manifest_found:
               manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="{pkg}">
-              <uses-permission android:name="android.permission.INTERNET"/>
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -182,11 +173,13 @@ jobs:
               with open("app/src/main/AndroidManifest.xml", "w") as f:
                   f.write(manifest)
 
-          # Strings and colors
+          # Always create strings.xml with correct app_name
           with open("app/src/main/res/values/strings.xml", "w") as f:
               f.write(f'''<resources>
               <string name="app_name">{app_name}</string>
           </resources>''')
+
+          # Default colors and theme
           with open("app/src/main/res/values/colors.xml", "w") as f:
               f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -204,7 +197,44 @@ jobs:
 
           python3 generate.py
 
-      - name: Create settings.gradle
+      - name: FORCE Fix App Name & Icon in Manifest
+        run: |
+          # Ensure AndroidManifest uses correct app name and icon
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            # Replace label if missing or hardcoded
+            sed -i 's|android:label="[^"]*"|android:label="@string/app_name"|g' "$MANIFEST"
+            sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' "$MANIFEST"
+            # If no label at all, insert after <application
+            if ! grep -q "android:label" "$MANIFEST"; then
+              sed -i '/<application / s|>| android:label="@string/app_name" android:icon="@mipmap/ic_launcher" >|' "$MANIFEST"
+            fi
+          fi
+          # Double-check strings.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+          <resources>
+              <string name=\"app_name\">${{ steps.app.outputs.app_name }}</string>
+          </resources>" > app/src/main/res/values/strings.xml
+
+      - name: Process App Icon (Force Override)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > icon.png
+            # Generate all densities
+            convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "Custom icon applied"
+          else
+            echo "No custom icon provided, keeping default (you can change later)"
+          fi
+
+      - name: Create Gradle Files
         run: |
           cat > settings.gradle << 'EOF'
           pluginManagement {
@@ -225,16 +255,12 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create Root build.gradle
-        run: |
           cat > build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-      - name: Create app build.gradle
-        run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
           plugins {
@@ -276,33 +302,11 @@ jobs:
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
 
-      - name: Create gradle.properties
-        run: |
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
-
-      - name: Process App Icon
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          ICON_B64="${{ github.event.client_payload.icon }}"
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
-            convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          else
-            convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -310,14 +314,10 @@ jobs:
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Clean Project
-        run: ./gradlew clean
-
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Verify APK Size
-        run: ls -lh app/build/outputs/apk/debug/
+      - name: Clean & Build APK
+        run: |
+          ./gradlew clean
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
