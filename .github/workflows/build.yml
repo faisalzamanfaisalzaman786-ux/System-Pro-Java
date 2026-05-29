@@ -153,7 +153,9 @@ jobs:
         run: |
           ICON_B64="${{ github.event.client_payload.icon }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
+            echo "Icon base64 length: ${#ICON_B64}"
             echo "$ICON_B64" | base64 -d > app_icon.png
+            file app_icon.png
             sudo apt-get update && sudo apt-get install -y imagemagick
             for d in 72 48 96 144 192; do
               size="${d}x${d}"
