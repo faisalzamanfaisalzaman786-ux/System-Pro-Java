@@ -1,4 +1,5 @@
-name: Build Android APK (Universal Full Builder Fixed)
+```yaml
+name: Build Android APK (Universal Stable Builder)
 
 on:
   workflow_dispatch:
@@ -50,7 +51,7 @@ jobs:
 
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-      - name: Create Fresh Android Project
+      - name: Create Fresh Project
         run: |
           rm -rf app
 
@@ -70,8 +71,8 @@ jobs:
           ${{ toJson(github.event.client_payload.files) }}
           EOF
 
-          NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          APP_NAME="${{ steps.app.outputs.app_name }}"
+          export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
+          export APP_NAME="${{ steps.app.outputs.app_name }}"
 
           cat > generate.py << 'PY'
           import json
@@ -105,15 +106,17 @@ jobs:
                       flags=re.MULTILINE
                   )
 
-                  content = content.replace(
-                      "extends AppCompatActivity",
-                      "extends Activity"
-                  )
+                  if "AppCompatActivity" in content:
 
-                  content = content.replace(
-                      "import androidx.appcompat.app.AppCompatActivity;",
-                      "import android.app.Activity;"
-                  )
+                      content = content.replace(
+                          "import androidx.appcompat.app.AppCompatActivity;",
+                          "import android.app.Activity;"
+                      )
+
+                      content = content.replace(
+                          "extends AppCompatActivity",
+                          "extends Activity"
+                      )
 
                   filename = os.path.basename(clean_path)
 
@@ -127,13 +130,22 @@ jobs:
                   if "AndroidManifest.xml" in clean_path:
                       manifest_found = True
                       new_path = "app/src/main/AndroidManifest.xml"
+
+                      content = content.replace(
+                          "Theme.AppCompat.Light.DarkActionBar",
+                          "@android:style/Theme.DeviceDefault.Light.NoActionBar"
+                      )
+
                   else:
+
                       filename = os.path.basename(clean_path)
 
                       if "layout" in clean_path:
                           new_path = "app/src/main/res/layout/" + filename
+
                       elif "values" in clean_path:
                           new_path = "app/src/main/res/values/" + filename
+
                       else:
                           new_path = "app/src/main/res/" + filename
 
@@ -199,7 +211,7 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:label="@string/app_name"
                   android:supportsRtl="true"
-                  android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+                  android:theme="@style/AppTheme">
 
                   <activity
                       android:name=".MainActivity"
@@ -231,11 +243,19 @@ jobs:
               <color name="colorAccent">#03DAC5</color>
           </resources>''')
 
-          print("Project generation complete")
-          PY
+          with open("app/src/main/res/values/themes.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
 
-          export NEW_PKG
-          export APP_NAME
+              <style name="AppTheme"
+                  parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+
+              </style>
+
+          </resources>''')
+
+          print("Project generation completed")
+          PY
 
           python3 generate.py
 
@@ -251,6 +271,7 @@ jobs:
           }
 
           dependencyResolutionManagement {
+
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
 
               repositories {
@@ -296,6 +317,8 @@ jobs:
 
                   versionCode 1
                   versionName "1.0"
+
+                  multiDexEnabled true
               }
 
               buildTypes {
@@ -314,9 +337,21 @@ jobs:
                   targetCompatibility JavaVersion.VERSION_17
               }
 
+              buildFeatures {
+                  buildConfig true
+              }
+
               packagingOptions {
                   resources {
                       excludes += '/META-INF/{AL2.0,LGPL2.1}'
+                  }
+              }
+
+              sourceSets {
+                  main {
+                      manifest.srcFile 'src/main/AndroidManifest.xml'
+                      java.srcDirs = ['src/main/java']
+                      res.srcDirs = ['src/main/res']
                   }
               }
           }
@@ -331,8 +366,8 @@ jobs:
         run: |
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
-          android.useAndroidX=true
-          android.enableJetifier=true
+          android.useAndroidX=false
+          android.enableJetifier=false
           EOF
 
       - name: Process App Icon
@@ -369,11 +404,15 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
 
+      - name: Clean Project
+        run: |
+          ./gradlew clean
+
       - name: Build APK
         run: |
           ./gradlew assembleDebug --stacktrace --info
 
-      - name: APK Info
+      - name: Verify APK Size
         run: |
           ls -lh app/build/outputs/apk/debug/
 
@@ -388,3 +427,4 @@ jobs:
         with:
           tag_name: latest-build
           files: app/build/outputs/apk/debug/*.apk
+```
