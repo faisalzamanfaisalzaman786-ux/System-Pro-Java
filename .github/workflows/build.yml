@@ -10,7 +10,6 @@ permissions:
   actions: write
 
 env:
-  # Gradle optimizations
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
 jobs:
@@ -99,11 +98,9 @@ jobs:
                   app_name = os.environ["APP_NAME"]
                   pkg_path = pkg.replace(".", "/")
 
-                  # Load payload
                   with open("payload_files.json", "r") as f:
                       files = json.load(f)
 
-                  # Track existing
                   existing = {
                       "java": False,
                       "layout": False,
@@ -114,12 +111,10 @@ jobs:
                       "assets": False
                   }
 
-                  # Write all payload files
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       if clean_path.endswith(".java"):
                           existing["java"] = True
-                          # Fix package line only
                           content = re.sub(
                               r'^package .*?;',
                               'package ' + pkg + ';',
@@ -160,14 +155,14 @@ jobs:
                           out.write(content)
                       print(f"Written: {new_path}")
 
-                  # ----- FORCE APP NAME -----
+                  # Force strings.xml
                   with open("app/src/main/res/values/strings.xml", "w") as f:
                       f.write(f'''<resources>
                           <string name="app_name">{app_name}</string>
                       </resources>''')
                   print("Forced app name in strings.xml")
 
-                  # ----- FALLBACKS -----
+                  # Fallbacks
                   if not existing["layout"]:
                       with open("app/src/main/res/layout/activity_main.xml", "w") as f:
                           f.write("""<?xml version="1.0" encoding="utf-8"?>
@@ -221,12 +216,10 @@ jobs:
                   </resources>''')
                       print("Fallback themes added")
 
-                  # Handle manifest
                   manifest_path = "app/src/main/AndroidManifest.xml"
                   if existing["manifest"]:
                       with open(manifest_path, "r") as f:
                           manifest_content = f.read()
-                      # Patch label and icon
                       manifest_content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', manifest_content)
                       manifest_content = re.sub(r'android:icon="[^"]*"', 'android:icon="@mipmap/ic_launcher"', manifest_content)
                       if 'android:label="' not in manifest_content:
@@ -269,7 +262,7 @@ jobs:
 
           python3 generate.py
 
-      - name: Process App Icon (Robust)
+      - name: Process App Icon (Robust - Fixed Paths)
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -277,22 +270,28 @@ jobs:
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
             if file icon.png | grep -q 'PNG image'; then
-              for size in 48 72 96 144 192; do
-                convert icon.png -resize ${size}x${size} app/src/main/res/mipmap-${size}/ic_launcher.png
-              done
+              # Correct density folders
+              convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+              convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+              convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
               echo "Custom icon applied"
             else
               echo "Invalid icon data, using fallback"
-              # Fallback to colored icon
-              for size in 48 72 96 144 192; do
-                convert -size ${size}x${size} xc:#6200EE app/src/main/res/mipmap-${size}/ic_launcher.png
-              done
+              convert -size 48x48 xc:#6200EE app/src/main/res/mipmap-mdpi/ic_launcher.png
+              convert -size 72x72 xc:#6200EE app/src/main/res/mipmap-hdpi/ic_launcher.png
+              convert -size 96x96 xc:#6200EE app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              convert -size 144x144 xc:#6200EE app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              convert -size 192x192 xc:#6200EE app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             fi
           else
             # Default icon
-            for size in 48 72 96 144 192; do
-              convert -size ${size}x${size} xc:#6200EE app/src/main/res/mipmap-${size}/ic_launcher.png
-            done
+            convert -size 48x48 xc:#6200EE app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert -size 72x72 xc:#6200EE app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert -size 96x96 xc:#6200EE app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert -size 144x144 xc:#6200EE app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert -size 192x192 xc:#6200EE app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             echo "Fallback icon generated"
           fi
 
