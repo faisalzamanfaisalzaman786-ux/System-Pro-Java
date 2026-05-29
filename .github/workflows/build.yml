@@ -39,34 +39,36 @@ jobs:
           mkdir -p "app/src/main/java/${PKG_PATH}"
           echo "Created fresh directory: app/src/main/java/${PKG_PATH}"
 
-      - name: Generate Files from Payload (with package correction)
+      - name: Generate Files from Payload
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          python3 <<'PY'
-import json, os, re
-with open('payload_files.json', 'r', encoding='utf-8') as f:
-    files = json.load(f)
-for orig_path, content in files.items():
-    if orig_path.endswith('.java'):
-        content = re.sub(r'^package .*;', f'package {NEW_PKG};', content, flags=re.MULTILINE)
-        java_file_name = os.path.basename(orig_path)
-        new_path = f"app/src/main/java/{NEW_PKG.replace('.', '/')}/{java_file_name}"
-    else:
-        new_path = orig_path
-    os.makedirs(os.path.dirname(new_path), exist_ok=True)
-    with open(new_path, 'w', encoding='utf-8') as out:
-        out.write(content)
-    print(f"Written: {new_path}")
-manifest_path = "app/src/main/AndroidManifest.xml"
-if os.path.exists(manifest_path):
-    with open(manifest_path, 'r', encoding='utf-8') as mf:
-        manifest_content = mf.read()
-    manifest_content = re.sub(r'package="[^"]*"', f'package="{NEW_PKG}"', manifest_content)
-    with open(manifest_path, 'w', encoding='utf-8') as mf:
-        mf.write(manifest_content)
-    print("AndroidManifest.xml package updated")
-PY
+          cat > process_files.py << 'EOF'
+          import json, os, re
+          with open('payload_files.json', 'r', encoding='utf-8') as f:
+              files = json.load(f)
+          for orig_path, content in files.items():
+              if orig_path.endswith('.java'):
+                  content = re.sub(r'^package .*;', f'package {os.environ["NEW_PKG"]};', content, flags=re.MULTILINE)
+                  java_file_name = os.path.basename(orig_path)
+                  new_path = f"app/src/main/java/{os.environ['NEW_PKG'].replace('.', '/')}/{java_file_name}"
+              else:
+                  new_path = orig_path
+              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+              with open(new_path, 'w', encoding='utf-8') as out:
+                  out.write(content)
+              print(f"Written: {new_path}")
+          manifest_path = "app/src/main/AndroidManifest.xml"
+          if os.path.exists(manifest_path):
+              with open(manifest_path, 'r', encoding='utf-8') as mf:
+                  manifest_content = mf.read()
+              manifest_content = re.sub(r'package="[^"]*"', f'package="{os.environ["NEW_PKG"]}"', manifest_content)
+              with open(manifest_path, 'w', encoding='utf-8') as mf:
+                  mf.write(manifest_content)
+              print("AndroidManifest.xml package updated")
+          EOF
+          export NEW_PKG
+          python3 process_files.py
 
       - name: Update app/build.gradle namespace and applicationId
         run: |
