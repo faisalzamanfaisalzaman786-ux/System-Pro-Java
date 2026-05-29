@@ -3,15 +3,33 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:background="@color/background_color"
+    android:padding="16dp">
+
+    <SurfaceView
+        android:id="@+id/surfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="16dp" />
 
     <Button
-        android:id="@+id/torchButton"
-        android:layout_width="wrap_content"
+        android:id="@+id/captureButton"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Turn ON Torch"
-        android:textSize="20sp"
-        android:enabled="false" />
+        android:text="@string/capture"
+        android:textColor="@color/button_text"
+        android:background="@color/button_bg"
+        android:textSize="18sp"
+        android:padding="12dp" />
+
+    <ImageView
+        android:id="@+id/imagePreview"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="16dp"
+        android:visibility="gone"
+        android:scaleType="centerCrop"
+        android:background="@color/preview_bg" />
 
 </LinearLayout>
