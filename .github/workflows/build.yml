@@ -1,4 +1,5 @@
-name: Build Android APK (Stable)
+```yaml
+name: Build Android APK (Universal Crash-Proof Builder)
 
 on:
   workflow_dispatch:
@@ -12,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,208 +23,337 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Get payload variables
-        id: vars
+      - name: Get package name
+        id: pkg
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          if [ -z "$PKG" ]; then PKG="com.systempro.app"; fi
-          if [ -z "$APP_NAME" ]; then APP_NAME="CodeForge Pro"; fi
+          if [ -z "$PKG" ]; then
+            PKG="com.systempro.app"
+          fi
+
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      - name: Clean and recreate directories
+      - name: Get app name
+        id: app
         run: |
-          rm -rf app/src/main/java app/src/main/res app/build.gradle
-          PKG_PATH="${{ steps.vars.outputs.package_path }}"
-          mkdir -p "app/src/main/java/${PKG_PATH}"
-          mkdir -p app/src/main/res/layout app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          APP_NAME="${{ github.event.client_payload.app_name }}"
 
-      - name: Generate files from payload
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="CodeForge Pro"
+          fi
+
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
+      - name: Clean old project
+        run: |
+          rm -rf app/src/main/java
+          rm -rf app/src/main/res
+          rm -rf app/src/main/AndroidManifest.xml
+          rm -rf app/build.gradle
+
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+      - name: Generate files safely
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
           EOF
-          NEW_PKG="${{ steps.vars.outputs.package_name }}"
-          cat > process.py << 'PY'
-          import json, os, re
-          new_pkg = os.environ['NEW_PKG']
-          with open('payload_files.json', 'r') as f:
+
+          NEW_PKG="${{ steps.pkg.outputs.package_name }}"
+          APP_NAME="${{ steps.app.outputs.app_name }}"
+
+          cat > generate.py << 'PY'
+          import json
+          import os
+          import re
+
+          pkg = os.environ["NEW_PKG"]
+          app_name = os.environ["APP_NAME"]
+
+          pkg_path = pkg.replace(".", "/")
+
+          with open("payload_files.json", "r") as f:
               files = json.load(f)
+
+          java_found = False
+          layout_found = False
+
           for path, content in files.items():
-              if path.endswith('.java'):
-                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+
+              if path.endswith(".java"):
+
+                  java_found = True
+
+                  content = re.sub(
+                      r'^package .*?;',
+                      'package ' + pkg + ';',
+                      content,
+                      flags=re.MULTILINE
+                  )
+
+                  content = content.replace(
+                      "extends AppCompatActivity",
+                      "extends Activity"
+                  )
+
+                  content = content.replace(
+                      "import androidx.appcompat.app.AppCompatActivity;",
+                      "import android.app.Activity;"
+                  )
+
                   filename = os.path.basename(path)
-                  new_path = f'app/src/main/java/{new_pkg.replace(".", "/")}/{filename}'
+
+                  new_path = "app/src/main/java/" + pkg_path + "/" + filename
+
+              elif path.endswith(".xml"):
+
+                  if "layout" in path:
+                      layout_found = True
+
+                  new_path = path
+
               else:
                   new_path = path
+
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
-              with open(new_path, 'w') as out:
+
+              with open(new_path, "w", encoding="utf-8") as out:
                   out.write(content)
-              print(f'Written: {new_path}')
+
+              print("Written:", new_path)
+
+          # fallback layout
+          if not layout_found:
+
+              layout_path = "app/src/main/res/layout/activity_main.xml"
+
+              with open(layout_path, "w") as f:
+                  f.write("""<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:orientation="vertical">
+
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="APK Build Success"
+                  android:textSize="24sp"/>
+
+          </LinearLayout>""")
+
+          # fallback activity
+          if not java_found:
+
+              java_dir = "app/src/main/java/" + pkg_path
+              os.makedirs(java_dir, exist_ok=True)
+
+              with open(java_dir + "/MainActivity.java", "w") as f:
+                  f.write(f'''package {pkg};
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.TextView;
+
+          public class MainActivity extends Activity {{
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {{
+                  super.onCreate(savedInstanceState);
+
+                  try {{
+                      setContentView(R.layout.activity_main);
+                  }} catch(Exception e) {{
+                      TextView tv = new TextView(this);
+                      tv.setText("Runtime Error: " + e.toString());
+                      setContentView(tv);
+                  }}
+              }}
+          }}
+          ''')
+
+          # strings.xml
+          os.makedirs("app/src/main/res/values", exist_ok=True)
+
+          with open("app/src/main/res/values/strings.xml", "w") as f:
+              f.write(f'''<resources>
+              <string name="app_name">{app_name}</string>
+          </resources>''')
+
+          # colors.xml
+          with open("app/src/main/res/values/colors.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+          </resources>''')
+
+          # themes.xml
+          with open("app/src/main/res/values/themes.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+          </resources>''')
+
+          # safe manifest
+          manifest = f'''<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="{pkg}">
+
+              <uses-permission android:name="android.permission.INTERNET"/>
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>'''
+
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(manifest)
+
+          print("Safe manifest generated")
           PY
+
           export NEW_PKG
-          python3 process.py
+          export APP_NAME
 
-      - name: Create safe Android resources
+          python3 generate.py
+
+      - name: Create app build.gradle
         run: |
-          PKG="${{ steps.vars.outputs.package_name }}"
-          APP="${{ steps.vars.outputs.app_name }}"
+          PKG="${{ steps.pkg.outputs.package_name }}"
 
-          mkdir -p app/src/main/res/values
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
 
-          echo '<resources>' > app/src/main/res/values/strings.xml
-          echo "    <string name=\"app_name\">$APP</string>" >> app/src/main/res/values/strings.xml
-          echo '</resources>' >> app/src/main/res/values/strings.xml
-
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
-          echo '<resources>' >> app/src/main/res/values/colors.xml
-          echo '    <color name="colorPrimary">#6200EE</color>' >> app/src/main/res/values/colors.xml
-          echo '    <color name="colorPrimaryDark">#3700B3</color>' >> app/src/main/res/values/colors.xml
-          echo '    <color name="colorAccent">#03DAC5</color>' >> app/src/main/res/values/colors.xml
-          echo '</resources>' >> app/src/main/res/values/colors.xml
-
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
-          echo '<resources>' >> app/src/main/res/values/themes.xml
-          echo '    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">' >> app/src/main/res/values/themes.xml
-          echo '        <item name="android:colorPrimary">@color/colorPrimary</item>' >> app/src/main/res/values/themes.xml
-          echo '        <item name="android:colorPrimaryDark">@color/colorPrimaryDark</item>' >> app/src/main/res/values/themes.xml
-          echo '        <item name="android:colorAccent">@color/colorAccent</item>' >> app/src/main/res/values/themes.xml
-          echo '    </style>' >> app/src/main/res/values/themes.xml
-          echo '</resources>' >> app/src/main/res/values/themes.xml
-
-          # Find or create MainActivity
-          ACTIVITY_FILE=$(find app/src/main/java -name "*.java" | xargs grep -l "extends.*Activity" | head -1)
-          if [ -z "$ACTIVITY_FILE" ]; then
-            mkdir -p "app/src/main/java/${PKG//.//}"
-            cat > "app/src/main/java/${PKG//.//}/MainActivity.java" << EOF
-            package $PKG;
-            import android.app.Activity;
-            import android.os.Bundle;
-            import android.widget.TextView;
-            public class MainActivity extends Activity {
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(R.layout.activity_main);
-                }
-            }
-            EOF
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
-            echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
-            echo '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
-            echo '    android:layout_height="match_parent"' >> app/src/main/res/layout/activity_main.xml
-            echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
-            echo '    android:orientation="vertical">' >> app/src/main/res/layout/activity_main.xml
-            echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:text="CodeForge Pro"' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:textSize="28sp"' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:textColor="#00FFCC" />' >> app/src/main/res/layout/activity_main.xml
-            echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
-          fi
-
-          LAUNCHER_ACTIVITY=$(find app/src/main/java -name "*.java" | head -1 | xargs basename | sed 's/\.java$//')
-          if [ -z "$LAUNCHER_ACTIVITY" ]; then
-            LAUNCHER_ACTIVITY="MainActivity"
-          fi
-
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-          echo "    package=\"$PKG\">" >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> app/src/main/AndroidManifest.xml
-          echo '    <application' >> app/src/main/AndroidManifest.xml
-          echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
-          echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
-          echo '        android:label="@string/app_name"' >> app/src/main/AndroidManifest.xml
-          echo '        android:theme="@style/AppTheme">' >> app/src/main/AndroidManifest.xml
-          echo '        <activity' >> app/src/main/AndroidManifest.xml
-          echo "            android:name=\".$LAUNCHER_ACTIVITY\"" >> app/src/main/AndroidManifest.xml
-          echo '            android:exported="true">' >> app/src/main/AndroidManifest.xml
-          echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-          echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '        </activity>' >> app/src/main/AndroidManifest.xml
-          echo '    </application>' >> app/src/main/AndroidManifest.xml
-          echo '</manifest>' >> app/src/main/AndroidManifest.xml
-
-      - name: Create app/build.gradle
-        run: |
-          PKG="${{ steps.vars.outputs.package_name }}"
-          cat > app/build.gradle << EOF
-          plugins { id 'com.android.application' }
           android {
+
+              namespace "__PKG__"
+
               compileSdk 34
-              namespace "$PKG"
+
               defaultConfig {
-                  applicationId "$PKG"
+
+                  applicationId "__PKG__"
+
                   minSdk 21
                   targetSdk 34
+
                   versionCode 1
                   versionName "1.0"
+
+                  multiDexEnabled true
               }
-              buildTypes { release { minifyEnabled false } }
+
+              buildTypes {
+
+                  release {
+                      minifyEnabled false
+                  }
+              }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
+
               sourceSets {
                   main {
+                      manifest.srcFile 'src/main/AndroidManifest.xml'
                       java.srcDirs = ['src/main/java']
                       res.srcDirs = ['src/main/res']
-                      manifest.srcFile 'src/main/AndroidManifest.xml'
                   }
               }
           }
-          dependencies {}
+
+          dependencies {
+              implementation 'androidx.multidex:multidex:2.0.1'
+          }
           EOF
+
+          sed -i "s/__PKG__/${PKG}/g" app/build.gradle
 
       - name: Process app icon
         run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
           ICON_B64="${{ github.event.client_payload.icon }}"
+
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
-            echo "$ICON_B64" | base64 -d > app_icon.png
-            sudo apt-get update && sudo apt-get install -y imagemagick
-            convert app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+            echo "$ICON_B64" | base64 -d > icon.png
+
+            convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
           else
-            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
+
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
           fi
 
-      - name: Setup Gradle wrapper
+      - name: Setup Gradle Wrapper
         run: |
-          if [ ! -f gradlew ]; then
-            mkdir -p gradle/wrapper
-            wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-            echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-            echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-            echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-            echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-            echo '#!/bin/sh' > gradlew
-            echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
-            echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
-            chmod +x gradlew
-          else
-            chmod +x gradlew
-          fi
+          mkdir -p gradle/wrapper
+
+          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar \
+          -O gradle/wrapper/gradle-wrapper.jar
+
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          cat > gradlew << 'EOF'
+          #!/bin/sh
+          exec java -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
+          EOF
+
+          chmod +x gradlew
 
       - name: Build APK
         run: |
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -235,3 +366,4 @@ jobs:
         with:
           tag_name: latest-build
           files: app/build/outputs/apk/debug/*.apk
+```
