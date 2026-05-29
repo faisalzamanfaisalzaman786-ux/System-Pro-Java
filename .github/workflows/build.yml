@@ -1,11 +1,9 @@
-name: Build Android APK (Professional Stable)
+name: Build Android APK (Payload-Based, Gradle 8.5 Locked)
 
 on:
   workflow_dispatch:
-
   repository_dispatch:
-    types:
-      - trigger_b64_build
+    types: [trigger_b64_build]
 
 permissions:
   contents: write
@@ -14,9 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -26,245 +22,86 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Read Dynamic Values
-        id: vars
+      # 1. پے لوڈ سے تمام فائلیں (Java, XML, Manifest) بنائیں
+      - name: Generate Files from Payload
         run: |
+          echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
+          python3 << 'PY'
+          import json, os
+          with open('payload_files.json', 'r', encoding='utf-8') as f:
+              files = json.load(f)
+          for path, content in files.items():
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, 'w', encoding='utf-8') as out:
+                  out.write(content)
+          print("All source files generated from payload")
+          PY
 
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          PACKAGE_NAME="${{ github.event.client_payload.package_name }}"
-
-          if [ -z "$APP_NAME" ]; then
-            APP_NAME="SystemPro App"
+      # 2. آئیکن کو پے لوڈ سے ڈی کوڈ کر کے mipmap فولڈرز میں رکھیں
+      - name: Process App Icon from Payload
+        run: |
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > app_icon.png
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            mkdir -p app/src/main/res/mipmap-hdpi
+            mkdir -p app/src/main/res/mipmap-mdpi
+            mkdir -p app/src/main/res/mipmap-xhdpi
+            mkdir -p app/src/main/res/mipmap-xxhdpi
+            mkdir -p app/src/main/res/mipmap-xxxhdpi
+            convert app_icon.png -resize 72x72   app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert app_icon.png -resize 48x48   app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert app_icon.png -resize 96x96   app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "App icon generated from payload"
+          else
+            echo "No icon in payload, using existing or default icon from repo"
           fi
 
-          if [ -z "$PACKAGE_NAME" ]; then
-            PACKAGE_NAME="com.systempro.app"
+      # 3. یقینی بنائیں کہ AndroidManifest.xml میں آئیکن کا راستہ درست ہے
+      - name: Ensure Manifest Uses Correct Icon Reference
+        run: |
+          if grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml; then
+            echo "Icon reference already correct"
+          else
+            sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|' app/src/main/AndroidManifest.xml
           fi
 
-          PACKAGE_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-          echo "package_path=$PACKAGE_PATH" >> $GITHUB_OUTPUT
-
-      - name: Create Android Project Structure
+      # 4. Gradle Wrapper سیٹ کریں (Gradle 8.5 لاک)
+      - name: Setup Gradle 8.5 Wrapper
         run: |
+          if [ ! -f gradlew ]; then
+            mkdir -p gradle/wrapper
+            wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+            echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+            echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+            echo '#!/bin/sh' > gradlew
+            echo 'GRADLE_OPTS="-Dorg.gradle.appname=gradlew"' >> gradlew
+            echo 'exec java $GRADLE_OPTS -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
+            chmod +x gradlew
+          else
+            chmod +x gradlew
+          fi
 
-          mkdir -p app/src/main/java/${{ steps.vars.outputs.package_path }}
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-anydpi-v26
-
-      - name: Create MainActivity.java
+      # 5. APK بلڈ کریں (ریپو میں موجود Gradle فائلیں استعمال ہوں گی)
+      - name: Build APK
         run: |
-
-          cat > app/src/main/java/${{ steps.vars.outputs.package_path }}/MainActivity.java <<EOF
-          package ${{ steps.vars.outputs.package_name }};
-
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-
-      - name: Create activity_main.xml
-        run: |
-
-          cat > app/src/main/res/layout/activity_main.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:gravity="center"
-              android:orientation="vertical"
-              android:padding="16dp">
-
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="${{ steps.vars.outputs.app_name }}"
-                  android:textSize="24sp"
-                  android:textStyle="bold"/>
-
-          </LinearLayout>
-          EOF
-
-      - name: Create values files
-        run: |
-
-          cat > app/src/main/res/values/strings.xml <<EOF
-          <resources>
-              <string name="app_name">${{ steps.vars.outputs.app_name }}</string>
-          </resources>
-          EOF
-
-          cat > app/src/main/res/values/colors.xml <<EOF
-          <resources>
-              <color name="black">#000000</color>
-              <color name="white">#FFFFFF</color>
-          </resources>
-          EOF
-
-          cat > app/src/main/res/values/themes.xml <<EOF
-          <resources xmlns:tools="http://schemas.android.com/tools">
-
-              <style name="Theme.SystemPro" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@android:color/holo_blue_dark</item>
-                  <item name="colorPrimaryDark">@android:color/holo_blue_dark</item>
-                  <item name="colorAccent">@android:color/holo_blue_light</item>
-              </style>
-
-          </resources>
-          EOF
-
-      - name: Create AndroidManifest.xml
-        run: |
-
-          cat > app/src/main/AndroidManifest.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <application
-                  android:allowBackup="true"
-                  android:icon="@android:drawable/sym_def_app_icon"
-                  android:label="@string/app_name"
-                  android:roundIcon="@android:drawable/sym_def_app_icon"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.SystemPro">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-
-          </manifest>
-          EOF
-
-      - name: Create Gradle Files
-        run: |
-
-          cat > settings.gradle <<EOF
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "SystemProProject"
-
-          include ':app'
-          EOF
-
-          cat > build.gradle <<EOF
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
-
-          mkdir -p app
-
-          cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-
-              namespace '${{ steps.vars.outputs.package_name }}'
-
-              compileSdk 34
-
-              defaultConfig {
-
-                  applicationId '${{ steps.vars.outputs.package_name }}'
-
-                  minSdk 21
-                  targetSdk 34
-
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-
-                  release {
-                      minifyEnabled false
-                  }
-              }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-
-          dependencies {
-
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-
-          }
-          EOF
-
-          cat > gradle.properties <<EOF
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m
-          EOF
-
-      - name: Setup Gradle 8.5
-        run: |
-
-          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-
-          unzip -q gradle-8.5-bin.zip
-
-          cat > gradlew <<EOF
-          #!/usr/bin/env sh
-          ./gradle-8.5/bin/gradle "\$@"
-          EOF
-
-          chmod +x gradlew
-
-      - name: Build Debug APK
-        run: |
-
           ./gradlew assembleDebug --no-daemon
 
-      - name: Verify APK Exists
-        run: |
-
-          ls -R app/build/outputs/apk/
-
+      # 6. APK اپ لوڈ کریں
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      # 7. GitHub Release بنائیں
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest-build
+          files: app/build/outputs/apk/debug/*.apk
