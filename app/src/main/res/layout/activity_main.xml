@@ -6,11 +6,12 @@
     android:gravity="center"
     android:padding="24dp">
 
-    <TextView
+    <Button
+        android:id="@+id/torchButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello CodeForge Pro"
-        android:textSize="28sp"
-        android:textColor="#00FFCC" />
+        android:text="Turn ON Torch"
+        android:textSize="20sp"
+        android:enabled="false" />
 
 </LinearLayout>
