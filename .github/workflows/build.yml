@@ -21,39 +21,65 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Get payload variables
-        id: vars
+      - name: Get package name from payload
+        id: pkg
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          if [ -z "$PKG" ]; then PKG="com.systempro.app"; fi
-          if [ -z "$APP_NAME" ]; then APP_NAME="CodeForge Pro"; fi
+          if [ -z "$PKG" ]; then
+            PKG="com.systempro.app"
+          fi
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      - name: Clean and recreate directories
+      - name: Get app name from payload
+        id: app
         run: |
-          rm -rf app/src/main/java app/src/main/res app/build.gradle
-          PKG_PATH="${{ steps.vars.outputs.package_path }}"
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="CodeForge Pro"
+          fi
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
+      - name: Clean and recreate Java source directory
+        run: |
+          rm -rf app/src/main/java
+          rm -f app/build.gradle
+          PKG_PATH="${{ steps.pkg.outputs.package_path }}"
           mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate files from payload
+      - name: Generate all files (including manifest with permissions)
         run: |
+          # Write payload files to JSON using heredoc (safe for special characters)
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
           EOF
-          NEW_PKG="${{ steps.vars.outputs.package_name }}"
-          NEW_NAME="${{ steps.vars.outputs.app_name }}"
+
+          NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           cat > generate_all.py << 'PY'
           import json, os, re
+
           new_pkg = os.environ['NEW_PKG']
-          new_name = os.environ['NEW_NAME']
           with open('payload_files.json', 'r') as f:
               files = json.load(f)
+
+          PERMISSIONS = [
+              "android.permission.INTERNET",
+              "android.permission.ACCESS_NETWORK_STATE",
+              "android.permission.ACCESS_WIFI_STATE",
+              "android.permission.CAMERA",
+              "android.permission.RECORD_AUDIO",
+              "android.permission.READ_EXTERNAL_STORAGE",
+              "android.permission.WRITE_EXTERNAL_STORAGE",
+              "android.permission.ACCESS_FINE_LOCATION",
+              "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.VIBRATE",
+              "android.permission.WAKE_LOCK",
+              "android.permission.POST_NOTIFICATIONS"
+          ]
+
           for orig_path, content in files.items():
               if orig_path.endswith('.java'):
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
@@ -61,65 +87,64 @@ jobs:
                   new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
               else:
                   new_path = orig_path
+
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
               print(f"Written: {new_path}")
-          # Force overwrite strings.xml with correct app name
-          strings_path = "app/src/main/res/values/strings.xml"
-          os.makedirs(os.path.dirname(strings_path), exist_ok=True)
-          with open(strings_path, 'w', encoding='utf-8') as f:
-              f.write(f'<resources>\n    <string name="app_name">{new_name}</string>\n</resources>')
-          print(f"Written: {strings_path} with app_name={new_name}")
-          # Ensure colors.xml exists
-          colors_path = "app/src/main/res/values/colors.xml"
-          if not os.path.exists(colors_path):
-              os.makedirs(os.path.dirname(colors_path), exist_ok=True)
-              with open(colors_path, 'w') as f:
-                  f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorPrimaryDark">#3700B3</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>')
+
+          manifest_path = "app/src/main/AndroidManifest.xml"
+          manifest_lines = [
+              '<?xml version="1.0" encoding="utf-8"?>',
+              '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
+              f'    package="{new_pkg}">',
+              ''
+          ]
+          for perm in PERMISSIONS:
+              manifest_lines.append(f'    <uses-permission android:name="{perm}" />')
+          manifest_lines.extend([
+              '',
+              '    <application',
+              '        android:allowBackup="true"',
+              '        android:icon="@mipmap/ic_launcher"',
+              '        android:label="@string/app_name"',
+              '        android:supportsRtl="true">',
+              '        <activity',
+              '            android:name=".MainActivity"',
+              '            android:exported="true">',
+              '            <intent-filter>',
+              '                <action android:name="android.intent.action.MAIN" />',
+              '                <category android:name="android.intent.category.LAUNCHER" />',
+              '            </intent-filter>',
+              '        </activity>',
+              '    </application>',
+              '',
+              '</manifest>'
+          ])
+          with open(manifest_path, 'w', encoding='utf-8') as mf:
+              mf.write('\n'.join(manifest_lines))
+          print(f"AndroidManifest.xml generated with {len(PERMISSIONS)} permissions")
           PY
-          export NEW_PKG NEW_NAME
+
+          export NEW_PKG
           python3 generate_all.py
 
-      - name: Ensure AndroidManifest.xml has correct package and icon
+      # NEW STEP: Inject app name into strings.xml
+      - name: Set app name in strings.xml
         run: |
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          PKG="${{ steps.vars.outputs.package_name }}"
-          # If manifest doesn't exist, create a fresh one
-          if [ ! -f "$MANIFEST" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > "$MANIFEST"
-            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> "$MANIFEST"
-            echo "    package=\"${PKG}\">" >> "$MANIFEST"
-            echo '    <uses-permission android:name="android.permission.INTERNET" />' >> "$MANIFEST"
-            echo '    <uses-permission android:name="android.permission.CAMERA" />' >> "$MANIFEST"
-            echo '    <application' >> "$MANIFEST"
-            echo '        android:allowBackup="true"' >> "$MANIFEST"
-            echo '        android:icon="@mipmap/ic_launcher"' >> "$MANIFEST"
-            echo '        android:label="@string/app_name"' >> "$MANIFEST"
-            echo '        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">' >> "$MANIFEST"
-            echo '        <activity' >> "$MANIFEST"
-            echo '            android:name=".MainActivity"' >> "$MANIFEST"
-            echo '            android:exported="true">' >> "$MANIFEST"
-            echo '            <intent-filter>' >> "$MANIFEST"
-            echo '                <action android:name="android.intent.action.MAIN" />' >> "$MANIFEST"
-            echo '                <category android:name="android.intent.category.LAUNCHER" />' >> "$MANIFEST"
-            echo '            </intent-filter>' >> "$MANIFEST"
-            echo '        </activity>' >> "$MANIFEST"
-            echo '    </application>' >> "$MANIFEST"
-            echo '</manifest>' >> "$MANIFEST"
-          else
-            # Update package name
-            sed -i "s/package=\"[^\"]*\"/package=\"${PKG}\"/" "$MANIFEST"
-            # Ensure icon attribute exists
-            if ! grep -q 'android:icon="@mipmap/ic_launcher"' "$MANIFEST"; then
-              sed -i 's|<application |<application android:icon="@mipmap/ic_launcher" |' "$MANIFEST"
-            fi
-          fi
-          echo "Manifest updated with package=${PKG}"
+          APP_NAME="${{ steps.app.outputs.app_name }}"
+          STRINGS_FILE="app/src/main/res/values/strings.xml"
+          mkdir -p app/src/main/res/values
+          cat > "$STRINGS_FILE" << EOF
+          <resources>
+              <string name="app_name">${APP_NAME}</string>
+          </resources>
+          EOF
+          echo "Updated strings.xml with app_name=${APP_NAME}"
 
-      - name: Create fresh app/build.gradle with correct namespace
+      - name: Create fresh app/build.gradle
         run: |
-          PKG="${{ steps.vars.outputs.package_name }}"
+          PKG="${{ steps.pkg.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -150,38 +175,19 @@ jobs:
           }
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
-          echo "app/build.gradle updated with namespace=${PKG}"
 
       - name: Process app icon from payload
         run: |
           ICON_B64="${{ github.event.client_payload.icon }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
-            echo "Icon base64 length: ${#ICON_B64}"
             echo "$ICON_B64" | base64 -d > app_icon.png
-            if [ -s app_icon.png ]; then
-              sudo apt-get update && sudo apt-get install -y imagemagick
-              for d in 72 48 96 144 192; do
-                size="${d}x${d}"
-                case $d in
-                  72) density="hdpi" ;;
-                  48) density="mdpi" ;;
-                  96) density="xhdpi" ;;
-                  144) density="xxhdpi" ;;
-                  192) density="xxxhdpi" ;;
-                esac
-                convert app_icon.png -resize $size "app/src/main/res/mipmap-${density}/ic_launcher.png"
-              done
-              echo "Icon generated from payload"
-            else
-              echo "Decoded icon is empty, using default"
-              convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
-              convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
-              convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
-              convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-              convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            fi
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            convert app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           else
-            echo "No icon in payload, using default green icon"
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
