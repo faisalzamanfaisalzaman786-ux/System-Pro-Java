@@ -47,24 +47,24 @@ jobs:
           ${{ toJson(github.event.client_payload.files) }}
           EOF
           NEW_PKG="${{ steps.vars.outputs.package_name }}"
-          python3 -c "
-          import json, os, re
-          new_pkg = os.environ['NEW_PKG']
-          with open('payload_files.json', 'r') as f:
-              files = json.load(f)
-          for orig_path, content in files.items():
-              if orig_path.endswith('.java'):
-                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-                  filename = os.path.basename(orig_path)
-                  new_path = f'app/src/main/java/{new_pkg.replace('.', '/')}/{filename}'
-              else:
-                  new_path = orig_path
-              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-              with open(new_path, 'w', encoding='utf-8') as out:
-                  out.write(content)
-              print(f'Written: {new_path}')
-          "
           export NEW_PKG
+          python3 -c "
+import json, os, re
+new_pkg = os.environ['NEW_PKG']
+with open('payload_files.json', 'r') as f:
+    files = json.load(f)
+for orig_path, content in files.items():
+    if orig_path.endswith('.java'):
+        content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+        filename = os.path.basename(orig_path)
+        new_path = f'app/src/main/java/{new_pkg.replace('.', '/')}/{filename}'
+    else:
+        new_path = orig_path
+    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+    with open(new_path, 'w', encoding='utf-8') as out:
+        out.write(content)
+    print(f'Written: {new_path}')
+"
 
       - name: Auto‑generate all critical resources (safe mode)
         run: |
@@ -119,7 +119,7 @@ jobs:
                         setContentView(R.layout.activity_main);
                     } catch(Exception e) {
                         TextView tv = new TextView(this);
-                        tv.setText("APK Built Successfully\\n(no custom layout)");
+                        tv.setText("APK Built Successfully\n(no custom layout)");
                         tv.setTextSize(22);
                         setContentView(tv);
                     }
