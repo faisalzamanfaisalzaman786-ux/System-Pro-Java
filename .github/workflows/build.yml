@@ -1,4 +1,4 @@
-name: Build Android APK (Universal Stable Builder)
+name: Build Android APK (Universal Stable Builder with Fallback)
 
 on:
   workflow_dispatch:
@@ -45,19 +45,21 @@ jobs:
           fi
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-      - name: Create Fresh Project
+      - name: Create Project Directories
         run: |
           rm -rf app
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/assets
 
-      - name: Generate Android Files
+      - name: Generate Files from Payload (with Fallback)
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
@@ -70,6 +72,7 @@ jobs:
           import json
           import os
           import re
+          import shutil
 
           pkg = os.environ["NEW_PKG"]
           app_name = os.environ["APP_NAME"]
@@ -78,14 +81,23 @@ jobs:
           with open("payload_files.json", "r") as f:
               files = json.load(f)
 
-          java_found = False
-          layout_found = False
-          manifest_found = False
+          # Track what exists in payload
+          existing = {
+              "java": False,
+              "layout": False,
+              "manifest": False,
+              "strings": False,
+              "colors": False,
+              "themes": False,
+              "assets": False
+          }
 
+          # First pass: write all payload files exactly as they are (no overwrite by default)
           for path, content in files.items():
               clean_path = path.strip("/")
               if clean_path.endswith(".java"):
-                  java_found = True
+                  existing["java"] = True
+                  # Only fix package line, keep everything else
                   content = re.sub(
                       r'^package .*?;',
                       'package ' + pkg + ';',
@@ -95,29 +107,42 @@ jobs:
                   filename = os.path.basename(clean_path)
                   new_path = "app/src/main/java/" + pkg_path + "/" + filename
               elif clean_path.endswith(".xml"):
-                  if "layout" in clean_path:
-                      layout_found = True
                   if "AndroidManifest.xml" in clean_path:
-                      manifest_found = True
+                      existing["manifest"] = True
                       new_path = "app/src/main/AndroidManifest.xml"
-                  else:
+                  elif "layout" in clean_path:
+                      existing["layout"] = True
                       filename = os.path.basename(clean_path)
-                      if "layout" in clean_path:
-                          new_path = "app/src/main/res/layout/" + filename
-                      elif "values" in clean_path:
-                          new_path = "app/src/main/res/values/" + filename
-                      else:
-                          new_path = "app/src/main/res/" + filename
+                      new_path = "app/src/main/res/layout/" + filename
+                  elif "values/strings.xml" in clean_path:
+                      existing["strings"] = True
+                      new_path = "app/src/main/res/values/strings.xml"
+                  elif "values/colors.xml" in clean_path:
+                      existing["colors"] = True
+                      new_path = "app/src/main/res/values/colors.xml"
+                  elif "values/themes.xml" in clean_path or "values/styles.xml" in clean_path:
+                      existing["themes"] = True
+                      filename = os.path.basename(clean_path)
+                      new_path = "app/src/main/res/values/" + filename
+                  else:
+                      # Any other xml (drawable, etc.)
+                      new_path = "app/src/main/res/" + clean_path
+              elif clean_path.startswith("assets/"):
+                  existing["assets"] = True
+                  # Remove "assets/" prefix
+                  relative = clean_path[7:]
+                  new_path = "app/src/main/assets/" + relative
               else:
+                  # Other files (e.g., build.gradle, proguard-rules.pro) - skip for now
                   continue
 
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, "w", encoding="utf-8") as out:
                   out.write(content)
-              print("Written:", new_path)
+              print(f"Written: {new_path}")
 
-          # Default layout if missing
-          if not layout_found:
+          # ---- FALLBACK: Create default files only if missing ----
+          if not existing["layout"]:
               with open("app/src/main/res/layout/activity_main.xml", "w") as f:
                   f.write("""<?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -128,12 +153,12 @@ jobs:
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="APK Build Success"
+                  android:text="Hello World"
                   android:textSize="22sp"/>
           </LinearLayout>""")
+              print("Fallback: created default layout")
 
-          # Default MainActivity
-          if not java_found:
+          if not existing["java"]:
               java_dir = "app/src/main/java/" + pkg_path
               os.makedirs(java_dir, exist_ok=True)
               with open(java_dir + "/MainActivity.java", "w") as f:
@@ -150,12 +175,13 @@ jobs:
               }}
           }}
           ''')
+              print("Fallback: created default MainActivity")
 
-          # Default manifest if missing
-          if not manifest_found:
+          if not existing["manifest"]:
               manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="{pkg}">
+              <uses-permission android:name="android.permission.INTERNET"/>
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -172,97 +198,56 @@ jobs:
           </manifest>'''
               with open("app/src/main/AndroidManifest.xml", "w") as f:
                   f.write(manifest)
+              print("Fallback: created default AndroidManifest")
 
-          # Always create strings.xml with correct app_name
-          with open("app/src/main/res/values/strings.xml", "w") as f:
-              f.write(f'''<resources>
+          if not existing["strings"]:
+              with open("app/src/main/res/values/strings.xml", "w") as f:
+                  f.write(f'''<resources>
               <string name="app_name">{app_name}</string>
           </resources>''')
+              print("Fallback: created default strings.xml")
 
-          # Default colors and theme
-          with open("app/src/main/res/values/colors.xml", "w") as f:
-              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          if not existing["colors"]:
+              with open("app/src/main/res/values/colors.xml", "w") as f:
+                  f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="colorAccent">#03DAC5</color>
           </resources>''')
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('''<?xml version="1.0" encoding="utf-8"?>
+              print("Fallback: created default colors.xml")
+
+          if not existing["themes"]:
+              with open("app/src/main/res/values/themes.xml", "w") as f:
+                  f.write('''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
               </style>
           </resources>''')
-          print("Project generation completed")
+              print("Fallback: created default themes.xml")
+
+          print("Project generation completed with fallback")
           PY
 
           python3 generate.py
 
-      - name: FORCE Fix App Name & Icon in Manifest
+      - name: Handle Custom build.gradle (if provided)
         run: |
-          # Ensure AndroidManifest uses correct app name and icon
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            # Replace label if missing or hardcoded
-            sed -i 's|android:label="[^"]*"|android:label="@string/app_name"|g' "$MANIFEST"
-            sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' "$MANIFEST"
-            # If no label at all, insert after <application
-            if ! grep -q "android:label" "$MANIFEST"; then
-              sed -i '/<application / s|>| android:label="@string/app_name" android:icon="@mipmap/ic_launcher" >|' "$MANIFEST"
-            fi
-          fi
-          # Double-check strings.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <resources>
-              <string name=\"app_name\">${{ steps.app.outputs.app_name }}</string>
-          </resources>" > app/src/main/res/values/strings.xml
-
-      - name: Process App Icon (Force Override)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          ICON_B64="${{ github.event.client_payload.icon }}"
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
-            # Generate all densities
-            convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            echo "Custom icon applied"
-          else
-            echo "No custom icon provided, keeping default (you can change later)"
-          fi
-
-      - name: Create Gradle Files
-        run: |
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "CodeForgePro"
-          include ':app'
-          EOF
-
-          cat > build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
-
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > app/build.gradle << 'EOF'
+          # Check if payload contains a custom build.gradle file
+          # We look for "app/build.gradle" in payload_files.json
+          # If exists, copy it; otherwise use default.
+          # For simplicity, we'll check using jq
+          if [ -f payload_files.json ]; then
+            if jq -e '.["app/build.gradle"]' payload_files.json > /dev/null; then
+              echo "Custom build.gradle found, using it."
+              # Extract and write
+              jq -r '.["app/build.gradle"]' payload_files.json > app/build.gradle
+              # Ensure namespace is still set? We'll patch package name if needed.
+              PKG="${{ steps.pkg.outputs.package_name }}"
+              sed -i "s/__PKG__/${PKG}/g" app/build.gradle || true
+              sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/g" app/build.gradle || true
+            else
+              echo "No custom build.gradle, using default."
+              cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application'
           }
@@ -300,7 +285,102 @@ jobs:
               implementation 'androidx.multidex:multidex:2.0.1'
           }
           EOF
-          sed -i "s/__PKG__/${PKG}/g" app/build.gradle
+              PKG="${{ steps.pkg.outputs.package_name }}"
+              sed -i "s/__PKG__/${PKG}/g" app/build.gradle
+            fi
+          else
+            # Default if no payload at all
+            cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace "__PKG__"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "__PKG__"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+                  multiDexEnabled true
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              buildFeatures {
+                  buildConfig true
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.multidex:multidex:2.0.1'
+          }
+          EOF
+            PKG="${{ steps.pkg.outputs.package_name }}"
+            sed -i "s/__PKG__/${PKG}/g" app/build.gradle
+          fi
+
+      - name: Process App Icon (Fallback if not provided)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > icon.png
+            convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "Custom icon applied"
+          else
+            # Fallback: generate a simple colored icon
+            convert -size 48x48 xc:#6200EE app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert -size 72x72 xc:#6200EE app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert -size 96x96 xc:#6200EE app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert -size 144x144 xc:#6200EE app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert -size 192x192 xc:#6200EE app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "Fallback icon generated"
+          fi
+
+      - name: Create Gradle Wrapper & Settings
+        run: |
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AppBuilder"
+          include ':app'
+          EOF
+
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
 
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
