@@ -48,37 +48,36 @@ jobs:
           EOF
           NEW_PKG="${{ steps.vars.outputs.package_name }}"
           export NEW_PKG
-          python3 -c "
-import json, os, re
-new_pkg = os.environ['NEW_PKG']
-with open('payload_files.json', 'r') as f:
-    files = json.load(f)
-for orig_path, content in files.items():
-    if orig_path.endswith('.java'):
-        content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-        filename = os.path.basename(orig_path)
-        new_path = f'app/src/main/java/{new_pkg.replace('.', '/')}/{filename}'
-    else:
-        new_path = orig_path
-    os.makedirs(os.path.dirname(new_path), exist_ok=True)
-    with open(new_path, 'w', encoding='utf-8') as out:
-        out.write(content)
-    print(f'Written: {new_path}')
-"
+          cat > generate_files.py << 'PYEOF'
+          import json, os, re
+          new_pkg = os.environ['NEW_PKG']
+          with open('payload_files.json', 'r') as f:
+              files = json.load(f)
+          for orig_path, content in files.items():
+              if orig_path.endswith('.java'):
+                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+                  filename = os.path.basename(orig_path)
+                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
+              else:
+                  new_path = orig_path
+              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+              with open(new_path, 'w', encoding='utf-8') as out:
+                  out.write(content)
+              print(f"Written: {new_path}")
+          PYEOF
+          python3 generate_files.py
 
       - name: Auto‑generate all critical resources (safe mode)
         run: |
           PKG="${{ steps.vars.outputs.package_name }}"
           APP="${{ steps.vars.outputs.app_name }}"
 
-          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <resources>
               <string name="app_name">${APP}</string>
           </resources>
           EOF
 
-          # colors.xml
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -88,7 +87,6 @@ for orig_path, content in files.items():
           </resources>
           EOF
 
-          # themes.xml (native, no AppCompat)
           cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -100,10 +98,8 @@ for orig_path, content in files.items():
           </resources>
           EOF
 
-          # Find any Java activity (or use fallback)
           ACTIVITY_FILE=$(find app/src/main/java -name "*.java" | xargs grep -l "extends.*Activity" | head -1)
           if [ -z "$ACTIVITY_FILE" ]; then
-            echo "No Activity found, generating fallback MainActivity"
             ACTIVITY_PATH="app/src/main/java/${PKG//.//}/MainActivity.java"
             mkdir -p "$(dirname "$ACTIVITY_PATH")"
             cat > "$ACTIVITY_PATH" << 'JAVAEOF'
@@ -127,7 +123,6 @@ for orig_path, content in files.items():
             }
             JAVAEOF
             sed -i "s/__PKG__/${PKG}/g" "$ACTIVITY_PATH"
-            # also create a default layout
             cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
             <?xml version="1.0" encoding="utf-8"?>
             <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -146,13 +141,11 @@ for orig_path, content in files.items():
             XMLEOF
           fi
 
-          # Determine the launcher activity class name
           LAUNCHER_ACTIVITY=$(find app/src/main/java -name "*.java" | head -1 | xargs basename | sed 's/\.java$//')
           if [ -z "$LAUNCHER_ACTIVITY" ]; then
             LAUNCHER_ACTIVITY="MainActivity"
           fi
 
-          # Create clean AndroidManifest.xml (never trust user manifest)
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -215,9 +208,7 @@ for orig_path, content in files.items():
                   }
               }
           }
-          dependencies {
-              // No AppCompat – pure Android
-          }
+          dependencies {}
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
 
