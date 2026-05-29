@@ -1,74 +1,114 @@
-package com.systempro.app4; 
+package com.systempro.app;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraManager;
-import android.os.Build;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.hardware.Camera;
 import android.os.Bundle;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import java.io.IOException;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
 
-    private CameraManager cameraManager;
-    private String cameraId;
-    private boolean isTorchOn = false;
-    private Button torchButton;
+    private Camera camera;
+    private SurfaceView surfaceView;
+    private SurfaceHolder surfaceHolder;
+    private Button captureButton;
+    private ImageView imagePreview;
+    private boolean cameraStarted = false;
 
-    private static final int CAMERA_PERMISSION_CODE = 100;
+    private static final int CAMERA_PERMISSION_CODE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        torchButton = findViewById(R.id.torchButton);
-        cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+        surfaceView = findViewById(R.id.surfaceView);
+        captureButton = findViewById(R.id.captureButton);
+        imagePreview = findViewById(R.id.imagePreview);
 
-        try {
-            cameraId = cameraManager.getCameraIdList()[0];
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
+        surfaceHolder = surfaceView.getHolder();
+        surfaceHolder.addCallback(this);
 
-        // چیک کریں کہ آیا پرمیشن پہلے سے موجود ہے
+        captureButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (camera != null) {
+                    camera.takePicture(null, null, new Camera.PictureCallback() {
+                        @Override
+                        public void onPictureTaken(byte[] data, Camera camera) {
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                            imagePreview.setImageBitmap(bitmap);
+                            imagePreview.setVisibility(View.VISIBLE);
+                            camera.startPreview(); // resume preview
+                        }
+                    });
+                }
+            }
+        });
+
+        // Check permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
-            // اگر نہیں تو مانگے
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA},
                     CAMERA_PERMISSION_CODE);
         } else {
-            // پرمیشن موجود ہے تو بٹن فعال کریں
-            enableTorchButton();
+            startCamera();
         }
-
-        torchButton.setOnClickListener(v -> toggleTorch());
     }
 
-    private void enableTorchButton() {
-        torchButton.setEnabled(true);
-        torchButton.setText("Turn ON Torch");
-    }
-
-    private void toggleTorch() {
+    private void startCamera() {
         try {
-            if (isTorchOn) {
-                cameraManager.setTorchMode(cameraId, false);
-                isTorchOn = false;
-                torchButton.setText("Turn ON Torch");
-            } else {
-                cameraManager.setTorchMode(cameraId, true);
-                isTorchOn = true;
-                torchButton.setText("Turn OFF Torch");
-            }
-        } catch (CameraAccessException e) {
+            camera = Camera.open();
+            cameraStarted = true;
+        } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Torch not available", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        if (camera != null && cameraStarted) {
+            try {
+                camera.setPreviewDisplay(holder);
+                camera.startPreview();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        if (camera != null && cameraStarted) {
+            camera.stopPreview();
+            try {
+                camera.setPreviewDisplay(holder);
+                camera.startPreview();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        if (camera != null && cameraStarted) {
+            camera.stopPreview();
+            camera.release();
+            camera = null;
         }
     }
 
@@ -77,9 +117,9 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                enableTorchButton();
+                startCamera();
             } else {
-                Toast.makeText(this, "Camera permission denied. Torch won't work.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Camera permission denied", Toast.LENGTH_LONG).show();
             }
         }
     }
