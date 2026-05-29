@@ -1,4 +1,4 @@
-name: Build Android APK (Safe Mode – Never Crash)
+name: Build Android APK (Safe Mode)
 
 on:
   workflow_dispatch:
@@ -41,68 +41,60 @@ jobs:
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate user files (Java, layouts, etc.)
+      - name: Generate user files
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
           EOF
-          NEW_PKG="${{ steps.vars.outputs.package_name }}"
-          export NEW_PKG
-          cat > generate_files.py << 'PYEOF'
+          cat > process.py << 'EOF'
           import json, os, re
           new_pkg = os.environ['NEW_PKG']
           with open('payload_files.json', 'r') as f:
               files = json.load(f)
-          for orig_path, content in files.items():
-              if orig_path.endswith('.java'):
+          for path, content in files.items():
+              if path.endswith('.java'):
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-                  filename = os.path.basename(orig_path)
-                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
+                  filename = os.path.basename(path)
+                  new_path = f'app/src/main/java/{new_pkg.replace(".", "/")}/{filename}'
               else:
-                  new_path = orig_path
+                  new_path = path
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
-              print(f"Written: {new_path}")
-          PYEOF
-          python3 generate_files.py
+              print(f'Written: {new_path}')
+          EOF
+          export NEW_PKG="${{ steps.vars.outputs.package_name }}"
+          python3 process.py
 
-      - name: Auto‑generate all critical resources (safe mode)
+      - name: Generate safe resources
         run: |
           PKG="${{ steps.vars.outputs.package_name }}"
           APP="${{ steps.vars.outputs.app_name }}"
 
-          cat > app/src/main/res/values/strings.xml << EOF
-          <resources>
-              <string name="app_name">${APP}</string>
-          </resources>
-          EOF
+          echo '<resources>' > app/src/main/res/values/strings.xml
+          echo "    <string name=\"app_name\">${APP}</string>" >> app/src/main/res/values/strings.xml
+          echo '</resources>' >> app/src/main/res/values/strings.xml
 
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
-          </resources>
-          EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
+          echo '<resources>' >> app/src/main/res/values/colors.xml
+          echo '    <color name="colorPrimary">#6200EE</color>' >> app/src/main/res/values/colors.xml
+          echo '    <color name="colorPrimaryDark">#3700B3</color>' >> app/src/main/res/values/colors.xml
+          echo '    <color name="colorAccent">#03DAC5</color>' >> app/src/main/res/values/colors.xml
+          echo '</resources>' >> app/src/main/res/values/colors.xml
 
-          cat > app/src/main/res/values/themes.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-                  <item name="android:colorPrimary">@color/colorPrimary</item>
-                  <item name="android:colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="android:colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
+          echo '<resources>' >> app/src/main/res/values/themes.xml
+          echo '    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">' >> app/src/main/res/values/themes.xml
+          echo '        <item name="android:colorPrimary">@color/colorPrimary</item>' >> app/src/main/res/values/themes.xml
+          echo '        <item name="android:colorPrimaryDark">@color/colorPrimaryDark</item>' >> app/src/main/res/values/themes.xml
+          echo '        <item name="android:colorAccent">@color/colorAccent</item>' >> app/src/main/res/values/themes.xml
+          echo '    </style>' >> app/src/main/res/values/themes.xml
+          echo '</resources>' >> app/src/main/res/values/themes.xml
 
           ACTIVITY_FILE=$(find app/src/main/java -name "*.java" | xargs grep -l "extends.*Activity" | head -1)
           if [ -z "$ACTIVITY_FILE" ]; then
-            ACTIVITY_PATH="app/src/main/java/${PKG//.//}/MainActivity.java"
-            mkdir -p "$(dirname "$ACTIVITY_PATH")"
-            cat > "$ACTIVITY_PATH" << 'JAVAEOF'
+            mkdir -p "app/src/main/java/${PKG//.//}"
+            cat > "app/src/main/java/${PKG//.//}/MainActivity.java" << 'JAVAEOF'
             package __PKG__;
             import android.app.Activity;
             import android.os.Bundle;
@@ -115,30 +107,28 @@ jobs:
                         setContentView(R.layout.activity_main);
                     } catch(Exception e) {
                         TextView tv = new TextView(this);
-                        tv.setText("APK Built Successfully\n(no custom layout)");
+                        tv.setText("APK Built Successfully");
                         tv.setTextSize(22);
                         setContentView(tv);
                     }
                 }
             }
             JAVAEOF
-            sed -i "s/__PKG__/${PKG}/g" "$ACTIVITY_PATH"
-            cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="24dp">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="CodeForge Pro Build"
-                    android:textSize="28sp"
-                    android:textColor="#00FFCC" />
-            </LinearLayout>
-            XMLEOF
+            sed -i "s/__PKG__/${PKG}/g" "app/src/main/java/${PKG//.//}/MainActivity.java"
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+            echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:layout_height="match_parent"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:orientation="vertical"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:padding="24dp">' >> app/src/main/res/layout/activity_main.xml
+            echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:text="CodeForge Pro Build"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:textSize="28sp"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:textColor="#00FFCC" />' >> app/src/main/res/layout/activity_main.xml
+            echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
           fi
 
           LAUNCHER_ACTIVITY=$(find app/src/main/java -name "*.java" | head -1 | xargs basename | sed 's/\.java$//')
@@ -146,41 +136,37 @@ jobs:
             LAUNCHER_ACTIVITY="MainActivity"
           fi
 
-          cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${PKG}">
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
+          echo "    package=\"${PKG}\">" >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.VIBRATE" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' >> app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />' >> app/src/main/AndroidManifest.xml
+          echo '    <application' >> app/src/main/AndroidManifest.xml
+          echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
+          echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
+          echo '        android:label="@string/app_name"' >> app/src/main/AndroidManifest.xml
+          echo '        android:theme="@style/AppTheme"' >> app/src/main/AndroidManifest.xml
+          echo '        android:supportsRtl="true">' >> app/src/main/AndroidManifest.xml
+          echo '        <activity' >> app/src/main/AndroidManifest.xml
+          echo "            android:name=\".${LAUNCHER_ACTIVITY}\"" >> app/src/main/AndroidManifest.xml
+          echo '            android:exported="true">' >> app/src/main/AndroidManifest.xml
+          echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
+          echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
+          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
+          echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
+          echo '        </activity>' >> app/src/main/AndroidManifest.xml
+          echo '    </application>' >> app/src/main/AndroidManifest.xml
+          echo '</manifest>' >> app/src/main/AndroidManifest.xml
 
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/AppTheme"
-                  android:supportsRtl="true">
-                  <activity
-                      android:name=".${LAUNCHER_ACTIVITY}"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Create app/build.gradle (no AppCompat dependency)
+      - name: Create app/build.gradle
         run: |
           PKG="${{ steps.vars.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
@@ -212,7 +198,7 @@ jobs:
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
 
-      - name: Process app icon from payload
+      - name: Process icon
         run: |
           ICON_B64="${{ github.event.client_payload.icon }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
