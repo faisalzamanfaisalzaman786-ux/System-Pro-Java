@@ -1,4 +1,4 @@
-package com.systempro.app1;
+package com.systempro.app2;
 
 import android.app.Activity;
 import android.os.Bundle;
