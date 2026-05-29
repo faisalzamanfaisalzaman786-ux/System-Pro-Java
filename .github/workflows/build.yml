@@ -1,4 +1,4 @@
-name: Build Android APK (Auto Permissions + Theme Fix)
+name: Build Android APK (Safe Mode – Never Crash)
 
 on:
   workflow_dispatch:
@@ -21,139 +21,175 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Get package name from payload
-        id: pkg
+      - name: Get payload variables
+        id: vars
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
-          if [ -z "$PKG" ]; then
-            PKG="com.systempro.app"
-          fi
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          if [ -z "$PKG" ]; then PKG="com.systempro.app"; fi
+          if [ -z "$APP_NAME" ]; then APP_NAME="CodeForge Pro"; fi
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
-
-      - name: Get app name from payload
-        id: app
-        run: |
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          if [ -z "$APP_NAME" ]; then
-            APP_NAME="CodeForge Pro"
-          fi
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
       - name: Clean and recreate directories
         run: |
           rm -rf app/src/main/java app/src/main/res app/build.gradle
-          PKG_PATH="${{ steps.pkg.outputs.package_path }}"
+          PKG_PATH="${{ steps.vars.outputs.package_path }}"
           mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate files from payload (basic manifest without theme)
+      - name: Generate user files (Java, layouts, etc.)
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
           EOF
-          NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > generate_all.py << 'PY'
+          NEW_PKG="${{ steps.vars.outputs.package_name }}"
+          python3 -c "
           import json, os, re
           new_pkg = os.environ['NEW_PKG']
           with open('payload_files.json', 'r') as f:
               files = json.load(f)
-          PERMISSIONS = [
-              "android.permission.INTERNET",
-              "android.permission.ACCESS_NETWORK_STATE",
-              "android.permission.ACCESS_WIFI_STATE",
-              "android.permission.CAMERA",
-              "android.permission.RECORD_AUDIO",
-              "android.permission.READ_EXTERNAL_STORAGE",
-              "android.permission.WRITE_EXTERNAL_STORAGE",
-              "android.permission.ACCESS_FINE_LOCATION",
-              "android.permission.ACCESS_COARSE_LOCATION",
-              "android.permission.VIBRATE",
-              "android.permission.WAKE_LOCK",
-              "android.permission.POST_NOTIFICATIONS"
-          ]
           for orig_path, content in files.items():
               if orig_path.endswith('.java'):
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
                   filename = os.path.basename(orig_path)
-                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
+                  new_path = f'app/src/main/java/{new_pkg.replace('.', '/')}/{filename}'
               else:
                   new_path = orig_path
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
-              print(f"Written: {new_path}")
-          manifest_path = "app/src/main/AndroidManifest.xml"
-          manifest_lines = [
-              '<?xml version="1.0" encoding="utf-8"?>',
-              '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
-              f'    package="{new_pkg}">',
-              ''
-          ]
-          for perm in PERMISSIONS:
-              manifest_lines.append(f'    <uses-permission android:name="{perm}" />')
-          manifest_lines.extend([
-              '',
-              '    <application',
-              '        android:allowBackup="true"',
-              '        android:icon="@mipmap/ic_launcher"',
-              '        android:label="@string/app_name"',
-              '        android:supportsRtl="true">',
-              '        <activity',
-              '            android:name=".MainActivity"',
-              '            android:exported="true">',
-              '            <intent-filter>',
-              '                <action android:name="android.intent.action.MAIN" />',
-              '                <category android:name="android.intent.category.LAUNCHER" />',
-              '            </intent-filter>',
-              '        </activity>',
-              '    </application>',
-              '',
-              '</manifest>'
-          ])
-          with open(manifest_path, 'w', encoding='utf-8') as mf:
-              mf.write('\n'.join(manifest_lines))
-          print(f"Manifest generated")
-          PY
+              print(f'Written: {new_path}')
+          "
           export NEW_PKG
-          python3 generate_all.py
 
-      - name: Set app name in strings.xml
+      - name: Auto‑generate all critical resources (safe mode)
         run: |
-          APP_NAME="${{ steps.app.outputs.app_name }}"
-          mkdir -p app/src/main/res/values
+          PKG="${{ steps.vars.outputs.package_name }}"
+          APP="${{ steps.vars.outputs.app_name }}"
+
+          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <resources>
-              <string name="app_name">${APP_NAME}</string>
+              <string name="app_name">${APP}</string>
           </resources>
           EOF
 
-      - name: Force add AppCompat theme to manifest and create themes.xml
-        run: |
-          # Add theme attribute to application tag
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          if ! grep -q 'android:theme=' "$MANIFEST"; then
-            sed -i 's|<application |<application android:theme="@style/AppTheme" |' "$MANIFEST"
-          fi
-          # Create themes.xml
-          mkdir -p app/src/main/res/values
-          cat > app/src/main/res/values/themes.xml << 'THEMESEOF'
+          # colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-                  <item name="colorPrimaryDark">#3700B3</item>
-                  <item name="colorAccent">#03DAC5</item>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+
+          # themes.xml (native, no AppCompat)
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+                  <item name="android:colorPrimary">@color/colorPrimary</item>
+                  <item name="android:colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="android:colorAccent">@color/colorAccent</item>
               </style>
           </resources>
-          THEMESEOF
-          echo "Theme added to manifest and themes.xml created"
+          EOF
 
-      - name: Create fresh app/build.gradle
+          # Find any Java activity (or use fallback)
+          ACTIVITY_FILE=$(find app/src/main/java -name "*.java" | xargs grep -l "extends.*Activity" | head -1)
+          if [ -z "$ACTIVITY_FILE" ]; then
+            echo "No Activity found, generating fallback MainActivity"
+            ACTIVITY_PATH="app/src/main/java/${PKG//.//}/MainActivity.java"
+            mkdir -p "$(dirname "$ACTIVITY_PATH")"
+            cat > "$ACTIVITY_PATH" << 'JAVAEOF'
+            package __PKG__;
+            import android.app.Activity;
+            import android.os.Bundle;
+            import android.widget.TextView;
+            public class MainActivity extends Activity {
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    try {
+                        setContentView(R.layout.activity_main);
+                    } catch(Exception e) {
+                        TextView tv = new TextView(this);
+                        tv.setText("APK Built Successfully\\n(no custom layout)");
+                        tv.setTextSize(22);
+                        setContentView(tv);
+                    }
+                }
+            }
+            JAVAEOF
+            sed -i "s/__PKG__/${PKG}/g" "$ACTIVITY_PATH"
+            # also create a default layout
+            cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="24dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CodeForge Pro Build"
+                    android:textSize="28sp"
+                    android:textColor="#00FFCC" />
+            </LinearLayout>
+            XMLEOF
+          fi
+
+          # Determine the launcher activity class name
+          LAUNCHER_ACTIVITY=$(find app/src/main/java -name "*.java" | head -1 | xargs basename | sed 's/\.java$//')
+          if [ -z "$LAUNCHER_ACTIVITY" ]; then
+            LAUNCHER_ACTIVITY="MainActivity"
+          fi
+
+          # Create clean AndroidManifest.xml (never trust user manifest)
+          cat > app/src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${PKG}">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/AppTheme"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".${LAUNCHER_ACTIVITY}"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Create app/build.gradle (no AppCompat dependency)
         run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
+          PKG="${{ steps.vars.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -180,7 +216,7 @@ jobs:
               }
           }
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
+              // No AppCompat – pure Android
           }
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
