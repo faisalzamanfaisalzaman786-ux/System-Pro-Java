@@ -1,7 +1,32 @@
 package com.systempro.app;
-import android.app.Activity;
+
 import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
 import android.widget.TextView;
-public class MainActivity extends Activity {
-    @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.textView); tv.setText("CodeForge Pro Works!"); }
+import android.widget.LinearLayout;
+import android.view.Gravity;
+
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        layout.setGravity(Gravity.CENTER);
+        layout.setOrientation(LinearLayout.VERTICAL);
+
+        TextView textView = new TextView(this);
+        textView.setText("HELLO WORLD");
+        textView.setTextSize(30);
+
+        layout.addView(textView);
+
+        setContentView(layout);
+    }
 }
