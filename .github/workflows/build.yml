@@ -79,12 +79,7 @@ jobs:
           colors_path = "app/src/main/res/values/colors.xml"
           if not os.path.exists(colors_path):
               with open(colors_path, 'w') as f:
-                  f.write('''<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#03DAC5</color>
-</resources>''')
+                  f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorPrimaryDark">#3700B3</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>')
           PY
           export NEW_PKG NEW_NAME
           python3 generate_all.py
