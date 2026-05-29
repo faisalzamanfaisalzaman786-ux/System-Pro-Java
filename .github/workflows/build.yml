@@ -45,80 +45,60 @@ jobs:
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > generate.py << 'EOF'
-          import json, os, re
-          new_pkg = os.environ['NEW_PKG']
-          with open('payload_files.json', 'r') as f:
-              files = json.load(f)
-          for path, content in files.items():
-              if path.endswith('.java'):
-                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-                  filename = os.path.basename(path)
-                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
-              else:
-                  new_path = path
-              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-              with open(new_path, 'w', encoding='utf-8') as out:
-                  out.write(content)
-              print(f"Written: {new_path}")
-          manifest = "app/src/main/AndroidManifest.xml"
-          if os.path.exists(manifest):
-              with open(manifest, 'r') as mf:
-                  man_content = mf.read()
-              man_content = re.sub(r'package="[^"]*"', f'package="{new_pkg}"', man_content)
-              with open(manifest, 'w') as mf:
-                  mf.write(man_content)
-              print("Manifest package updated")
-          EOF
+          python3 -c "
+import json, os, re
+new_pkg = os.environ['NEW_PKG']
+with open('payload_files.json', 'r') as f:
+    files = json.load(f)
+for path, content in files.items():
+    if path.endswith('.java'):
+        content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+        filename = os.path.basename(path)
+        new_path = f\"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}\"
+    else:
+        new_path = path
+    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+    with open(new_path, 'w', encoding='utf-8') as out:
+        out.write(content)
+    print(f'Written: {new_path}')
+manifest = 'app/src/main/AndroidManifest.xml'
+if os.path.exists(manifest):
+    with open(manifest, 'r') as mf:
+        man_content = mf.read()
+    man_content = re.sub(r'package=\"[^\"]*\"', f'package=\"{new_pkg}\"', man_content)
+    with open(manifest, 'w') as mf:
+        mf.write(man_content)
+    print('Manifest package updated')
+"
           export NEW_PKG
-          python3 generate.py
 
-      # 🟢 نئا سٹیپ: پرمیشنز انجیکٹ کریں
       - name: Inject common permissions into AndroidManifest.xml
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
+          # Ensure manifest exists
           if [ ! -f "$MANIFEST" ]; then
-            echo "Manifest not found, creating minimal one"
-            cat > "$MANIFEST" << 'MAN'
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="__PKG__">
-                <application android:label="App">
-                    <activity android:name=".MainActivity" android:exported="true">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN"/>
-                            <category android:name="android.intent.category.LAUNCHER"/>
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            MAN
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > "$MANIFEST"
+            printf '%s\n' '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> "$MANIFEST"
+            printf '%s\n' '    package="__PKG__">' >> "$MANIFEST"
+            printf '%s\n' '    <application android:label="App">' >> "$MANIFEST"
+            printf '%s\n' '        <activity android:name=".MainActivity" android:exported="true">' >> "$MANIFEST"
+            printf '%s\n' '            <intent-filter>' >> "$MANIFEST"
+            printf '%s\n' '                <action android:name="android.intent.action.MAIN"/>' >> "$MANIFEST"
+            printf '%s\n' '                <category android:name="android.intent.category.LAUNCHER"/>' >> "$MANIFEST"
+            printf '%s\n' '            </intent-filter>' >> "$MANIFEST"
+            printf '%s\n' '        </activity>' >> "$MANIFEST"
+            printf '%s\n' '    </application>' >> "$MANIFEST"
+            printf '%s\n' '</manifest>' >> "$MANIFEST"
             sed -i "s/__PKG__/${{ steps.pkg.outputs.package_name }}/g" "$MANIFEST"
           fi
 
-          # پرمیشنز کی لسٹ (آپ یہاں اپنی مرضی کی پرمیشنز شامل کر سکتے ہیں)
-          PERMISSIONS=(
-            "android.permission.INTERNET"
-            "android.permission.ACCESS_NETWORK_STATE"
-            "android.permission.ACCESS_WIFI_STATE"
-            "android.permission.CAMERA"
-            "android.permission.RECORD_AUDIO"
-            "android.permission.READ_EXTERNAL_STORAGE"
-            "android.permission.WRITE_EXTERNAL_STORAGE"
-            "android.permission.ACCESS_FINE_LOCATION"
-            "android.permission.ACCESS_COARSE_LOCATION"
-            "android.permission.VIBRATE"
-            "android.permission.WAKE_LOCK"
-            "android.permission.POST_NOTIFICATIONS"
-          )
-
-          for perm in "${PERMISSIONS[@]}"; do
-            if ! grep -q "<uses-permission android:name=\"$perm\"" "$MANIFEST"; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
+          PERMS="android.permission.INTERNET android.permission.ACCESS_NETWORK_STATE android.permission.ACCESS_WIFI_STATE android.permission.CAMERA android.permission.RECORD_AUDIO android.permission.READ_EXTERNAL_STORAGE android.permission.WRITE_EXTERNAL_STORAGE android.permission.ACCESS_FINE_LOCATION android.permission.ACCESS_COARSE_LOCATION android.permission.VIBRATE android.permission.WAKE_LOCK android.permission.POST_NOTIFICATIONS"
+          for perm in $PERMS; do
+            if ! grep -q "android:name=\"$perm\"" "$MANIFEST"; then
+              sed -i "/<manifest /a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
               echo "Added permission: $perm"
             fi
           done
-          echo "All permissions injected"
 
       - name: Create fresh app/build.gradle
         run: |
