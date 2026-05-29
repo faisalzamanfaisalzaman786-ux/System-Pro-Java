@@ -45,37 +45,39 @@ jobs:
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          python3 -c "
-import json, os, re
-new_pkg = os.environ['NEW_PKG']
-with open('payload_files.json', 'r') as f:
-    files = json.load(f)
-for path, content in files.items():
-    if path.endswith('.java'):
-        content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-        filename = os.path.basename(path)
-        new_path = f\"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}\"
-    else:
-        new_path = path
-    os.makedirs(os.path.dirname(new_path), exist_ok=True)
-    with open(new_path, 'w', encoding='utf-8') as out:
-        out.write(content)
-    print(f'Written: {new_path}')
-manifest = 'app/src/main/AndroidManifest.xml'
-if os.path.exists(manifest):
-    with open(manifest, 'r') as mf:
-        man_content = mf.read()
-    man_content = re.sub(r'package=\"[^\"]*\"', f'package=\"{new_pkg}\"', man_content)
-    with open(manifest, 'w') as mf:
-        mf.write(man_content)
-    print('Manifest package updated')
-"
+          # Write the Python script to a file
+          cat > generate.py << 'EOF'
+          import json, os, re
+          new_pkg = os.environ['NEW_PKG']
+          with open('payload_files.json', 'r') as f:
+              files = json.load(f)
+          for path, content in files.items():
+              if path.endswith('.java'):
+                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+                  filename = os.path.basename(path)
+                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
+              else:
+                  new_path = path
+              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+              with open(new_path, 'w', encoding='utf-8') as out:
+                  out.write(content)
+              print(f"Written: {new_path}")
+          manifest = "app/src/main/AndroidManifest.xml"
+          if os.path.exists(manifest):
+              with open(manifest, 'r') as mf:
+                  man_content = mf.read()
+              man_content = re.sub(r'package="[^"]*"', f'package="{new_pkg}"', man_content)
+              with open(manifest, 'w') as mf:
+                  mf.write(man_content)
+              print("Manifest package updated")
+          EOF
           export NEW_PKG
+          python3 generate.py
 
       - name: Inject common permissions into AndroidManifest.xml
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
-          # Ensure manifest exists
+          # Ensure manifest exists (fallback)
           if [ ! -f "$MANIFEST" ]; then
             printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > "$MANIFEST"
             printf '%s\n' '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> "$MANIFEST"
