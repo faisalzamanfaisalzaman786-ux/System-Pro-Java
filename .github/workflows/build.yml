@@ -84,6 +84,41 @@ jobs:
           export NEW_PKG NEW_NAME
           python3 generate_all.py
 
+      - name: Ensure AndroidManifest.xml exists with icon reference
+        run: |
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          PKG="${{ steps.vars.outputs.package_name }}"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "Creating AndroidManifest.xml"
+            cat > "$MANIFEST" << EOF
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="${PKG}">
+                <uses-permission android:name="android.permission.INTERNET" />
+                <uses-permission android:name="android.permission.CAMERA" />
+                <application
+                    android:allowBackup="true"
+                    android:icon="@mipmap/ic_launcher"
+                    android:label="@string/app_name"
+                    android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+                    <activity
+                        android:name=".MainActivity"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            EOF
+          else
+            # If manifest exists, ensure it has the icon attribute
+            if ! grep -q 'android:icon="@mipmap/ic_launcher"' "$MANIFEST"; then
+              sed -i 's|<application |<application android:icon="@mipmap/ic_launcher" |' "$MANIFEST"
+            fi
+          fi
+
       - name: Create fresh app/build.gradle
         run: |
           PKG="${{ steps.vars.outputs.package_name }}"
@@ -135,7 +170,9 @@ jobs:
               esac
               convert app_icon.png -resize $size "app/src/main/res/mipmap-${density}/ic_launcher.png"
             done
+            echo "Icon generated from payload"
           else
+            echo "No icon in payload, using default green icon"
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
