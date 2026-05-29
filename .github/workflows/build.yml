@@ -1,5 +1,4 @@
-
-name: Build Android APK (Universal Crash-Proof Builder)
+name: Build Android APK (Universal Full Builder Fixed)
 
 on:
   workflow_dispatch:
@@ -23,10 +22,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Get package name
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Get Package Name
         id: pkg
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
+
           if [ -z "$PKG" ]; then
             PKG="com.systempro.app"
           fi
@@ -36,7 +39,7 @@ jobs:
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      - name: Get app name
+      - name: Get App Name
         id: app
         run: |
           APP_NAME="${{ github.event.client_payload.app_name }}"
@@ -47,13 +50,11 @@ jobs:
 
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-      - name: Clean old project
+      - name: Create Fresh Android Project
         run: |
-          rm -rf app/src/main/java
-          rm -rf app/src/main/res
-          rm -rf app/src/main/AndroidManifest.xml
-          rm -rf app/build.gradle
+          rm -rf app
 
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
@@ -63,7 +64,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate files safely
+      - name: Generate Android Files
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
@@ -87,10 +88,13 @@ jobs:
 
           java_found = False
           layout_found = False
+          manifest_found = False
 
           for path, content in files.items():
 
-              if path.endswith(".java"):
+              clean_path = path.strip("/")
+
+              if clean_path.endswith(".java"):
 
                   java_found = True
 
@@ -111,19 +115,30 @@ jobs:
                       "import android.app.Activity;"
                   )
 
-                  filename = os.path.basename(path)
+                  filename = os.path.basename(clean_path)
 
                   new_path = "app/src/main/java/" + pkg_path + "/" + filename
 
-              elif path.endswith(".xml"):
+              elif clean_path.endswith(".xml"):
 
-                  if "layout" in path:
+                  if "layout" in clean_path:
                       layout_found = True
 
-                  new_path = path
+                  if "AndroidManifest.xml" in clean_path:
+                      manifest_found = True
+                      new_path = "app/src/main/AndroidManifest.xml"
+                  else:
+                      filename = os.path.basename(clean_path)
+
+                      if "layout" in clean_path:
+                          new_path = "app/src/main/res/layout/" + filename
+                      elif "values" in clean_path:
+                          new_path = "app/src/main/res/values/" + filename
+                      else:
+                          new_path = "app/src/main/res/" + filename
 
               else:
-                  new_path = path
+                  continue
 
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
 
@@ -132,12 +147,9 @@ jobs:
 
               print("Written:", new_path)
 
-          # fallback layout
           if not layout_found:
 
-              layout_path = "app/src/main/res/layout/activity_main.xml"
-
-              with open(layout_path, "w") as f:
+              with open("app/src/main/res/layout/activity_main.xml", "w") as f:
                   f.write("""<?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -146,15 +158,13 @@ jobs:
               android:orientation="vertical">
 
               <TextView
-                  android:id="@+id/textView"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="APK Build Success"
-                  android:textSize="24sp"/>
+                  android:textSize="22sp"/>
 
           </LinearLayout>""")
 
-          # fallback activity
           if not java_found:
 
               java_dir = "app/src/main/java/" + pkg_path
@@ -165,49 +175,20 @@ jobs:
 
           import android.app.Activity;
           import android.os.Bundle;
-          import android.widget.TextView;
 
           public class MainActivity extends Activity {{
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {{
                   super.onCreate(savedInstanceState);
-
-                  try {{
-                      setContentView(R.layout.activity_main);
-                  }} catch(Exception e) {{
-                      TextView tv = new TextView(this);
-                      tv.setText("Runtime Error: " + e.toString());
-                      setContentView(tv);
-                  }}
+                  setContentView(R.layout.activity_main);
               }}
           }}
           ''')
 
-          # strings.xml
-          os.makedirs("app/src/main/res/values", exist_ok=True)
+          if not manifest_found:
 
-          with open("app/src/main/res/values/strings.xml", "w") as f:
-              f.write(f'''<resources>
-              <string name="app_name">{app_name}</string>
-          </resources>''')
-
-          # colors.xml
-          with open("app/src/main/res/values/colors.xml", "w") as f:
-              f.write('''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-          </resources>''')
-
-          # themes.xml
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
-          </resources>''')
-
-          # safe manifest
-          manifest = f'''<?xml version="1.0" encoding="utf-8"?>
+              manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="{pkg}">
 
@@ -218,7 +199,7 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:label="@string/app_name"
                   android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
+                  android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
 
                   <activity
                       android:name=".MainActivity"
@@ -235,16 +216,61 @@ jobs:
 
           </manifest>'''
 
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(manifest)
+              with open("app/src/main/AndroidManifest.xml", "w") as f:
+                  f.write(manifest)
 
-          print("Safe manifest generated")
+          with open("app/src/main/res/values/strings.xml", "w") as f:
+              f.write(f'''<resources>
+              <string name="app_name">{app_name}</string>
+          </resources>''')
+
+          with open("app/src/main/res/values/colors.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>''')
+
+          print("Project generation complete")
           PY
 
           export NEW_PKG
           export APP_NAME
 
           python3 generate.py
+
+      - name: Create settings.gradle
+        run: |
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "CodeForgePro"
+
+          include ':app'
+          EOF
+
+      - name: Create Root build.gradle
+        run: |
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
 
       - name: Create app build.gradle
         run: |
@@ -270,14 +296,16 @@ jobs:
 
                   versionCode 1
                   versionName "1.0"
-
-                  multiDexEnabled true
               }
 
               buildTypes {
 
                   release {
                       minifyEnabled false
+                  }
+
+                  debug {
+                      debuggable true
                   }
               }
 
@@ -286,23 +314,28 @@ jobs:
                   targetCompatibility JavaVersion.VERSION_17
               }
 
-              sourceSets {
-                  main {
-                      manifest.srcFile 'src/main/AndroidManifest.xml'
-                      java.srcDirs = ['src/main/java']
-                      res.srcDirs = ['src/main/res']
+              packagingOptions {
+                  resources {
+                      excludes += '/META-INF/{AL2.0,LGPL2.1}'
                   }
               }
           }
 
           dependencies {
-              implementation 'androidx.multidex:multidex:2.0.1'
           }
           EOF
 
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
 
-      - name: Process app icon
+      - name: Create gradle.properties
+        run: |
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4096m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+      - name: Process App Icon
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -329,31 +362,20 @@ jobs:
 
           fi
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate Gradle Wrapper
         run: |
-          mkdir -p gradle/wrapper
-
-          wget -q https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar \
-          -O gradle/wrapper/gradle-wrapper.jar
-
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-          cat > gradlew << 'EOF'
-          #!/bin/sh
-          exec java -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
-          EOF
-
-          chmod +x gradlew
+          gradle wrapper --gradle-version 8.5
 
       - name: Build APK
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
+
+      - name: APK Info
+        run: |
+          ls -lh app/build/outputs/apk/debug/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
