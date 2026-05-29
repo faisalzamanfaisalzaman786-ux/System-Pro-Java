@@ -1,4 +1,4 @@
-name: Build Android APK (Fresh Build with Correct Package)
+name: Build Android APK (Auto Permissions Injection)
 
 on:
   workflow_dispatch:
@@ -32,8 +32,7 @@ jobs:
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      # مکمل صفائی: پرانی Java اور app/build.gradle ہٹائیں
-      - name: Clean old source and build.gradle
+      - name: Clean and recreate Java source directory
         run: |
           rm -rf app/src/main/java
           rm -f app/build.gradle
@@ -42,7 +41,6 @@ jobs:
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      # پے لوڈ سے فائلیں (Java, XML, Manifest) بنائیں
       - name: Generate files from payload
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
@@ -54,9 +52,7 @@ jobs:
               files = json.load(f)
           for path, content in files.items():
               if path.endswith('.java'):
-                  # پیکج لائن تبدیل کریں
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
-                  # نئے پاتھ میں ڈال دیں (پیکج نیم کے مطابق ڈائریکٹری)
                   filename = os.path.basename(path)
                   new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
               else:
@@ -65,7 +61,6 @@ jobs:
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
               print(f"Written: {new_path}")
-          # Manifest کا package attribute بھی درست کریں
           manifest = "app/src/main/AndroidManifest.xml"
           if os.path.exists(manifest):
               with open(manifest, 'r') as mf:
@@ -78,19 +73,61 @@ jobs:
           export NEW_PKG
           python3 generate.py
 
-      # نئی app/build.gradle فائل بنائیں (مکمل کنٹرول)
+      # 🟢 نئا سٹیپ: پرمیشنز انجیکٹ کریں
+      - name: Inject common permissions into AndroidManifest.xml
+        run: |
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "Manifest not found, creating minimal one"
+            cat > "$MANIFEST" << 'MAN'
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="__PKG__">
+                <application android:label="App">
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN"/>
+                            <category android:name="android.intent.category.LAUNCHER"/>
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            MAN
+            sed -i "s/__PKG__/${{ steps.pkg.outputs.package_name }}/g" "$MANIFEST"
+          fi
+
+          # پرمیشنز کی لسٹ (آپ یہاں اپنی مرضی کی پرمیشنز شامل کر سکتے ہیں)
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CAMERA"
+            "android.permission.RECORD_AUDIO"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.ACCESS_FINE_LOCATION"
+            "android.permission.ACCESS_COARSE_LOCATION"
+            "android.permission.VIBRATE"
+            "android.permission.WAKE_LOCK"
+            "android.permission.POST_NOTIFICATIONS"
+          )
+
+          for perm in "${PERMISSIONS[@]}"; do
+            if ! grep -q "<uses-permission android:name=\"$perm\"" "$MANIFEST"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$perm\" />" "$MANIFEST"
+              echo "Added permission: $perm"
+            fi
+          done
+          echo "All permissions injected"
+
       - name: Create fresh app/build.gradle
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
+          plugins { id 'com.android.application' }
           android {
               compileSdk 34
               namespace "__PKG__"
-
               defaultConfig {
                   applicationId "__PKG__"
                   minSdk 21
@@ -98,18 +135,11 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-
+              buildTypes { release { minifyEnabled false } }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-
               sourceSets {
                   main {
                       java.srcDirs = ['src/main/java']
@@ -118,16 +148,12 @@ jobs:
                   }
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
-          # پلیس ہولڈر کو اصل پیکج سے بدلیں
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
-          echo "app/build.gradle created with namespace=${PKG}"
 
-      # آئیکن جنریٹ کریں (اگر پے لوڈ میں ہو)
       - name: Process app icon from payload
         run: |
           ICON_B64="${{ github.event.client_payload.icon }}"
@@ -139,18 +165,14 @@ jobs:
             convert app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            echo "Icon generated"
           else
-            # ڈیفالٹ سبز آئیکن
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            echo "Default icon generated"
           fi
 
-      # Gradle wrapper سیٹ کریں (Gradle 8.5)
       - name: Setup Gradle 8.5 wrapper
         run: |
           if [ ! -f gradlew ]; then
