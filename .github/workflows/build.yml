@@ -65,29 +65,27 @@ jobs:
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
               print(f"Written: {new_path}")
+          # Force overwrite strings.xml with correct app name
           strings_path = "app/src/main/res/values/strings.xml"
-          if os.path.exists(strings_path):
-              with open(strings_path, 'r') as f:
-                  strings_content = f.read()
-              strings_content = re.sub(r'<string name="app_name">.*?</string>', f'<string name="app_name">{new_name}</string>', strings_content, flags=re.DOTALL)
-              with open(strings_path, 'w') as f:
-                  f.write(strings_content)
-          else:
-              os.makedirs(os.path.dirname(strings_path), exist_ok=True)
-              with open(strings_path, 'w') as f:
-                  f.write(f'<resources>\n    <string name="app_name">{new_name}</string>\n</resources>')
+          os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+          with open(strings_path, 'w', encoding='utf-8') as f:
+              f.write(f'<resources>\n    <string name="app_name">{new_name}</string>\n</resources>')
+          print(f"Written: {strings_path} with app_name={new_name}")
+          # Ensure colors.xml exists
           colors_path = "app/src/main/res/values/colors.xml"
           if not os.path.exists(colors_path):
+              os.makedirs(os.path.dirname(colors_path), exist_ok=True)
               with open(colors_path, 'w') as f:
                   f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#6200EE</color>\n    <color name="colorPrimaryDark">#3700B3</color>\n    <color name="colorAccent">#03DAC5</color>\n</resources>')
           PY
           export NEW_PKG NEW_NAME
           python3 generate_all.py
 
-      - name: Ensure AndroidManifest.xml exists with icon reference
+      - name: Ensure AndroidManifest.xml has correct package and icon
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
           PKG="${{ steps.vars.outputs.package_name }}"
+          # If manifest doesn't exist, create a fresh one
           if [ ! -f "$MANIFEST" ]; then
             echo '<?xml version="1.0" encoding="utf-8"?>' > "$MANIFEST"
             echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> "$MANIFEST"
@@ -110,12 +108,16 @@ jobs:
             echo '    </application>' >> "$MANIFEST"
             echo '</manifest>' >> "$MANIFEST"
           else
+            # Update package name
+            sed -i "s/package=\"[^\"]*\"/package=\"${PKG}\"/" "$MANIFEST"
+            # Ensure icon attribute exists
             if ! grep -q 'android:icon="@mipmap/ic_launcher"' "$MANIFEST"; then
               sed -i 's|<application |<application android:icon="@mipmap/ic_launcher" |' "$MANIFEST"
             fi
           fi
+          echo "Manifest updated with package=${PKG}"
 
-      - name: Create fresh app/build.gradle
+      - name: Create fresh app/build.gradle with correct namespace
         run: |
           PKG="${{ steps.vars.outputs.package_name }}"
           cat > app/build.gradle << 'EOF'
@@ -148,6 +150,7 @@ jobs:
           }
           EOF
           sed -i "s/__PKG__/${PKG}/g" app/build.gradle
+          echo "app/build.gradle updated with namespace=${PKG}"
 
       - name: Process app icon from payload
         run: |
@@ -155,20 +158,28 @@ jobs:
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "Icon base64 length: ${#ICON_B64}"
             echo "$ICON_B64" | base64 -d > app_icon.png
-            file app_icon.png
-            sudo apt-get update && sudo apt-get install -y imagemagick
-            for d in 72 48 96 144 192; do
-              size="${d}x${d}"
-              case $d in
-                72) density="hdpi" ;;
-                48) density="mdpi" ;;
-                96) density="xhdpi" ;;
-                144) density="xxhdpi" ;;
-                192) density="xxxhdpi" ;;
-              esac
-              convert app_icon.png -resize $size "app/src/main/res/mipmap-${density}/ic_launcher.png"
-            done
-            echo "Icon generated from payload"
+            if [ -s app_icon.png ]; then
+              sudo apt-get update && sudo apt-get install -y imagemagick
+              for d in 72 48 96 144 192; do
+                size="${d}x${d}"
+                case $d in
+                  72) density="hdpi" ;;
+                  48) density="mdpi" ;;
+                  96) density="xhdpi" ;;
+                  144) density="xxhdpi" ;;
+                  192) density="xxxhdpi" ;;
+                esac
+                convert app_icon.png -resize $size "app/src/main/res/mipmap-${density}/ic_launcher.png"
+              done
+              echo "Icon generated from payload"
+            else
+              echo "Decoded icon is empty, using default"
+              convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
+              convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
+              convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            fi
           else
             echo "No icon in payload, using default green icon"
             convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
