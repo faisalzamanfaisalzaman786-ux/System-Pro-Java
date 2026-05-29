@@ -49,7 +49,7 @@ jobs:
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate files from payload
+      - name: Generate files from payload (basic manifest without theme)
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
@@ -130,28 +130,26 @@ jobs:
           </resources>
           EOF
 
-      - name: Auto-fix theme for AppCompatActivity (no heredoc)
+      - name: Force add AppCompat theme to manifest and create themes.xml
         run: |
-          MAIN_ACTIVITY=$(find app/src/main/java -name "MainActivity.java" | head -1)
-          if [ -f "$MAIN_ACTIVITY" ] && grep -q "AppCompatActivity" "$MAIN_ACTIVITY"; then
-            echo "AppCompatActivity detected, adding theme"
-            MANIFEST="app/src/main/AndroidManifest.xml"
-            if ! grep -q 'android:theme=' "$MANIFEST"; then
-              sed -i 's|<application |<application android:theme="@style/AppTheme" |' "$MANIFEST"
-            fi
-            mkdir -p app/src/main/res/values
-            printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/values/themes.xml
-            printf '<resources>\n' >> app/src/main/res/values/themes.xml
-            printf '    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n' >> app/src/main/res/values/themes.xml
-            printf '        <item name="colorPrimary">#6200EE</item>\n' >> app/src/main/res/values/themes.xml
-            printf '        <item name="colorPrimaryDark">#3700B3</item>\n' >> app/src/main/res/values/themes.xml
-            printf '        <item name="colorAccent">#03DAC5</item>\n' >> app/src/main/res/values/themes.xml
-            printf '    </style>\n' >> app/src/main/res/values/themes.xml
-            printf '</resources>\n' >> app/src/main/res/values/themes.xml
-            echo "Theme added for AppCompatActivity"
-          else
-            echo "Plain Activity detected, no theme needed"
+          # Add theme attribute to application tag
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if ! grep -q 'android:theme=' "$MANIFEST"; then
+            sed -i 's|<application |<application android:theme="@style/AppTheme" |' "$MANIFEST"
           fi
+          # Create themes.xml
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/themes.xml << 'THEMESEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryDark">#3700B3</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+          </resources>
+          THEMESEOF
+          echo "Theme added to manifest and themes.xml created"
 
       - name: Create fresh app/build.gradle
         run: |
