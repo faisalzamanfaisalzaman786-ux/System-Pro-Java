@@ -1,4 +1,4 @@
-```yaml
+
 name: Build Android APK (Universal Stable Builder)
 
 on:
@@ -427,4 +427,4 @@ jobs:
         with:
           tag_name: latest-build
           files: app/build/outputs/apk/debug/*.apk
-```
+
