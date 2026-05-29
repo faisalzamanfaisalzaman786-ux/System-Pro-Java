@@ -89,31 +89,27 @@ jobs:
           MANIFEST="app/src/main/AndroidManifest.xml"
           PKG="${{ steps.vars.outputs.package_name }}"
           if [ ! -f "$MANIFEST" ]; then
-            echo "Creating AndroidManifest.xml"
-            cat > "$MANIFEST" << EOF
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="${PKG}">
-                <uses-permission android:name="android.permission.INTERNET" />
-                <uses-permission android:name="android.permission.CAMERA" />
-                <application
-                    android:allowBackup="true"
-                    android:icon="@mipmap/ic_launcher"
-                    android:label="@string/app_name"
-                    android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-                    <activity
-                        android:name=".MainActivity"
-                        android:exported="true">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
+            echo '<?xml version="1.0" encoding="utf-8"?>' > "$MANIFEST"
+            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> "$MANIFEST"
+            echo "    package=\"${PKG}\">" >> "$MANIFEST"
+            echo '    <uses-permission android:name="android.permission.INTERNET" />' >> "$MANIFEST"
+            echo '    <uses-permission android:name="android.permission.CAMERA" />' >> "$MANIFEST"
+            echo '    <application' >> "$MANIFEST"
+            echo '        android:allowBackup="true"' >> "$MANIFEST"
+            echo '        android:icon="@mipmap/ic_launcher"' >> "$MANIFEST"
+            echo '        android:label="@string/app_name"' >> "$MANIFEST"
+            echo '        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">' >> "$MANIFEST"
+            echo '        <activity' >> "$MANIFEST"
+            echo '            android:name=".MainActivity"' >> "$MANIFEST"
+            echo '            android:exported="true">' >> "$MANIFEST"
+            echo '            <intent-filter>' >> "$MANIFEST"
+            echo '                <action android:name="android.intent.action.MAIN" />' >> "$MANIFEST"
+            echo '                <category android:name="android.intent.category.LAUNCHER" />' >> "$MANIFEST"
+            echo '            </intent-filter>' >> "$MANIFEST"
+            echo '        </activity>' >> "$MANIFEST"
+            echo '    </application>' >> "$MANIFEST"
+            echo '</manifest>' >> "$MANIFEST"
           else
-            # If manifest exists, ensure it has the icon attribute
             if ! grep -q 'android:icon="@mipmap/ic_launcher"' "$MANIFEST"; then
               sed -i 's|<application |<application android:icon="@mipmap/ic_launcher" |' "$MANIFEST"
             fi
