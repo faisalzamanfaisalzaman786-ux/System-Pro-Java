@@ -1,4 +1,4 @@
-name: Build Android APK (Auto Permissions Injection)
+name: Build Android APK (Auto Permissions + Theme Fix)
 
 on:
   workflow_dispatch:
@@ -41,30 +41,25 @@ jobs:
           fi
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-      - name: Clean and recreate Java source directory
+      - name: Clean and recreate directories
         run: |
-          rm -rf app/src/main/java
-          rm -f app/build.gradle
+          rm -rf app/src/main/java app/src/main/res app/build.gradle
           PKG_PATH="${{ steps.pkg.outputs.package_path }}"
           mkdir -p "app/src/main/java/${PKG_PATH}"
           mkdir -p app/src/main/res/layout app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate all files (including manifest with permissions)
+      - name: Generate files from payload
         run: |
-          # Write payload files to JSON using heredoc (safe for special characters)
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
           EOF
-
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           cat > generate_all.py << 'PY'
           import json, os, re
-
           new_pkg = os.environ['NEW_PKG']
           with open('payload_files.json', 'r') as f:
               files = json.load(f)
-
           PERMISSIONS = [
               "android.permission.INTERNET",
               "android.permission.ACCESS_NETWORK_STATE",
@@ -79,7 +74,6 @@ jobs:
               "android.permission.WAKE_LOCK",
               "android.permission.POST_NOTIFICATIONS"
           ]
-
           for orig_path, content in files.items():
               if orig_path.endswith('.java'):
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
@@ -87,12 +81,10 @@ jobs:
                   new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
               else:
                   new_path = orig_path
-
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
               print(f"Written: {new_path}")
-
           manifest_path = "app/src/main/AndroidManifest.xml"
           manifest_lines = [
               '<?xml version="1.0" encoding="utf-8"?>',
@@ -123,24 +115,47 @@ jobs:
           ])
           with open(manifest_path, 'w', encoding='utf-8') as mf:
               mf.write('\n'.join(manifest_lines))
-          print(f"AndroidManifest.xml generated with {len(PERMISSIONS)} permissions")
+          print(f"Manifest generated")
           PY
-
           export NEW_PKG
           python3 generate_all.py
 
-      # NEW STEP: Inject app name into strings.xml
       - name: Set app name in strings.xml
         run: |
           APP_NAME="${{ steps.app.outputs.app_name }}"
-          STRINGS_FILE="app/src/main/res/values/strings.xml"
           mkdir -p app/src/main/res/values
-          cat > "$STRINGS_FILE" << EOF
+          cat > app/src/main/res/values/strings.xml << EOF
           <resources>
               <string name="app_name">${APP_NAME}</string>
           </resources>
           EOF
-          echo "Updated strings.xml with app_name=${APP_NAME}"
+
+      # NEW: Fix theme if MainActivity uses AppCompatActivity
+      - name: Auto-fix theme for AppCompatActivity
+        run: |
+          MAIN_ACTIVITY=$(find app/src/main/java -name "MainActivity.java" | head -1)
+          if grep -q "AppCompatActivity" "$MAIN_ACTIVITY"; then
+            echo "AppCompatActivity detected, adding theme"
+            # Add theme to manifest if not present
+            MANIFEST="app/src/main/AndroidManifest.xml"
+            if ! grep -q 'android:theme=' "$MANIFEST"; then
+              sed -i 's|<application |<application android:theme="@style/AppTheme" |' "$MANIFEST"
+            fi
+            # Create themes.xml
+            mkdir -p app/src/main/res/values
+            cat > app/src/main/res/values/themes.xml << 'THEMES'
+            <resources>
+                <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                    <item name="colorPrimary">#6200EE</item>
+                    <item name="colorPrimaryDark">#3700B3</item>
+                    <item name="colorAccent">#03DAC5</item>
+                </style>
+            </resources>
+            THEMES
+            echo "Theme added for AppCompatActivity"
+          else
+            echo "Plain Activity detected, no theme needed"
+          fi
 
       - name: Create fresh app/build.gradle
         run: |
