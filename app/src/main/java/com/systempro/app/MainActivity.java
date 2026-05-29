@@ -1,4 +1,4 @@
-package com.systempro.app;   // آپ کے پیکج نیم کے مطابق تبدیل ہو جائے گا
+package com.systempro.app4; 
 
 import android.Manifest;
 import android.app.Activity;
