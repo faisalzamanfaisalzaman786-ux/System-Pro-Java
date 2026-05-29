@@ -1,4 +1,4 @@
-name: Build Android APK (Clean Recreate Package Dirs)
+name: Build Android APK (Fresh Build with Correct Package)
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Read package name from payload
+      - name: Get package name from payload
         id: pkg
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
@@ -32,74 +32,126 @@ jobs:
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      - name: Clean and recreate Java source directory
+      # مکمل صفائی: پرانی Java اور app/build.gradle ہٹائیں
+      - name: Clean old source and build.gradle
         run: |
           rm -rf app/src/main/java
+          rm -f app/build.gradle
           PKG_PATH="${{ steps.pkg.outputs.package_path }}"
           mkdir -p "app/src/main/java/${PKG_PATH}"
-          echo "Created fresh directory: app/src/main/java/${PKG_PATH}"
+          mkdir -p app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate Files from Payload
+      # پے لوڈ سے فائلیں (Java, XML, Manifest) بنائیں
+      - name: Generate files from payload
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > process_files.py << 'EOF'
+          cat > generate.py << 'EOF'
           import json, os, re
-          with open('payload_files.json', 'r', encoding='utf-8') as f:
+          new_pkg = os.environ['NEW_PKG']
+          with open('payload_files.json', 'r') as f:
               files = json.load(f)
-          for orig_path, content in files.items():
-              if orig_path.endswith('.java'):
-                  content = re.sub(r'^package .*;', f'package {os.environ["NEW_PKG"]};', content, flags=re.MULTILINE)
-                  java_file_name = os.path.basename(orig_path)
-                  new_path = f"app/src/main/java/{os.environ['NEW_PKG'].replace('.', '/')}/{java_file_name}"
+          for path, content in files.items():
+              if path.endswith('.java'):
+                  # پیکج لائن تبدیل کریں
+                  content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
+                  # نئے پاتھ میں ڈال دیں (پیکج نیم کے مطابق ڈائریکٹری)
+                  filename = os.path.basename(path)
+                  new_path = f"app/src/main/java/{new_pkg.replace('.', '/')}/{filename}"
               else:
-                  new_path = orig_path
+                  new_path = path
               os.makedirs(os.path.dirname(new_path), exist_ok=True)
               with open(new_path, 'w', encoding='utf-8') as out:
                   out.write(content)
               print(f"Written: {new_path}")
-          manifest_path = "app/src/main/AndroidManifest.xml"
-          if os.path.exists(manifest_path):
-              with open(manifest_path, 'r', encoding='utf-8') as mf:
-                  manifest_content = mf.read()
-              manifest_content = re.sub(r'package="[^"]*"', f'package="{os.environ["NEW_PKG"]}"', manifest_content)
-              with open(manifest_path, 'w', encoding='utf-8') as mf:
-                  mf.write(manifest_content)
-              print("AndroidManifest.xml package updated")
+          # Manifest کا package attribute بھی درست کریں
+          manifest = "app/src/main/AndroidManifest.xml"
+          if os.path.exists(manifest):
+              with open(manifest, 'r') as mf:
+                  man_content = mf.read()
+              man_content = re.sub(r'package="[^"]*"', f'package="{new_pkg}"', man_content)
+              with open(manifest, 'w') as mf:
+                  mf.write(man_content)
+              print("Manifest package updated")
           EOF
           export NEW_PKG
-          python3 process_files.py
+          python3 generate.py
 
-      - name: Update app/build.gradle namespace and applicationId
+      # نئی app/build.gradle فائل بنائیں (مکمل کنٹرول)
+      - name: Create fresh app/build.gradle
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
-          if [ -f app/build.gradle ]; then
-            sed -i "s/namespace \".*\"/namespace \"${PKG}\"/" app/build.gradle
-            sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/" app/build.gradle
-          fi
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
 
-      - name: Process App Icon from Payload
+          android {
+              compileSdk 34
+              namespace "__PKG__"
+
+              defaultConfig {
+                  applicationId "__PKG__"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              sourceSets {
+                  main {
+                      java.srcDirs = ['src/main/java']
+                      res.srcDirs = ['src/main/res']
+                      manifest.srcFile 'src/main/AndroidManifest.xml'
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+          # پلیس ہولڈر کو اصل پیکج سے بدلیں
+          sed -i "s/__PKG__/${PKG}/g" app/build.gradle
+          echo "app/build.gradle created with namespace=${PKG}"
+
+      # آئیکن جنریٹ کریں (اگر پے لوڈ میں ہو)
+      - name: Process app icon from payload
         run: |
           ICON_B64="${{ github.event.client_payload.icon }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > app_icon.png
             sudo apt-get update && sudo apt-get install -y imagemagick
-            mkdir -p app/src/main/res/mipmap-hdpi
-            mkdir -p app/src/main/res/mipmap-mdpi
-            mkdir -p app/src/main/res/mipmap-xhdpi
-            mkdir -p app/src/main/res/mipmap-xxhdpi
-            mkdir -p app/src/main/res/mipmap-xxxhdpi
             convert app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            echo "Icon generated from payload"
+            echo "Icon generated"
           else
-            echo "No icon in payload"
+            # ڈیفالٹ سبز آئیکن
+            convert -size 72x72 xc:#00FFCC app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert -size 48x48 xc:#00FFCC app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert -size 96x96 xc:#00FFCC app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert -size 144x144 xc:#00FFCC app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert -size 192x192 xc:#00FFCC app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "Default icon generated"
           fi
 
-      - name: Setup Gradle 8.5 Wrapper
+      # Gradle wrapper سیٹ کریں (Gradle 8.5)
+      - name: Setup Gradle 8.5 wrapper
         run: |
           if [ ! -f gradlew ]; then
             mkdir -p gradle/wrapper
