@@ -43,7 +43,11 @@ jobs:
 
       - name: Generate all files (including manifest with permissions)
         run: |
-          echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
+          # Write payload files to JSON using heredoc (safe for special characters)
+          cat > payload_files.json << 'EOF'
+          ${{ toJson(github.event.client_payload.files) }}
+          EOF
+
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           cat > generate_all.py << 'PY'
           import json, os, re
@@ -52,7 +56,6 @@ jobs:
           with open('payload_files.json', 'r') as f:
               files = json.load(f)
 
-          # Permissions to inject
           PERMISSIONS = [
               "android.permission.INTERNET",
               "android.permission.ACCESS_NETWORK_STATE",
@@ -69,7 +72,6 @@ jobs:
           ]
 
           for orig_path, content in files.items():
-              # For Java files, fix package statement
               if orig_path.endswith('.java'):
                   content = re.sub(r'^package .*;', f'package {new_pkg};', content, flags=re.MULTILINE)
                   filename = os.path.basename(orig_path)
@@ -82,9 +84,7 @@ jobs:
                   out.write(content)
               print(f"Written: {new_path}")
 
-          # Create or override AndroidManifest.xml with all permissions injected
           manifest_path = "app/src/main/AndroidManifest.xml"
-          # Build the manifest XML string
           manifest_lines = [
               '<?xml version="1.0" encoding="utf-8"?>',
               '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
@@ -116,6 +116,7 @@ jobs:
               mf.write('\n'.join(manifest_lines))
           print(f"AndroidManifest.xml generated with {len(PERMISSIONS)} permissions")
           PY
+
           export NEW_PKG
           python3 generate_all.py
 
