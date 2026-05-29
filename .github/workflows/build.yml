@@ -127,6 +127,10 @@ jobs:
                           if "AndroidManifest.xml" in clean_path:
                               existing["manifest"] = True
                               new_path = "app/src/main/AndroidManifest.xml"
+                              # Remove package attribute from manifest (AGP 8+ requirement)
+                              content = re.sub(r'\s+package="[^"]*"', '', content)
+                              # Also remove any standalone package="..." if present
+                              content = re.sub(r'package="[^"]*"', '', content)
                           elif "layout" in clean_path:
                               existing["layout"] = True
                               filename = os.path.basename(clean_path)
@@ -220,17 +224,17 @@ jobs:
                   if existing["manifest"]:
                       with open(manifest_path, "r") as f:
                           manifest_content = f.read()
+                      # Patch label and icon (keep as is, but ensure no package attribute)
                       manifest_content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', manifest_content)
                       manifest_content = re.sub(r'android:icon="[^"]*"', 'android:icon="@mipmap/ic_launcher"', manifest_content)
                       if 'android:label="' not in manifest_content:
                           manifest_content = manifest_content.replace('<application', '<application android:label="@string/app_name" android:icon="@mipmap/ic_launcher"')
                       with open(manifest_path, "w") as f:
                           f.write(manifest_content)
-                      print("Patched existing manifest")
+                      print("Patched existing manifest (package attribute already removed)")
                   else:
                       manifest = f'''<?xml version="1.0" encoding="utf-8"?>
-                  <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                      package="{pkg}">
+                  <manifest xmlns:android="http://schemas.android.com/apk/res/android">
                       <uses-permission android:name="android.permission.INTERNET"/>
                       <application
                           android:allowBackup="true"
@@ -270,7 +274,6 @@ jobs:
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
             if file icon.png | grep -q 'PNG image'; then
-              # Correct density folders
               convert icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
               convert icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
               convert icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -286,7 +289,6 @@ jobs:
               convert -size 192x192 xc:#6200EE app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             fi
           else
-            # Default icon
             convert -size 48x48 xc:#6200EE app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert -size 72x72 xc:#6200EE app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert -size 96x96 xc:#6200EE app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -368,7 +370,6 @@ jobs:
         run: |
           if [ ! -f app/proguard-rules.pro ]; then
             cat > app/proguard-rules.pro << 'EOF'
-          # Keep our MainActivity and other activities
           -keep public class * extends android.app.Activity
           -keep public class * extends android.app.Application
           -keep public class * extends android.app.Service
