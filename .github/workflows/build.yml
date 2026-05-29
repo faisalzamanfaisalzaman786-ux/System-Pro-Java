@@ -32,7 +32,6 @@ jobs:
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
 
-      # 🟢 نئی ڈائرکٹری صاف اور نئے پیکج نیم کے مطابق بنائیں
       - name: Clean and recreate Java source directory
         run: |
           rm -rf app/src/main/java
@@ -44,28 +43,21 @@ jobs:
         run: |
           echo '${{ toJson(github.event.client_payload.files) }}' > payload_files.json
           NEW_PKG="${{ steps.pkg.outputs.package_name }}"
-          python3 << PY
+          python3 <<'PY'
 import json, os, re
 with open('payload_files.json', 'r', encoding='utf-8') as f:
     files = json.load(f)
-
 for orig_path, content in files.items():
-    # اگر فائل Java ہے تو پیکج لائن تبدیل کریں
     if orig_path.endswith('.java'):
-        # پیکج لائن بدلیں
         content = re.sub(r'^package .*;', f'package {NEW_PKG};', content, flags=re.MULTILINE)
-        # نئے پاتھ میں پیکج نیم کے مطابق ڈائریکٹری بنائیں
         java_file_name = os.path.basename(orig_path)
         new_path = f"app/src/main/java/{NEW_PKG.replace('.', '/')}/{java_file_name}"
     else:
-        new_path = orig_path  # باقی فائلیں ویسے ہی رکھیں (manifest, xml, etc.)
-    
+        new_path = orig_path
     os.makedirs(os.path.dirname(new_path), exist_ok=True)
     with open(new_path, 'w', encoding='utf-8') as out:
         out.write(content)
     print(f"Written: {new_path}")
-
-# خاص طور پر AndroidManifest.xml کا package ایٹریبیوٹ بھی اپ ڈیٹ کریں
 manifest_path = "app/src/main/AndroidManifest.xml"
 if os.path.exists(manifest_path):
     with open(manifest_path, 'r', encoding='utf-8') as mf:
@@ -90,20 +82,19 @@ PY
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > app_icon.png
             sudo apt-get update && sudo apt-get install -y imagemagick
-            mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-            for d in 72 48 96 144 192; do
-              size="${d}x${d}"
-              density=""
-              case $d in
-                72) density="hdpi" ;;
-                48) density="mdpi" ;;
-                96) density="xhdpi" ;;
-                144) density="xxhdpi" ;;
-                192) density="xxxhdpi" ;;
-              esac
-              convert app_icon.png -resize $size "app/src/main/res/mipmap-${density}/ic_launcher.png"
-            done
-            echo "Icon generated"
+            mkdir -p app/src/main/res/mipmap-hdpi
+            mkdir -p app/src/main/res/mipmap-mdpi
+            mkdir -p app/src/main/res/mipmap-xhdpi
+            mkdir -p app/src/main/res/mipmap-xxhdpi
+            mkdir -p app/src/main/res/mipmap-xxxhdpi
+            convert app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "Icon generated from payload"
+          else
+            echo "No icon in payload"
           fi
 
       - name: Setup Gradle 8.5 Wrapper
