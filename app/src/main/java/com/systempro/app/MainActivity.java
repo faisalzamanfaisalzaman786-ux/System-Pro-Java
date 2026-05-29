@@ -1,6 +1,7 @@
 package com.systempro.app5;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -12,12 +13,11 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.io.IOException;
 
-public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
+public class MainActivity extends Activity implements SurfaceHolder.Callback {
 
     private Camera camera;
     private SurfaceView surfaceView;
@@ -50,14 +50,13 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                             Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                             imagePreview.setImageBitmap(bitmap);
                             imagePreview.setVisibility(View.VISIBLE);
-                            camera.startPreview(); // resume preview
+                            camera.startPreview();
                         }
                     });
                 }
             }
         });
 
-        // Check permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
