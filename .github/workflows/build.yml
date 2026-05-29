@@ -130,28 +130,24 @@ jobs:
           </resources>
           EOF
 
-      # NEW: Fix theme if MainActivity uses AppCompatActivity
-      - name: Auto-fix theme for AppCompatActivity
+      - name: Auto-fix theme for AppCompatActivity (no heredoc)
         run: |
           MAIN_ACTIVITY=$(find app/src/main/java -name "MainActivity.java" | head -1)
-          if grep -q "AppCompatActivity" "$MAIN_ACTIVITY"; then
+          if [ -f "$MAIN_ACTIVITY" ] && grep -q "AppCompatActivity" "$MAIN_ACTIVITY"; then
             echo "AppCompatActivity detected, adding theme"
-            # Add theme to manifest if not present
             MANIFEST="app/src/main/AndroidManifest.xml"
             if ! grep -q 'android:theme=' "$MANIFEST"; then
               sed -i 's|<application |<application android:theme="@style/AppTheme" |' "$MANIFEST"
             fi
-            # Create themes.xml
             mkdir -p app/src/main/res/values
-            cat > app/src/main/res/values/themes.xml << 'THEMES'
-            <resources>
-                <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                    <item name="colorPrimary">#6200EE</item>
-                    <item name="colorPrimaryDark">#3700B3</item>
-                    <item name="colorAccent">#03DAC5</item>
-                </style>
-            </resources>
-            THEMES
+            printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/values/themes.xml
+            printf '<resources>\n' >> app/src/main/res/values/themes.xml
+            printf '    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n' >> app/src/main/res/values/themes.xml
+            printf '        <item name="colorPrimary">#6200EE</item>\n' >> app/src/main/res/values/themes.xml
+            printf '        <item name="colorPrimaryDark">#3700B3</item>\n' >> app/src/main/res/values/themes.xml
+            printf '        <item name="colorAccent">#03DAC5</item>\n' >> app/src/main/res/values/themes.xml
+            printf '    </style>\n' >> app/src/main/res/values/themes.xml
+            printf '</resources>\n' >> app/src/main/res/values/themes.xml
             echo "Theme added for AppCompatActivity"
           else
             echo "Plain Activity detected, no theme needed"
