@@ -1,4 +1,4 @@
-name: Build Android APK (Pro Level with Signing & ProGuard)
+name: Build Android APK (Release Only)
 
 on:
   workflow_dispatch:
@@ -62,19 +62,17 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           mkdir -p app/src/main/assets
 
-      - name: Decode Keystore (if provided)
+      - name: Decode Keystore (Required for Release Build)
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-            echo "KEYSTORE_PATH=keystore.jks" >> $GITHUB_ENV
-            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-            echo "SIGNING_CONFIGURED=true" >> $GITHUB_ENV
-          else
-            echo "No keystore secrets found, debug build only."
-            echo "SIGNING_CONFIGURED=false" >> $GITHUB_ENV
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "ERROR: KEYSTORE_BASE64 secret is missing. Release build requires a valid keystore."
+            exit 1
           fi
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "KEYSTORE_PATH=keystore.jks" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Generate Files from Payload (with Full Fallback & Validation)
         run: |
@@ -129,7 +127,6 @@ jobs:
                               new_path = "app/src/main/AndroidManifest.xml"
                               # Remove package attribute from manifest (AGP 8+ requirement)
                               content = re.sub(r'\s+package="[^"]*"', '', content)
-                              # Also remove any standalone package="..." if present
                               content = re.sub(r'package="[^"]*"', '', content)
                           elif "layout" in clean_path:
                               existing["layout"] = True
@@ -224,14 +221,13 @@ jobs:
                   if existing["manifest"]:
                       with open(manifest_path, "r") as f:
                           manifest_content = f.read()
-                      # Patch label and icon (keep as is, but ensure no package attribute)
                       manifest_content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', manifest_content)
                       manifest_content = re.sub(r'android:icon="[^"]*"', 'android:icon="@mipmap/ic_launcher"', manifest_content)
                       if 'android:label="' not in manifest_content:
                           manifest_content = manifest_content.replace('<application', '<application android:label="@string/app_name" android:icon="@mipmap/ic_launcher"')
                       with open(manifest_path, "w") as f:
                           f.write(manifest_content)
-                      print("Patched existing manifest (package attribute already removed)")
+                      print("Patched existing manifest")
                   else:
                       manifest = f'''<?xml version="1.0" encoding="utf-8"?>
                   <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -266,7 +262,7 @@ jobs:
 
           python3 generate.py
 
-      - name: Process App Icon (Robust - Fixed Paths)
+      - name: Process App Icon (Robust)
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -335,9 +331,6 @@ jobs:
               }
 
               buildTypes {
-                  debug {
-                      debuggable true
-                  }
                   release {
                       minifyEnabled true
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -426,36 +419,17 @@ jobs:
       - name: Clean Project
         run: ./gradlew clean
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Build Release APK (if signing configured)
-        if: env.SIGNING_CONFIGURED == 'true'
+      - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload Release APK (if exists)
-        if: env.SIGNING_CONFIGURED == 'true'
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
 
-      - name: Create Release with Release APK
-        if: env.SIGNING_CONFIGURED == 'true'
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-release
           files: app/build/outputs/apk/release/*.apk
-
-      - name: Fallback Release (Debug only)
-        if: env.SIGNING_CONFIGURED != 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest-debug
-          files: app/build/outputs/apk/debug/*.apk
