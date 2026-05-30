@@ -1,4 +1,4 @@
-name: Build Android APK (Release Only)
+name: Build Android APK + AAB (Release Only)
 
 on:
   workflow_dispatch:
@@ -68,7 +68,6 @@ jobs:
             echo "ERROR: KEYSTORE_BASE64 secret is missing. Release build requires a valid keystore."
             exit 1
           fi
-          # Use absolute path to avoid double 'app/' folder issue
           KEYSTORE_ABS="$GITHUB_WORKSPACE/keystore.jks"
           echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 -d > "$KEYSTORE_ABS"
           if [ ! -s "$KEYSTORE_ABS" ]; then
@@ -428,14 +427,25 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
 
+      - name: Build Release AAB (Android App Bundle)
+        run: ./gradlew bundleRelease --stacktrace
+
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
 
-      - name: Create Release
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+
+      - name: Create Release with both files
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-release
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
