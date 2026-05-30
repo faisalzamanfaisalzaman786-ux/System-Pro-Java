@@ -68,14 +68,14 @@ jobs:
             echo "ERROR: KEYSTORE_BASE64 secret is missing. Release build requires a valid keystore."
             exit 1
           fi
-          # Decode keystore directly into app/ folder (where Gradle expects it)
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 -d > app/keystore.jks
-          # Verify the file exists and is not empty
-          if [ ! -s app/keystore.jks ]; then
+          # Use absolute path to avoid double 'app/' folder issue
+          KEYSTORE_ABS="$GITHUB_WORKSPACE/keystore.jks"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 -d > "$KEYSTORE_ABS"
+          if [ ! -s "$KEYSTORE_ABS" ]; then
             echo "ERROR: Decoded keystore file is empty or missing."
             exit 1
           fi
-          echo "KEYSTORE_PATH=app/keystore.jks" >> $GITHUB_ENV
+          echo "KEYSTORE_PATH=$KEYSTORE_ABS" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
@@ -307,8 +307,6 @@ jobs:
             PKG="${{ steps.pkg.outputs.package_name }}"
             sed -i "s/__PKG__/${PKG}/g" app/build.gradle || true
             sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/g" app/build.gradle || true
-            # Ensure signing config uses the correct keystore path from environment
-            sed -i 's|storeFile file(".*")|storeFile file(System.getenv("KEYSTORE_PATH") ?: "none")|g' app/build.gradle
           else
             echo "Creating default build.gradle with ProGuard and signing support"
             cat > app/build.gradle << 'EOF'
