@@ -68,8 +68,14 @@ jobs:
             echo "ERROR: KEYSTORE_BASE64 secret is missing. Release build requires a valid keystore."
             exit 1
           fi
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-          echo "KEYSTORE_PATH=keystore.jks" >> $GITHUB_ENV
+          # Decode keystore directly into app/ folder (where Gradle expects it)
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 -d > app/keystore.jks
+          # Verify the file exists and is not empty
+          if [ ! -s app/keystore.jks ]; then
+            echo "ERROR: Decoded keystore file is empty or missing."
+            exit 1
+          fi
+          echo "KEYSTORE_PATH=app/keystore.jks" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
@@ -125,7 +131,7 @@ jobs:
                           if "AndroidManifest.xml" in clean_path:
                               existing["manifest"] = True
                               new_path = "app/src/main/AndroidManifest.xml"
-                              # Remove package attribute from manifest (AGP 8+ requirement)
+                              # Remove package attribute (AGP 8+ requirement)
                               content = re.sub(r'\s+package="[^"]*"', '', content)
                               content = re.sub(r'package="[^"]*"', '', content)
                           elif "layout" in clean_path:
@@ -301,6 +307,8 @@ jobs:
             PKG="${{ steps.pkg.outputs.package_name }}"
             sed -i "s/__PKG__/${PKG}/g" app/build.gradle || true
             sed -i "s/applicationId \".*\"/applicationId \"${PKG}\"/g" app/build.gradle || true
+            # Ensure signing config uses the correct keystore path from environment
+            sed -i 's|storeFile file(".*")|storeFile file(System.getenv("KEYSTORE_PATH") ?: "none")|g' app/build.gradle
           else
             echo "Creating default build.gradle with ProGuard and signing support"
             cat > app/build.gradle << 'EOF'
