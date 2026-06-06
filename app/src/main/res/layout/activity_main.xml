@@ -30,14 +30,6 @@
             android:textColor="#E0E0E0"
             android:layout_marginTop="8dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Total: 45+ Permissions"
-            android:textSize="12sp"
-            android:textColor="#BBDEFB"
-            android:layout_marginTop="4dp" />
-
     </LinearLayout>
 
     <!-- Permission Status -->
@@ -55,10 +47,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="16dp"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textColor="#212121"
-            android:fontFamily="monospace"
-            android:lineSpacingExtra="2dp" />
+            android:fontFamily="monospace" />
 
     </ScrollView>
 
@@ -99,15 +90,6 @@
             android:textSize="16sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#9C27B0" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="⚠️ نوٹ: کچھ پرمیشنز Android ورژن کے مطابق خودکار ہیں"
-            android:textSize="11sp"
-            android:textColor="#757575"
-            android:gravity="center"
-            android:layout_marginTop="12dp" />
 
     </LinearLayout>
 
