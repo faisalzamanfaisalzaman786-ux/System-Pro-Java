@@ -1,133 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background_dark">
+    android:background="#1a1a2e">
 
     <!-- Header with Monogram -->
-    <androidx.cardview.widget.CardView
-        android:id="@+id/card_header"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/primary">
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:background="#16213e">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="20dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <!-- Monogram / Logo -->
+            <!-- Monogram -->
+            <TextView
+                android:layout_width="55dp"
+                android:layout_height="55dp"
+                android:text="ف"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:gravity="center"
+                android:background="#667eea"
+                android:layout_marginEnd="15dp" />
+
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_weight="1"
+                android:orientation="vertical">
 
                 <TextView
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:text="ف"
-                    android:textSize="32sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="فیصل سسٹم پرو"
+                    android:textSize="18sp"
                     android:textStyle="bold"
-                    android:textColor="#FFFFFF"
-                    android:gravity="center"
-                    android:background="@drawable/monogram_bg"
-                    android:layout_marginEnd="15dp" />
+                    android:textColor="#FFFFFF" />
 
-                <LinearLayout
-                    android:layout_width="0dp"
+                <TextView
+                    android:id="@+id/tv_date_time"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="فیصل سسٹم پرو"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        android:textColor="#FFFFFF" />
-
-                    <TextView
-                        android:id="@+id/tv_date_time"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Monday, 01 Jan 2024"
-                        android:textSize="11sp"
-                        android:textColor="#E0E0E0" />
-
-                </LinearLayout>
-
-                <!-- Status Indicator -->
-                <View
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:background="@drawable/status_indicator"
-                    android:layout_marginEnd="8dp" />
+                    android:text="Loading..."
+                    android:textSize="10sp"
+                    android:textColor="#BBBBBB" />
 
             </LinearLayout>
 
-            <!-- Stats Row -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="12dp"
-                android:gravity="center">
-
-                <TextView
-                    android:id="@+id/tv_line_count"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📝 0 lines"
-                    android:textSize="12sp"
-                    android:textColor="#E0E0E0"
-                    android:gravity="center" />
-
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="20dp"
-                    android:background="#80FFFFFF" />
-
-                <TextView
-                    android:id="@+id/tv_char_count"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="🔤 0 chars"
-                    android:textSize="12sp"
-                    android:textColor="#E0E0E0"
-                    android:gravity="center" />
-
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="20dp"
-                    android:background="#80FFFFFF" />
-
-                <TextView
-                    android:id="@+id/tv_status"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="💡 Ready"
-                    android:textSize="12sp"
-                    android:textColor="#E0E0E0"
-                    android:gravity="center" />
-
-            </LinearLayout>
+                android:text="💡 Ready"
+                android:textSize="11sp"
+                android:textColor="#4CAF50"
+                android:background="#2d2d2d"
+                android:padding="6dp"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:borderRadius="15dp" />
 
         </LinearLayout>
 
-    </androidx.cardview.widget.CardView>
+        <!-- Stats Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:gravity="center">
 
-    <!-- Main Content Area (Editor + Preview) -->
+            <TextView
+                android:id="@+id/tv_line_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📝 0 lines"
+                android:textSize="11sp"
+                android:textColor="#BBBBBB"
+                android:gravity="center" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="15dp"
+                android:background="#444444" />
+
+            <TextView
+                android:id="@+id/tv_char_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔤 0 chars"
+                android:textSize="11sp"
+                android:textColor="#BBBBBB"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Editor and Preview Area -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -141,7 +121,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="10dp">
 
             <!-- Editor Toolbar -->
             <LinearLayout
@@ -156,33 +136,33 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="✏️ Code Editor"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="#FFFFFF" />
 
-                <ImageButton
+                <Button
                     android:id="@+id/btn_copy"
-                    android:layout_width="35dp"
+                    android:layout_width="40dp"
                     android:layout_height="35dp"
-                    android:src="@drawable/ic_copy"
+                    android:text="📋"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:padding="8dp" />
+                    android:textSize="16sp" />
 
-                <ImageButton
+                <Button
                     android:id="@+id/btn_share"
-                    android:layout_width="35dp"
+                    android:layout_width="40dp"
                     android:layout_height="35dp"
-                    android:src="@drawable/ic_share"
+                    android:text="📤"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:padding="8dp" />
+                    android:textSize="16sp" />
 
-                <ImageButton
+                <Button
                     android:id="@+id/btn_save"
-                    android:layout_width="35dp"
+                    android:layout_width="40dp"
                     android:layout_height="35dp"
-                    android:src="@drawable/ic_save"
+                    android:text="💾"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:padding="8dp" />
+                    android:textSize="16sp" />
 
             </LinearLayout>
 
@@ -191,22 +171,22 @@
                 android:id="@+id/scroll_editor"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@drawable/editor_bg"
-                android:padding="8dp">
+                android:background="#0d1117"
+                android:padding="10dp">
 
                 <EditText
                     android:id="@+id/et_code_editor"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@null"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_primary"
-                    android:lineSpacingExtra="4dp"
+                    android:textSize="12sp"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#666666"
+                    android:lineSpacingExtra="3dp"
                     android:gravity="top"
                     android:minHeight="200dp"
                     android:inputType="textMultiLine"
-                    android:imeOptions="actionDone"
-                    android:importantForAutofill="no" />
+                    android:hint="// اپنا HTML, CSS, یا JavaScript کوڈ یہاں لکھیں..." />
 
             </ScrollView>
 
@@ -220,82 +200,70 @@
             android:layout_weight="1"
             android:orientation="vertical"
             android:visibility="gone"
-            android:padding="12dp">
+            android:padding="10dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="👁 Live Preview"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="#FFFFFF"
                 android:layout_marginBottom="8dp" />
 
             <WebView
                 android:id="@+id/web_preview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="#FFFFFF"
-                android:padding="8dp" />
+                android:background="#FFFFFF" />
 
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Bottom Action Buttons -->
+    <!-- Bottom Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp"
-        android:background="@color/background_card"
-        android:elevation="8dp">
+        android:padding="12dp"
+        android:background="#16213e">
 
         <Button
             android:id="@+id/btn_run"
-            style="@style/ModernButton"
             android:layout_width="0dp"
-            android:layout_height="50dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:text="▶ RUN"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:backgroundTint="@color/success"
-            android:layout_marginEnd="8dp" />
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#4CAF50"
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btn_toggle_preview"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="👁 پریویو"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#2196F3"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp" />
 
         <Button
             android:id="@+id/btn_clear"
-            style="@style/ModernButton"
             android:layout_width="0dp"
-            android:layout_height="50dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:text="🗑 Clear"
-            android:textSize="16sp"
-            android:backgroundTint="@color/error"
-            android:layout_marginStart="8dp" />
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#F44336"
+            android:layout_marginStart="6dp" />
 
     </LinearLayout>
-
-    <!-- Floating Action Buttons -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_run"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_play"
-        app:fabSize="normal"
-        app:backgroundTint="@color/success"
-        android:visibility="gone" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_preview"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_preview"
-        app:fabSize="normal"
-        app:backgroundTint="@color/primary" />
 
 </LinearLayout>
