@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup JDK 17
+      - name: Setup JDK 11
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -228,6 +228,9 @@ jobs:
                           manifest_content = f.read()
                       manifest_content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', manifest_content)
                       manifest_content = re.sub(r'android:icon="[^"]*"', 'android:icon="@mipmap/ic_launcher"', manifest_content)
+                      # FIX: Remove roundIcon completely
+                      manifest_content = re.sub(r'android:roundIcon="[^"]*"', '', manifest_content)
+                      manifest_content = re.sub(r'\s+android:roundIcon="[^"]*"', '', manifest_content)
                       if 'android:label="' not in manifest_content:
                           manifest_content = manifest_content.replace('<application', '<application android:label="@string/app_name" android:icon="@mipmap/ic_launcher"')
                       with open(manifest_path, "w") as f:
@@ -271,6 +274,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
+          # Fix ImageMagick policy to avoid conversion errors
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
           ICON_B64="${{ github.event.client_payload.icon }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
@@ -344,8 +349,8 @@ jobs:
               }
 
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
               }
 
               buildFeatures {
