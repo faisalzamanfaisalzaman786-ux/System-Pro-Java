@@ -91,222 +91,295 @@ jobs:
           export APP_NAME="${{ steps.app.outputs.app_name }}"
 
           cat > generate.py << "PY"
-          import json
-          import os
-          import re
-          import sys
-          import traceback
+import json
+import os
+import re
+import sys
+import traceback
 
-          def main():
-              try:
-                  pkg = os.environ.get("NEW_PKG", "com.systempro.app")
-                  app_name = os.environ.get("APP_NAME", "MyApp")
-                  pkg_path = pkg.replace(".", "/")
+def main():
+    try:
+        pkg = os.environ.get("NEW_PKG", "com.systempro.app")
+        app_name = os.environ.get("APP_NAME", "MyApp")
+        pkg_path = pkg.replace(".", "/")
 
-                  files = {}
-                  payload_file = "payload_files.json"
-                  if os.path.exists(payload_file):
-                      with open(payload_file, "r") as f:
-                          content = f.read().strip()
-                          if content:
-                              files = json.loads(content)
+        files = {}
+        payload_file = "payload_files.json"
+        if os.path.exists(payload_file):
+            with open(payload_file, "r") as f:
+                content = f.read().strip()
+                if content:
+                    files = json.loads(content)
 
-                  existing = {
-                      "java": False,
-                      "layout": False,
-                      "manifest": False,
-                      "strings": False,
-                      "colors": False,
-                      "themes": False
-                  }
+        existing = {
+            "java": False,
+            "layout": False,
+            "manifest": False,
+            "strings": False,
+            "colors": False,
+            "themes": False
+        }
 
-                  for path, content in files.items():
-                      clean_path = path.strip("/")
-                      if clean_path.endswith(".java"):
-                          existing["java"] = True
-                          content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
-                          if not re.search(r'^package ', content, re.MULTILINE):
-                              content = f'package {pkg};\n\n{content}'
-                          filename = os.path.basename(clean_path)
-                          new_path = f"app/src/main/java/{pkg_path}/{filename}"
-                          os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                          with open(new_path, "w", encoding="utf-8") as out:
-                              out.write(content)
-                      elif clean_path.endswith(".xml"):
-                          if "AndroidManifest.xml" in clean_path:
-                              existing["manifest"] = True
-                              new_path = "app/src/main/AndroidManifest.xml"
-                              content = re.sub(r'\s+package="[^"]*"', '', content)
-                              content = re.sub(r'android:roundIcon="[^"]*"', '', content)
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                          elif "layout" in clean_path:
-                              existing["layout"] = True
-                              filename = os.path.basename(clean_path)
-                              new_path = f"app/src/main/res/layout/{filename}"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                          elif "values/strings.xml" in clean_path:
-                              existing["strings"] = True
-                              new_path = "app/src/main/res/values/strings.xml"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                          elif "values/colors.xml" in clean_path:
-                              existing["colors"] = True
-                              new_path = "app/src/main/res/values/colors.xml"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                          elif "values/themes.xml" in clean_path or "values/styles.xml" in clean_path:
-                              existing["themes"] = True
-                              filename = os.path.basename(clean_path)
-                              new_path = f"app/src/main/res/values/{filename}"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
+        for path, content in files.items():
+            clean_path = path.strip("/")
+            if clean_path.endswith(".java"):
+                existing["java"] = True
+                content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
+                if not re.search(r'^package ', content, re.MULTILINE):
+                    content = f'package {pkg};\n\n{content}'
+                filename = os.path.basename(clean_path)
+                new_path = f"app/src/main/java/{pkg_path}/{filename}"
+                os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                with open(new_path, "w", encoding="utf-8") as out:
+                    out.write(content)
+            elif clean_path.endswith(".xml"):
+                if "AndroidManifest.xml" in clean_path:
+                    existing["manifest"] = True
+                    new_path = "app/src/main/AndroidManifest.xml"
+                    content = re.sub(r'\s+package="[^"]*"', '', content)
+                    content = re.sub(r'android:roundIcon="[^"]*"', '', content)
+                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                    with open(new_path, "w", encoding="utf-8") as out:
+                        out.write(content)
+                elif "layout" in clean_path:
+                    existing["layout"] = True
+                    filename = os.path.basename(clean_path)
+                    new_path = f"app/src/main/res/layout/{filename}"
+                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                    with open(new_path, "w", encoding="utf-8") as out:
+                        out.write(content)
+                elif "values/strings.xml" in clean_path:
+                    existing["strings"] = True
+                    new_path = "app/src/main/res/values/strings.xml"
+                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                    with open(new_path, "w", encoding="utf-8") as out:
+                        out.write(content)
+                elif "values/colors.xml" in clean_path:
+                    existing["colors"] = True
+                    new_path = "app/src/main/res/values/colors.xml"
+                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                    with open(new_path, "w", encoding="utf-8") as out:
+                        out.write(content)
+                elif "values/themes.xml" in clean_path or "values/styles.xml" in clean_path:
+                    existing["themes"] = True
+                    filename = os.path.basename(clean_path)
+                    new_path = f"app/src/main/res/values/{filename}"
+                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                    with open(new_path, "w", encoding="utf-8") as out:
+                        out.write(content)
 
-                  strings_path = "app/src/main/res/values/strings.xml"
-                  if not existing["strings"]:
-                      os.makedirs(os.path.dirname(strings_path), exist_ok=True)
-                      with open(strings_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">' + app_name + '</string>\n</resources>')
-                  else:
-                      with open(strings_path, "r", encoding="utf-8") as f:
-                          content = f.read()
-                      if 'name="app_name"' not in content:
-                          content = content.replace('</resources>', '    <string name="app_name">' + app_name + '</string>\n</resources>')
-                          with open(strings_path, "w", encoding="utf-8") as f:
-                              f.write(content)
+        # ============ FALLBACK WITH COLORS ============
+        
+        strings_path = "app/src/main/res/values/strings.xml"
+        if not existing["strings"]:
+            os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+            with open(strings_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<resources>\n')
+                f.write(f'    <string name="app_name">{app_name}</string>\n')
+                f.write('</resources>')
 
-                  colors_path = "app/src/main/res/values/colors.xml"
-                  if not existing["colors"]:
-                      os.makedirs(os.path.dirname(colors_path), exist_ok=True)
-                      with open(colors_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n')
-                          f.write('    <color name="colorPrimary">#6200EE</color>\n')
-                          f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
-                          f.write('    <color name="colorAccent">#03DAC5</color>\n')
-                          f.write('    <color name="background">#FFFFFF</color>\n')
-                          f.write('    <color name="titleColor">#000000</color>\n')
-                          f.write('    <color name="textColor">#333333</color>\n')
-                          f.write('    <color name="hintColor">#999999</color>\n')
-                          f.write('    <color name="white">#FFFFFF</color>\n')
-                          f.write('    <color name="black">#000000</color>\n')
-                          f.write('</resources>')
+        colors_path = "app/src/main/res/values/colors.xml"
+        if not existing["colors"]:
+            os.makedirs(os.path.dirname(colors_path), exist_ok=True)
+            with open(colors_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<resources>\n')
+                f.write('    <color name="colorPrimary">#6200EE</color>\n')
+                f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
+                f.write('    <color name="colorAccent">#03DAC5</color>\n')
+                f.write('    <color name="background">#F5F5F5</color>\n')
+                f.write('    <color name="titleColor">#6200EE</color>\n')
+                f.write('    <color name="textColor">#333333</color>\n')
+                f.write('    <color name="hintColor">#999999</color>\n')
+                f.write('    <color name="white">#FFFFFF</color>\n')
+                f.write('    <color name="black">#000000</color>\n')
+                f.write('    <color name="buttonBackground">#6200EE</color>\n')
+                f.write('</resources>\n')
 
-                  themes_path = "app/src/main/res/values/themes.xml"
-                  if not existing["themes"]:
-                      os.makedirs(os.path.dirname(themes_path), exist_ok=True)
-                      with open(themes_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n')
-                          f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
-                          f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
-                          f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
-                          f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
-                          f.write('    </style>\n')
-                          f.write('</resources>')
+        themes_path = "app/src/main/res/values/themes.xml"
+        if not existing["themes"]:
+            os.makedirs(os.path.dirname(themes_path), exist_ok=True)
+            with open(themes_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<resources>\n')
+                f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
+                f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
+                f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
+                f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
+                f.write('    </style>\n')
+                f.write('</resources>\n')
 
-                  if not existing["layout"]:
-                      layout_path = "app/src/main/res/layout/activity_main.xml"
-                      os.makedirs(os.path.dirname(layout_path), exist_ok=True)
-                      with open(layout_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n')
-                          f.write('    android:layout_width="match_parent"\n')
-                          f.write('    android:layout_height="match_parent"\n')
-                          f.write('    android:orientation="vertical"\n')
-                          f.write('    android:gravity="center"\n')
-                          f.write('    android:padding="16dp">\n')
-                          f.write('    <TextView\n')
-                          f.write('        android:layout_width="wrap_content"\n')
-                          f.write('        android:layout_height="wrap_content"\n')
-                          f.write('        android:text="Hello World"\n')
-                          f.write('        android:textSize="24sp"\n')
-                          f.write('        android:textColor="@color/titleColor"/>\n')
-                          f.write('</LinearLayout>')
+        # ============ COLORFUL LAYOUT FALLBACK ============
+        if not existing["layout"]:
+            layout_path = "app/src/main/res/layout/activity_main.xml"
+            os.makedirs(os.path.dirname(layout_path), exist_ok=True)
+            with open(layout_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n')
+                f.write('    android:layout_width="match_parent"\n')
+                f.write('    android:layout_height="match_parent"\n')
+                f.write('    android:orientation="vertical"\n')
+                f.write('    android:gravity="center"\n')
+                f.write('    android:background="@color/background"\n')
+                f.write('    android:padding="16dp">\n')
+                f.write('\n')
+                f.write('    <TextView\n')
+                f.write('        android:layout_width="wrap_content"\n')
+                f.write('        android:layout_height="wrap_content"\n')
+                f.write('        android:text="Welcome!"\n')
+                f.write('        android:textSize="28sp"\n')
+                f.write('        android:textColor="@color/titleColor"\n')
+                f.write('        android:textStyle="bold"\n')
+                f.write('        android:layout_marginBottom="20dp"/>\n')
+                f.write('\n')
+                f.write('    <Button\n')
+                f.write('        android:id="@+id/clickButton"\n')
+                f.write('        android:layout_width="wrap_content"\n')
+                f.write('        android:layout_height="wrap_content"\n')
+                f.write('        android:text="CLICK ME!"\n')
+                f.write('        android:textColor="@color/white"\n')
+                f.write('        android:backgroundTint="@color/colorPrimary"\n')
+                f.write('        android:padding="12dp"/>\n')
+                f.write('\n')
+                f.write('    <TextView\n')
+                f.write('        android:id="@+id/counterText"\n')
+                f.write('        android:layout_width="wrap_content"\n')
+                f.write('        android:layout_height="wrap_content"\n')
+                f.write('        android:text="Button clicked: 0 times"\n')
+                f.write('        android:textSize="18sp"\n')
+                f.write('        android:textColor="@color/textColor"\n')
+                f.write('        android:layout_marginTop="20dp"/>\n')
+                f.write('\n')
+                f.write('</LinearLayout>\n')
 
-                  if not existing["java"]:
-                      java_dir = f"app/src/main/java/{pkg_path}"
-                      os.makedirs(java_dir, exist_ok=True)
-                      java_path = f"{java_dir}/MainActivity.java"
-                      with open(java_path, "w", encoding="utf-8") as f:
-                          f.write(f'package {pkg};\n\n')
-                          f.write('import android.os.Bundle;\n')
-                          f.write('import androidx.appcompat.app.AppCompatActivity;\n\n')
-                          f.write('public class MainActivity extends AppCompatActivity {\n')
-                          f.write('    @Override\n')
-                          f.write('    protected void onCreate(Bundle savedInstanceState) {\n')
-                          f.write('        super.onCreate(savedInstanceState);\n')
-                          f.write('        setContentView(R.layout.activity_main);\n')
-                          f.write('    }\n')
-                          f.write('}\n')
+        # ============ JAVA MAIN ACTIVITY FALLBACK ============
+        if not existing["java"]:
+            java_dir = f"app/src/main/java/{pkg_path}"
+            os.makedirs(java_dir, exist_ok=True)
+            java_path = f"{java_dir}/MainActivity.java"
+            with open(java_path, "w", encoding="utf-8") as f:
+                f.write(f'package {pkg};\n\n')
+                f.write('import android.os.Bundle;\n')
+                f.write('import android.view.View;\n')
+                f.write('import android.widget.Button;\n')
+                f.write('import android.widget.TextView;\n')
+                f.write('import androidx.appcompat.app.AppCompatActivity;\n\n')
+                f.write('public class MainActivity extends AppCompatActivity {\n')
+                f.write('    private int counter = 0;\n')
+                f.write('    private TextView counterText;\n')
+                f.write('    private Button clickButton;\n\n')
+                f.write('    @Override\n')
+                f.write('    protected void onCreate(Bundle savedInstanceState) {\n')
+                f.write('        super.onCreate(savedInstanceState);\n')
+                f.write('        setContentView(R.layout.activity_main);\n\n')
+                f.write('        counterText = findViewById(R.id.counterText);\n')
+                f.write('        clickButton = findViewById(R.id.clickButton);\n\n')
+                f.write('        clickButton.setOnClickListener(new View.OnClickListener() {\n')
+                f.write('            @Override\n')
+                f.write('            public void onClick(View v) {\n')
+                f.write('                counter++;\n')
+                f.write('                counterText.setText("Button clicked: " + counter + " times");\n')
+                f.write('            }\n')
+                f.write('        });\n')
+                f.write('    }\n')
+                f.write('}\n')
 
-                  manifest_path = "app/src/main/AndroidManifest.xml"
-                  if not existing["manifest"]:
-                      with open(manifest_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n')
-                          f.write('    <uses-permission android:name="android.permission.INTERNET"/>\n')
-                          f.write('    <application\n')
-                          f.write('        android:allowBackup="true"\n')
-                          f.write('        android:icon="@mipmap/ic_launcher"\n')
-                          f.write('        android:label="@string/app_name"\n')
-                          f.write('        android:theme="@style/AppTheme"\n')
-                          f.write('        android:supportsRtl="true">\n')
-                          f.write('        <activity android:name=".MainActivity" android:exported="true">\n')
-                          f.write('            <intent-filter>\n')
-                          f.write('                <action android:name="android.intent.action.MAIN"/>\n')
-                          f.write('                <category android:name="android.intent.category.LAUNCHER"/>\n')
-                          f.write('            </intent-filter>\n')
-                          f.write('        </activity>\n')
-                          f.write('    </application>\n')
-                          f.write('</manifest>')
-                  else:
-                      with open(manifest_path, "r", encoding="utf-8") as f:
-                          content = f.read()
-                      if 'android:label="' in content and '@string' not in content:
-                          content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', content)
-                      if 'android:icon="' not in content:
-                          content = content.replace('<application', '<application android:icon="@mipmap/ic_launcher"')
-                      with open(manifest_path, "w", encoding="utf-8") as f:
-                          f.write(content)
+        # ============ MANIFEST FALLBACK ============
+        manifest_path = "app/src/main/AndroidManifest.xml"
+        if not existing["manifest"]:
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n')
+                f.write('    <uses-permission android:name="android.permission.INTERNET"/>\n')
+                f.write('    <application\n')
+                f.write('        android:allowBackup="true"\n')
+                f.write('        android:icon="@mipmap/ic_launcher"\n')
+                f.write('        android:label="@string/app_name"\n')
+                f.write('        android:theme="@style/AppTheme"\n')
+                f.write('        android:supportsRtl="true">\n')
+                f.write('        <activity android:name=".MainActivity" android:exported="true">\n')
+                f.write('            <intent-filter>\n')
+                f.write('                <action android:name="android.intent.action.MAIN"/>\n')
+                f.write('                <category android:name="android.intent.category.LAUNCHER"/>\n')
+                f.write('            </intent-filter>\n')
+                f.write('        </activity>\n')
+                f.write('    </application>\n')
+                f.write('</manifest>\n')
+        else:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            if 'android:label="' in content and '@string' not in content:
+                content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', content)
+            if 'android:icon="' not in content:
+                content = content.replace('<application', '<application android:icon="@mipmap/ic_launcher"')
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                f.write(content)
 
-                  print("✅ Project generation completed successfully")
+        print("✅ Project generation completed successfully")
 
-              except Exception as e:
-                  print(f"❌ Error: {e}")
-                  traceback.print_exc()
-                  sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
-          if __name__ == "__main__":
-              main()
-          PY
+if __name__ == "__main__":
+    main()
+PY
 
           python3 generate.py
 
-      - name: Generate App Icons
+      - name: Generate App Icons (Custom + Fallback)
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
           
-          for size in 48 72 96 144 192; do
-            case $size in
-              48) density="mdpi" ;;
-              72) density="hdpi" ;;
-              96) density="xhdpi" ;;
-              144) density="xxhdpi" ;;
-              192) density="xxxhdpi" ;;
-            esac
-            convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
-              app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
-          done
-          echo "✅ Icons generated"
+          USE_FALLBACK=false
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > /tmp/icon.png
+            if file /tmp/icon.png | grep -q 'PNG image'; then
+              echo "✅ Custom icon detected, generating all densities..."
+              convert /tmp/icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+              echo "✅ Custom icon applied successfully"
+              USE_FALLBACK=false
+            else
+              echo "⚠️ Invalid icon data, using fallback"
+              USE_FALLBACK=true
+            fi
+          else
+            echo "ℹ️ No custom icon provided, using fallback"
+            USE_FALLBACK=true
+          fi
+          
+          if [ "$USE_FALLBACK" = "true" ]; then
+            echo "Generating fallback colored icons..."
+            for size in 48 72 96 144 192; do
+              case $size in
+                48) density="mdpi" ;;
+                72) density="hdpi" ;;
+                96) density="xhdpi" ;;
+                144) density="xxhdpi" ;;
+                192) density="xxxhdpi" ;;
+              esac
+              convert -size ${size}x${size} xc:#6200EE -gravity center \
+                -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
+                app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
+              cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
+            done
+            echo "✅ Fallback icons generated"
+          fi
 
       - name: Create build.gradle
         run: |
