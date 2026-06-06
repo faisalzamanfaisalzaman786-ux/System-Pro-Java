@@ -1,26 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="20dp"
     android:background="#F5F5F5">
 
-    <!-- Header -->
+    <!-- Header Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:padding="16dp"
-        android:background="#2196F3"
-        android:layout_marginBottom="24dp">
+        android:padding="20dp"
+        android:background="#2196F3">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="📱 ٹیسٹ ایپلیکیشن"
+            android:text="📱 پرمیشن مینیجر پرو"
             android:textSize="22sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
@@ -28,51 +25,57 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Permission Manager"
+            android:text="تمام پرمیشنز چیک کریں"
             android:textSize="14sp"
             android:textColor="#E0E0E0"
             android:layout_marginTop="8dp" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Total: 45+ Permissions"
+            android:textSize="12sp"
+            android:textColor="#BBDEFB"
+            android:layout_marginTop="4dp" />
+
     </LinearLayout>
 
-    <!-- Permission Status Card - بغیر CardView کے -->
-    <LinearLayout
+    <!-- Permission Status Display -->
+    <ScrollView
+        android:id="@+id/scroll_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginBottom="20dp"
+        android:layout_margin="12dp"
         android:background="#FFFFFF"
-        android:elevation="4dp"
-        android:padding="8dp">
+        android:elevation="4dp">
 
-        <ScrollView
+        <TextView
+            android:id="@+id/tv_permission_status"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:textSize="12sp"
+            android:textColor="#212121"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="2dp" />
 
-            <TextView
-                android:id="@+id/tv_permission_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="16dp"
-                android:textSize="13sp"
-                android:textColor="#212121"
-                android:fontFamily="monospace" />
+    </ScrollView>
 
-        </ScrollView>
-
-    </LinearLayout>
-
-    <!-- Buttons -->
+    <!-- Button Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#FFFFFF"
+        android:elevation="8dp">
 
         <Button
             android:id="@+id/btn_check_permissions"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="🔍 چیک کریں اجازتیں"
+            android:text="🔍 تمام اجازتیں چیک کریں"
             android:textSize="16sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#4CAF50"
@@ -82,10 +85,19 @@
             android:id="@+id/btn_request_permissions"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="📨 اجازتیں طلب کریں"
+            android:text="📨 تمام اجازتیں طلب کریں"
             android:textSize="16sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#FF5722" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚠️ نوٹ: کچھ پرمیشنز Android ورژن کے مطابق خودکار ہیں"
+            android:textSize="11sp"
+            android:textColor="#757575"
+            android:gravity="center"
+            android:layout_marginTop="12dp" />
 
     </LinearLayout>
 
