@@ -81,7 +81,7 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Files (Respects Payload, Smart Fallbacks)
+      - name: Generate Files (Force Update App Name & Package)
         run: |
           cat > payload_files.json << 'EOF'
           ${{ toJson(github.event.client_payload.files) }}
@@ -126,6 +126,7 @@ jobs:
                       
                       if clean_path.endswith(".java"):
                           existing["java"] = True
+                          # Force update package name
                           content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
                           if not re.search(r'^package ', content, re.MULTILINE):
                               content = f'package {pkg};\n\n{content}'
@@ -140,14 +141,13 @@ jobs:
                           if "AndroidManifest.xml" in clean_path:
                               existing["manifest"] = True
                               new_path = "app/src/main/AndroidManifest.xml"
-                              # Only remove package attribute (required for AGP 8+)
-                              # NO other changes to respect user's manifest
+                              # Remove package attribute (AGP 8+ requirement)
                               content = re.sub(r'\s+package="[^"]*"', '', content)
                               content = re.sub(r'package="[^"]*"', '', content)
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print(f"✓ AndroidManifest.xml (package attribute removed only)")
+                              print(f"✓ AndroidManifest.xml")
                               
                           elif "layout" in clean_path:
                               existing["layout"] = True
@@ -164,7 +164,7 @@ jobs:
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print("✓ strings.xml")
+                              print("✓ strings.xml (will force update app_name later)")
                               
                           elif "values/colors.xml" in clean_path:
                               existing["colors"] = True
@@ -183,41 +183,74 @@ jobs:
                                   out.write(content)
                               print(f"✓ Theme: {filename}")
 
-                  # ============ FALLBACKS (ONLY IF MISSING IN PAYLOAD) ============
-                  
-                  # Strings Fallback
+                  # ============ FORCE UPDATE APP NAME IN STRINGS.XML ============
                   strings_path = "app/src/main/res/values/strings.xml"
-                  if not existing["strings"]:
+                  if os.path.exists(strings_path):
+                      with open(strings_path, "r", encoding="utf-8") as f:
+                          content = f.read()
+                      # Force replace app_name
+                      if re.search(r'<string name="app_name">', content):
+                          content = re.sub(r'<string name="app_name">.*?</string>', f'<string name="app_name">{app_name}</string>', content)
+                      else:
+                          content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
+                      with open(strings_path, "w", encoding="utf-8") as f:
+                          f.write(content)
+                      print("✓ Force updated app_name in strings.xml")
+                  else:
+                      # Create new strings.xml
                       os.makedirs(os.path.dirname(strings_path), exist_ok=True)
                       with open(strings_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
                           f.write('<resources>\n')
                           f.write(f'    <string name="app_name">{app_name}</string>\n')
                           f.write('</resources>\n')
-                      print("✓ Fallback strings.xml created")
+                      print("✓ Created strings.xml with app_name")
 
-                  # Colors Fallback (Material 3 Template)
+                  # ============ FORCE UPDATE PACKAGE NAME IN ALL JAVA FILES ============
+                  java_base_dir = f"app/src/main/java"
+                  if os.path.exists(java_base_dir):
+                      for root, dirs, files in os.walk(java_base_dir):
+                          for file in files:
+                              if file.endswith(".java"):
+                                  file_path = os.path.join(root, file)
+                                  with open(file_path, "r", encoding="utf-8") as f:
+                                      content = f.read()
+                                  # Force update package declaration
+                                  content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
+                                  with open(file_path, "w", encoding="utf-8") as f:
+                                      f.write(content)
+                                  print(f"✓ Force updated package in {file}")
+
+                  # ============ FORCE UPDATE MANIFEST LABEL ============
+                  manifest_path = "app/src/main/AndroidManifest.xml"
+                  if os.path.exists(manifest_path):
+                      with open(manifest_path, "r", encoding="utf-8") as f:
+                          content = f.read()
+                      # Ensure label uses string resource
+                      content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', content)
+                      with open(manifest_path, "w", encoding="utf-8") as f:
+                          f.write(content)
+                      print("✓ Force updated manifest label")
+
+                  # ============ FALLBACKS (ONLY IF MISSING) ============
+                  
+                  # Colors Fallback
                   colors_path = "app/src/main/res/values/colors.xml"
                   if not existing["colors"]:
                       os.makedirs(os.path.dirname(colors_path), exist_ok=True)
                       with open(colors_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
                           f.write('<resources>\n')
-                          f.write('    <color name="md3_primary">#6200EE</color>\n')
-                          f.write('    <color name="md3_primary_dark">#3700B3</color>\n')
-                          f.write('    <color name="md3_background">#FFFBFE</color>\n')
-                          f.write('    <color name="md3_on_surface">#1C1B1F</color>\n')
                           f.write('    <color name="colorPrimary">#6200EE</color>\n')
                           f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
                           f.write('    <color name="colorAccent">#03DAC6</color>\n')
-                          f.write('    <color name="background">#FFFBFE</color>\n')
+                          f.write('    <color name="background">#F5F5F5</color>\n')
                           f.write('    <color name="white">#FFFFFF</color>\n')
                           f.write('    <color name="black">#000000</color>\n')
                           f.write('    <color name="titleColor">#6200EE</color>\n')
-                          f.write('    <color name="textColor">#1C1B1F</color>\n')
-                          f.write('    <color name="hintColor">#79747E</color>\n')
+                          f.write('    <color name="textColor">#333333</color>\n')
                           f.write('</resources>\n')
-                      print("✓ Fallback colors.xml (Material 3) created")
+                      print("✓ Fallback colors.xml created")
 
                   # Themes Fallback
                   themes_path = "app/src/main/res/values/themes.xml"
@@ -226,9 +259,9 @@ jobs:
                       with open(themes_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
                           f.write('<resources>\n')
-                          f.write('    <style name="AppTheme" parent="Theme.MaterialComponents.Light">\n')
-                          f.write('        <item name="colorPrimary">@color/md3_primary</item>\n')
-                          f.write('        <item name="colorPrimaryDark">@color/md3_primary_dark</item>\n')
+                          f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
+                          f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
+                          f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
                           f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
                           f.write('    </style>\n')
                           f.write('</resources>\n')
@@ -245,32 +278,15 @@ jobs:
                           f.write('    android:layout_height="match_parent"\n')
                           f.write('    android:orientation="vertical"\n')
                           f.write('    android:gravity="center"\n')
-                          f.write('    android:background="@color/md3_background"\n')
+                          f.write('    android:background="@color/background"\n')
                           f.write('    android:padding="16dp">\n')
                           f.write('    <TextView\n')
                           f.write('        android:layout_width="wrap_content"\n')
                           f.write('        android:layout_height="wrap_content"\n')
                           f.write('        android:text="Welcome"\n')
                           f.write('        android:textSize="28sp"\n')
-                          f.write('        android:textColor="@color/md3_primary"\n')
-                          f.write('        android:textStyle="bold"\n')
-                          f.write('        android:layout_marginBottom="20dp"/>\n')
-                          f.write('    <Button\n')
-                          f.write('        android:id="@+id/clickButton"\n')
-                          f.write('        android:layout_width="wrap_content"\n')
-                          f.write('        android:layout_height="wrap_content"\n')
-                          f.write('        android:text="CLICK ME"\n')
-                          f.write('        android:textColor="@color/white"\n')
-                          f.write('        android:backgroundTint="@color/md3_primary"\n')
-                          f.write('        android:padding="12dp"/>\n')
-                          f.write('    <TextView\n')
-                          f.write('        android:id="@+id/counterText"\n')
-                          f.write('        android:layout_width="wrap_content"\n')
-                          f.write('        android:layout_height="wrap_content"\n')
-                          f.write('        android:text="Button clicked: 0 times"\n')
-                          f.write('        android:textSize="18sp"\n')
-                          f.write('        android:textColor="@color/md3_on_surface"\n')
-                          f.write('        android:layout_marginTop="20dp"/>\n')
+                          f.write('        android:textColor="@color/titleColor"\n')
+                          f.write('        android:textStyle="bold"/>\n')
                           f.write('</LinearLayout>\n')
                       print("✓ Fallback layout created")
 
@@ -282,33 +298,17 @@ jobs:
                       with open(java_path, "w", encoding="utf-8") as f:
                           f.write(f'package {pkg};\n\n')
                           f.write('import android.os.Bundle;\n')
-                          f.write('import android.view.View;\n')
-                          f.write('import android.widget.Button;\n')
-                          f.write('import android.widget.TextView;\n')
                           f.write('import androidx.appcompat.app.AppCompatActivity;\n\n')
                           f.write('public class MainActivity extends AppCompatActivity {\n')
-                          f.write('    private int counter = 0;\n')
-                          f.write('    private TextView counterText;\n')
-                          f.write('    private Button clickButton;\n\n')
                           f.write('    @Override\n')
                           f.write('    protected void onCreate(Bundle savedInstanceState) {\n')
                           f.write('        super.onCreate(savedInstanceState);\n')
-                          f.write('        setContentView(R.layout.activity_main);\n\n')
-                          f.write('        counterText = findViewById(R.id.counterText);\n')
-                          f.write('        clickButton = findViewById(R.id.clickButton);\n\n')
-                          f.write('        clickButton.setOnClickListener(new View.OnClickListener() {\n')
-                          f.write('            @Override\n')
-                          f.write('            public void onClick(View v) {\n')
-                          f.write('                counter++;\n')
-                          f.write('                counterText.setText("Button clicked: " + counter + " times");\n')
-                          f.write('            }\n')
-                          f.write('        });\n')
+                          f.write('        setContentView(R.layout.activity_main);\n')
                           f.write('    }\n')
                           f.write('}\n')
                       print("✓ Fallback MainActivity.java created")
 
-                  # Manifest Fallback (ONLY if not in payload)
-                  manifest_path = "app/src/main/AndroidManifest.xml"
+                  # Manifest Fallback
                   if not existing["manifest"]:
                       with open(manifest_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
@@ -331,7 +331,8 @@ jobs:
                       print("✓ Fallback AndroidManifest.xml created")
 
                   print("\n✅ Project generation completed successfully")
-                  print("   (Payload files respected, fallbacks used only for missing files)")
+                  print(f"   Package: {pkg}")
+                  print(f"   App Name: {app_name}")
 
               except Exception as e:
                   print(f"❌ Error: {e}")
