@@ -3,52 +3,234 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
-    android:background="@color/background_color"
+    android:background="@color/background_white"
     android:padding="16dp">
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
-        android:textSize="32sp"
-        android:textColor="@color/title_color"
+        android:text="Color Test App"
+        android:textSize="24sp"
+        android:textColor="@color/text_dark"
         android:textStyle="bold"
+        android:gravity="center"
         android:layout_marginBottom="20dp"/>
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Welcome to Colorful App"
-        android:textSize="18sp"
-        android:textColor="@color/subtitle_color"
+        android:text="Check if colors are implementing correctly"
+        android:textSize="14sp"
+        android:textColor="@color/text_gray"
+        android:gravity="center"
         android:layout_marginBottom="30dp"/>
 
-    <Button
-        android:id="@+id/clickButton"
-        android:layout_width="200dp"
-        android:layout_height="60dp"
-        android:text="CLICK ME!"
-        android:textSize="18sp"
-        android:textColor="@color/button_text_color"
-        android:backgroundTint="@color/button_bg_color"
-        android:layout_marginBottom="20dp"/>
-
-    <TextView
-        android:id="@+id/counterText"
-        android:layout_width="wrap_content"
+    <!-- Red Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Button clicked: 0 times"
-        android:textSize="16sp"
-        android:textColor="@color/counter_color"
-        android:layout_marginTop="20dp"/>
+        android:orientation="horizontal"
+        android:background="@color/red_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
 
-    <TextView
-        android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RED"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Red Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Green Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Tap the button to see the counter increase"
-        android:textSize="12sp"
-        android:textColor="@color/footer_color"
-        android:layout_marginTop="30dp"/>
+        android:orientation="horizontal"
+        android:background="@color/green_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GREEN"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Green Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Blue Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/blue_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="BLUE"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Blue Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Purple Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/purple_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PURPLE"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Purple Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Orange Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/orange_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ORANGE"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Orange Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Pink Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/pink_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PINK"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Pink Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Yellow Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/yellow_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="YELLOW"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Yellow Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
+
+    <!-- Cyan Tab -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/cyan_tab"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CYAN"
+            android:textSize="18sp"
+            android:textColor="@color/text_black"
+            android:textStyle="bold"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="This is Cyan Color"
+            android:textSize="14sp"
+            android:textColor="@color/text_black"/>
+    </LinearLayout>
 
 </LinearLayout>
