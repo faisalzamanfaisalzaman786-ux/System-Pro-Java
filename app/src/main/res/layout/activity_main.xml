@@ -1,233 +1,269 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_light_gray">
+    android:orientation="vertical"
+    android:background="#1a1a2e">
 
+    <!-- Header with Monogram -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="20dp"
+        android:background="#16213e">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Color Test App"
-            android:textSize="24sp"
-            android:textColor="@color/text_black"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_marginBottom="20dp"/>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Check if colors are implementing correctly"
-            android:textSize="14sp"
-            android:textColor="@color/text_gray"
-            android:gravity="center"
-            android:layout_marginBottom="30dp"/>
-
-        <!-- RED Tab -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:background="@color/red_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
+            android:gravity="center_vertical">
+
+            <!-- Monogram -->
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="RED"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
+                android:layout_width="55dp"
+                android:layout_height="55dp"
+                android:text="ف"
+                android:textSize="28sp"
                 android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
+                android:textColor="#FFFFFF"
+                android:gravity="center"
+                android:background="#667eea"
+                android:layout_marginEnd="15dp" />
+
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="This is Red Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="فیصل سسٹم پرو"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tv_date_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Loading..."
+                    android:textSize="10sp"
+                    android:textColor="#BBBBBB" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="💡 Ready"
+                android:textSize="11sp"
+                android:textColor="#4CAF50"
+                android:background="#2d2d2d"
+                android:padding="6dp"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:borderRadius="15dp" />
+
         </LinearLayout>
 
-        <!-- GREEN Tab -->
+        <!-- Stats Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:background="@color/green_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="GREEN"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Green Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
+            android:layout_marginTop="12dp"
+            android:gravity="center">
 
-        <!-- BLUE Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/blue_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
             <TextView
+                android:id="@+id/tv_line_count"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="BLUE"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Blue Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
+                android:layout_weight="1"
+                android:text="📝 0 lines"
+                android:textSize="11sp"
+                android:textColor="#BBBBBB"
+                android:gravity="center" />
 
-        <!-- PURPLE Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/purple_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="PURPLE"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Purple Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
+            <View
+                android:layout_width="1dp"
+                android:layout_height="15dp"
+                android:background="#444444" />
 
-        <!-- ORANGE Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/orange_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
             <TextView
+                android:id="@+id/tv_char_count"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="ORANGE"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Orange Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
+                android:layout_weight="1"
+                android:text="🔤 0 chars"
+                android:textSize="11sp"
+                android:textColor="#BBBBBB"
+                android:gravity="center" />
 
-        <!-- PINK Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/pink_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="PINK"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Pink Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
-
-        <!-- YELLOW Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/yellow_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="YELLOW"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Yellow Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
-        </LinearLayout>
-
-        <!-- CYAN Tab -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@color/cyan_tab"
-            android:padding="16dp"
-            android:layout_marginBottom="10dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="CYAN"
-                android:textSize="18sp"
-                android:textColor="@color/text_black"
-                android:textStyle="bold"
-                android:layout_weight="1"/>
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="This is Cyan Color"
-                android:textSize="14sp"
-                android:textColor="@color/text_black"
-                android:layout_weight="2"/>
         </LinearLayout>
 
     </LinearLayout>
-</ScrollView>
+
+    <!-- Editor and Preview Area -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Editor Section -->
+        <LinearLayout
+            android:id="@+id/layout_editor"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <!-- Editor Toolbar -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="✏️ Code Editor"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btn_copy"
+                    android:layout_width="40dp"
+                    android:layout_height="35dp"
+                    android:text="📋"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btn_share"
+                    android:layout_width="40dp"
+                    android:layout_height="35dp"
+                    android:text="📤"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btn_save"
+                    android:layout_width="40dp"
+                    android:layout_height="35dp"
+                    android:text="💾"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+            <!-- Code Editor -->
+            <ScrollView
+                android:id="@+id/scroll_editor"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#0d1117"
+                android:padding="10dp">
+
+                <EditText
+                    android:id="@+id/et_code_editor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@null"
+                    android:textSize="12sp"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#666666"
+                    android:lineSpacingExtra="3dp"
+                    android:gravity="top"
+                    android:minHeight="200dp"
+                    android:inputType="textMultiLine"
+                    android:hint="// اپنا HTML, CSS, یا JavaScript کوڈ یہاں لکھیں..." />
+
+            </ScrollView>
+
+        </LinearLayout>
+
+        <!-- Preview Section -->
+        <LinearLayout
+            android:id="@+id/layout_preview"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="👁 Live Preview"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="8dp" />
+
+            <WebView
+                android:id="@+id/web_preview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#FFFFFF" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Bottom Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#16213e">
+
+        <Button
+            android:id="@+id/btn_run"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="▶ RUN"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#4CAF50"
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btn_toggle_preview"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="👁 پریویو"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#2196F3"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btn_clear"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="🗑 Clear"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#F44336"
+            android:layout_marginStart="6dp" />
+
+    </LinearLayout>
+
+</LinearLayout>
