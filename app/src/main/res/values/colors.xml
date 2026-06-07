@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Background -->
-    <color name="background_color">#F0F4F8</color>
+    <color name="background_white">#FFFFFF</color>
     
-    <!-- Text Colors -->
-    <color name="title_color">#E91E63</color>
-    <color name="subtitle_color">#9C27B0</color>
-    <color name="counter_color">#FF5722</color>
-    <color name="footer_color">#9E9E9E</color>
+    <!-- Text Colors (Dark for visibility on bright backgrounds) -->
+    <color name="text_black">#000000</color>
+    <color name="text_dark">#333333</color>
+    <color name="text_gray">#666666</color>
     
-    <!-- Button Colors -->
-    <color name="button_bg_color">#4CAF50</color>
-    <color name="button_text_color">#FFFFFF</color>
+    <!-- Tab Colors -->
+    <color name="red_tab">#FF0000</color>      <!-- Pure Red -->
+    <color name="green_tab">#00FF00</color>    <!-- Pure Green -->
+    <color name="blue_tab">#0000FF</color>     <!-- Pure Blue -->
+    <color name="purple_tab">#800080</color>   <!-- Purple -->
+    <color name="orange_tab">#FFA500</color>   <!-- Orange -->
+    <color name="pink_tab">#FFC0CB</color>     <!-- Pink -->
+    <color name="yellow_tab">#FFFF00</color>   <!-- Yellow -->
+    <color name="cyan_tab">#00FFFF</color>     <!-- Cyan -->
     
-    <!-- Material Colors -->
+    <!-- Material Design Colors (for theme) -->
     <color name="colorPrimary">#6200EE</color>
     <color name="colorPrimaryDark">#3700B3</color>
     <color name="colorAccent">#03DAC6</color>
