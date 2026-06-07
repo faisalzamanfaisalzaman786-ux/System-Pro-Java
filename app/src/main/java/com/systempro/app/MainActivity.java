@@ -1,4 +1,4 @@
-package com.example.colortest;
+package com.example.colortest1;
 
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
