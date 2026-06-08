@@ -55,6 +55,7 @@
 
             </LinearLayout>
 
+            <!-- FIXED: Removed invalid android:borderRadius attribute -->
             <TextView
                 android:id="@+id/tv_status"
                 android:layout_width="wrap_content"
@@ -65,8 +66,7 @@
                 android:background="#2d2d2d"
                 android:padding="6dp"
                 android:paddingLeft="10dp"
-                android:paddingRight="10dp"
-                android:borderRadius="15dp" />
+                android:paddingRight="10dp" />
 
         </LinearLayout>
 
