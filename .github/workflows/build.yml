@@ -3,19 +3,17 @@ name: Build Android APK + AAB (Release Only)
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_b64_build]    # ✅ AS IS - NOT CHANGED
+    types: [trigger_b64_build]
 
 permissions:
   contents: write
   actions: write
 
-# ✅ ADD THIS - To prevent multiple concurrent builds
 concurrency:
   group: android-build-${{ github.run_id }}
   cancel-in-progress: true
 
 env:
-  # ✅ FIXED - Disabled parallel and caching to fix build failure
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
 
 jobs:
@@ -114,8 +112,10 @@ jobs:
                   if os.path.exists(payload_file):
                       with open(payload_file, "r") as f:
                           content = f.read().strip()
-                          if content:
+                          if content and content != "null":
                               files = json.loads(content)
+                          else:
+                              files = {}
 
                   existing = {
                       "java": False,
@@ -489,7 +489,6 @@ jobs:
       - name: Clean Project
         run: ./gradlew clean --no-daemon
 
-      # ✅ FIXED - Build commands with no-parallel and no-build-cache
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
 
