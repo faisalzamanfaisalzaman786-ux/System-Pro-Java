@@ -1,8 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme -->
+    <style name="Theme.Web2App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color -->
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorPrimaryVariant">@color/primary_dark_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        
+        <!-- Secondary brand color -->
+        <item name="colorSecondary">@color/accent_green</item>
+        <item name="colorSecondaryVariant">@color/accent_purple</item>
+        <item name="colorOnSecondary">@color/black</item>
+        
+        <!-- Status bar color -->
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        
+        <!-- Navigation bar color -->
+        <item name="android:navigationBarColor">@color/background_dark</item>
+        
+        <!-- Background color -->
+        <item name="android:windowBackground">@color/background_dark</item>
+        
+        <!-- Typography -->
+        <item name="android:fontFamily">sans-serif</item>
+        
+        <!-- Default Material theme colors -->
+        <item name="colorSurface">@color/card_background</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorError">@color/error_red</item>
+    </style>
+    
+    <!-- Alternative light theme -->
+    <style name="Theme.Web2App.Light" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorPrimaryVariant">@color/primary_dark_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        
+        <item name="colorSecondary">@color/accent_green</item>
+        <item name="colorSecondaryVariant">@color/accent_purple</item>
+        <item name="colorOnSecondary">@color/black</item>
+        
+        <item name="android:statusBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowBackground">@color/background_light</item>
+        
+        <item name="colorSurface">@color/white</item>
+        <item name="colorOnSurface">@color/text_dark</item>
+        <item name="colorError">@color/error_red</item>
     </style>
 </resources>
