@@ -1,4 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Color Test App</string>
+    <!-- App Name -->
+    <string name="app_name">Web2App</string>
+    
+    <!-- Permission Messages -->
+    <string name="permission_required_message">Some permissions are required for full functionality. The app will work with limited features.</string>
+    
+    <!-- Error Messages -->
+    <string name="error_loading_content">Error loading content</string>
+    
+    <!-- Toast Messages -->
+    <string name="permissions_granted">All permissions granted</string>
+    <string name="permissions_denied">Permissions denied. Some features may not work</string>
+    
+    <!-- Button Labels -->
+    <string name="button_ok">OK</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="button_allow">Allow</string>
+    <string name="button_deny">Deny</string>
+    
+    <!-- Dialog Titles -->
+    <string name="dialog_permission_title">Permissions Required</string>
+    <string name="dialog_info_title">Information</string>
+    <string name="dialog_error_title">Error</string>
+    
+    <!-- Dialog Messages -->
+    <string name="dialog_permission_message">This app needs certain permissions to work properly. Please grant the required permissions.</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_clear_cache">Clear Cache</string>
+    <string name="settings_about">About</string>
+    
+    <!-- About -->
+    <string name="about_text">Web2App - Convert your website to Android App\nVersion 1.0.0</string>
 </resources>
