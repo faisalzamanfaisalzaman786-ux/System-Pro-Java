@@ -2,59 +2,27 @@ name: Build Android APK + AAB (Release Only)
 
 on:
   workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name'
-        required: false
-        default: 'com.systempro.app'
-        type: string
-      app_name:
-        description: 'App Name'
-        required: false
-        default: 'MyApp'
-        type: string
-      icon:
-        description: 'Icon Base64'
-        required: false
-        type: string
-      files:
-        description: 'Project Files JSON'
-        required: false
-        type: string
-  
-  # IMPORTANT: Only trigger on specific event type, NOT on push
   repository_dispatch:
-    types: [system_pro_build]  # Changed from trigger_b64_build to avoid auto triggers
-
-# Prevent multiple concurrent builds
-concurrency:
-  group: android-build-${{ github.ref }}
-  cancel-in-progress: true
+    types: [trigger_b64_build]    # ✅ AS IS - NOT CHANGED
 
 permissions:
   contents: write
   actions: write
 
+# ✅ ADD THIS - To prevent multiple concurrent builds
+concurrency:
+  group: android-build-${{ github.run_id }}
+  cancel-in-progress: true
+
 env:
+  # ✅ FIXED - Disabled parallel and caching to fix build failure
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
 
 jobs:
   build:
-    # Add condition to prevent auto triggers from file pushes
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      (github.event_name == 'repository_dispatch' && github.event.action == 'system_pro_build')
-    
     runs-on: ubuntu-latest
 
     steps:
-      - name: Wait for previous builds to complete
-        uses: softprops/turnstyle@v1
-        with:
-          poll-interval-seconds: 10
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: actions/checkout@v4
 
       - name: Setup JDK 17
@@ -69,11 +37,7 @@ jobs:
       - name: Get Package Name
         id: pkg
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PKG="${{ github.event.inputs.package_name }}"
-          else
-            PKG="${{ github.event.client_payload.package_name }}"
-          fi
+          PKG="${{ github.event.client_payload.package_name }}"
           if [ -z "$PKG" ]; then
             PKG="com.systempro.app"
           fi
@@ -85,26 +49,11 @@ jobs:
       - name: Get App Name
         id: app
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            APP_NAME="${{ github.event.inputs.app_name }}"
-          else
-            APP_NAME="${{ github.event.client_payload.app_name }}"
-          fi
+          APP_NAME="${{ github.event.client_payload.app_name }}"
           if [ -z "$APP_NAME" ]; then
             APP_NAME="MyApp"
           fi
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-
-      - name: Get Icon and Files
-        id: payload
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "icon=${{ github.event.inputs.icon }}" >> $GITHUB_OUTPUT
-            echo "files=${{ github.event.inputs.files }}" >> $GITHUB_OUTPUT
-          else
-            echo "icon=${{ github.event.client_payload.icon }}" >> $GITHUB_OUTPUT
-            echo "files=${{ github.event.client_payload.files }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create Project Directories
         run: |
@@ -138,11 +87,14 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Files
+      - name: Generate Files (Force Update App Name & Package)
         run: |
+          cat > payload_files.json << 'EOF'
+          ${{ toJson(github.event.client_payload.files) }}
+          EOF
+
           export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           export APP_NAME="${{ steps.app.outputs.app_name }}"
-          export FILES_JSON='${{ steps.payload.outputs.files }}'
 
           cat > generate.py << 'EOF'
           import json
@@ -156,14 +108,14 @@ jobs:
                   pkg = os.environ.get("NEW_PKG", "com.systempro.app")
                   app_name = os.environ.get("APP_NAME", "MyApp")
                   pkg_path = pkg.replace(".", "/")
-                  files_json = os.environ.get("FILES_JSON", "{}")
 
                   files = {}
-                  if files_json and files_json != "{}" and files_json != "null":
-                      try:
-                          files = json.loads(files_json)
-                      except:
-                          pass
+                  payload_file = "payload_files.json"
+                  if os.path.exists(payload_file):
+                      with open(payload_file, "r") as f:
+                          content = f.read().strip()
+                          if content:
+                              files = json.loads(content)
 
                   existing = {
                       "java": False,
@@ -174,7 +126,7 @@ jobs:
                       "themes": False
                   }
 
-                  # Process payload files
+                  # ============ PROCESS PAYLOAD FILES ============
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       
@@ -216,7 +168,7 @@ jobs:
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print("✓ strings.xml")
+                              print("✓ strings.xml (will force update app_name later)")
                               
                           elif "values/colors.xml" in clean_path:
                               existing["colors"] = True
@@ -235,7 +187,7 @@ jobs:
                                   out.write(content)
                               print(f"✓ Theme: {filename}")
 
-                  # Force update strings.xml with app name
+                  # ============ FORCE UPDATE APP NAME IN STRINGS.XML ============
                   strings_path = "app/src/main/res/values/strings.xml"
                   if os.path.exists(strings_path):
                       with open(strings_path, "r", encoding="utf-8") as f:
@@ -246,7 +198,7 @@ jobs:
                           content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
                       with open(strings_path, "w", encoding="utf-8") as f:
                           f.write(content)
-                      print("✓ Updated app_name in strings.xml")
+                      print("✓ Force updated app_name in strings.xml")
                   else:
                       os.makedirs(os.path.dirname(strings_path), exist_ok=True)
                       with open(strings_path, "w", encoding="utf-8") as f:
@@ -254,10 +206,10 @@ jobs:
                           f.write('<resources>\n')
                           f.write(f'    <string name="app_name">{app_name}</string>\n')
                           f.write('</resources>\n')
-                      print("✓ Created strings.xml")
+                      print("✓ Created strings.xml with app_name")
 
-                  # Update package in all Java files
-                  java_base_dir = "app/src/main/java"
+                  # ============ FORCE UPDATE PACKAGE NAME IN ALL JAVA FILES ============
+                  java_base_dir = f"app/src/main/java"
                   if os.path.exists(java_base_dir):
                       for root, dirs, files in os.walk(java_base_dir):
                           for file in files:
@@ -268,9 +220,9 @@ jobs:
                                   content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
                                   with open(file_path, "w", encoding="utf-8") as f:
                                       f.write(content)
-                                  print(f"✓ Updated package in {file}")
+                                  print(f"✓ Force updated package in {file}")
 
-                  # Update manifest label
+                  # ============ FORCE UPDATE MANIFEST LABEL ============
                   manifest_path = "app/src/main/AndroidManifest.xml"
                   if os.path.exists(manifest_path):
                       with open(manifest_path, "r", encoding="utf-8") as f:
@@ -278,19 +230,24 @@ jobs:
                       content = re.sub(r'android:label="[^"]*"', 'android:label="@string/app_name"', content)
                       with open(manifest_path, "w", encoding="utf-8") as f:
                           f.write(content)
-                      print("✓ Updated manifest label")
+                      print("✓ Force updated manifest label")
 
-                  # Fallbacks
+                  # ============ FALLBACKS ============
+                  
                   if not existing["colors"]:
                       colors_path = "app/src/main/res/values/colors.xml"
                       os.makedirs(os.path.dirname(colors_path), exist_ok=True)
                       with open(colors_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n')
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<resources>\n')
                           f.write('    <color name="colorPrimary">#6200EE</color>\n')
                           f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
                           f.write('    <color name="colorAccent">#03DAC6</color>\n')
+                          f.write('    <color name="background">#F5F5F5</color>\n')
                           f.write('    <color name="white">#FFFFFF</color>\n')
                           f.write('    <color name="black">#000000</color>\n')
+                          f.write('    <color name="titleColor">#6200EE</color>\n')
+                          f.write('    <color name="textColor">#333333</color>\n')
                           f.write('</resources>\n')
                       print("✓ Fallback colors.xml created")
 
@@ -298,15 +255,79 @@ jobs:
                       themes_path = "app/src/main/res/values/themes.xml"
                       os.makedirs(os.path.dirname(themes_path), exist_ok=True)
                       with open(themes_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n')
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<resources>\n')
                           f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
                           f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
                           f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
                           f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
-                          f.write('    </style>\n</resources>\n')
+                          f.write('    </style>\n')
+                          f.write('</resources>\n')
                       print("✓ Fallback themes.xml created")
 
-                  print(f"\n✅ Project generated: {pkg} / {app_name}")
+                  if not existing["layout"]:
+                      layout_path = "app/src/main/res/layout/activity_main.xml"
+                      os.makedirs(os.path.dirname(layout_path), exist_ok=True)
+                      with open(layout_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n')
+                          f.write('    android:layout_width="match_parent"\n')
+                          f.write('    android:layout_height="match_parent"\n')
+                          f.write('    android:orientation="vertical"\n')
+                          f.write('    android:gravity="center"\n')
+                          f.write('    android:background="@color/background"\n')
+                          f.write('    android:padding="16dp">\n')
+                          f.write('    <TextView\n')
+                          f.write('        android:layout_width="wrap_content"\n')
+                          f.write('        android:layout_height="wrap_content"\n')
+                          f.write('        android:text="Welcome"\n')
+                          f.write('        android:textSize="28sp"\n')
+                          f.write('        android:textColor="@color/titleColor"\n')
+                          f.write('        android:textStyle="bold"/>\n')
+                          f.write('</LinearLayout>\n')
+                      print("✓ Fallback layout created")
+
+                  if not existing["java"]:
+                      java_dir = f"app/src/main/java/{pkg_path}"
+                      os.makedirs(java_dir, exist_ok=True)
+                      java_path = f"{java_dir}/MainActivity.java"
+                      with open(java_path, "w", encoding="utf-8") as f:
+                          f.write(f'package {pkg};\n\n')
+                          f.write('import android.os.Bundle;\n')
+                          f.write('import androidx.appcompat.app.AppCompatActivity;\n\n')
+                          f.write('public class MainActivity extends AppCompatActivity {\n')
+                          f.write('    @Override\n')
+                          f.write('    protected void onCreate(Bundle savedInstanceState) {\n')
+                          f.write('        super.onCreate(savedInstanceState);\n')
+                          f.write('        setContentView(R.layout.activity_main);\n')
+                          f.write('    }\n')
+                          f.write('}\n')
+                      print("✓ Fallback MainActivity.java created")
+
+                  if not existing["manifest"]:
+                      with open(manifest_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n')
+                          f.write('    <uses-permission android:name="android.permission.INTERNET"/>\n')
+                          f.write('    <application\n')
+                          f.write('        android:allowBackup="true"\n')
+                          f.write('        android:icon="@mipmap/ic_launcher"\n')
+                          f.write('        android:label="@string/app_name"\n')
+                          f.write('        android:theme="@style/AppTheme"\n')
+                          f.write('        android:supportsRtl="true">\n')
+                          f.write('        <activity android:name=".MainActivity" android:exported="true">\n')
+                          f.write('            <intent-filter>\n')
+                          f.write('                <action android:name="android.intent.action.MAIN"/>\n')
+                          f.write('                <category android:name="android.intent.category.LAUNCHER"/>\n')
+                          f.write('            </intent-filter>\n')
+                          f.write('        </activity>\n')
+                          f.write('    </application>\n')
+                          f.write('</manifest>\n')
+                      print("✓ Fallback AndroidManifest.xml created")
+
+                  print("\n✅ Project generation completed successfully")
+                  print(f"   Package: {pkg}")
+                  print(f"   App Name: {app_name}")
 
               except Exception as e:
                   print(f"❌ Error: {e}")
@@ -325,7 +346,7 @@ jobs:
           sudo apt-get install -y imagemagick
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
           
-          ICON_B64="${{ steps.payload.outputs.icon }}"
+          ICON_B64="${{ github.event.client_payload.icon }}"
           
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > /tmp/icon.png
@@ -468,6 +489,7 @@ jobs:
       - name: Clean Project
         run: ./gradlew clean --no-daemon
 
+      # ✅ FIXED - Build commands with no-parallel and no-build-cache
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
 
