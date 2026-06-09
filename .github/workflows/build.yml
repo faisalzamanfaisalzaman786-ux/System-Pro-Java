@@ -1,1 +1,539 @@
-.
+name: Build Android APK + AAB (Release Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: false
+        default: 'com.example.app'
+        type: string
+      app_name:
+        description: 'App Name'
+        required: false
+        default: 'MyApp'
+        type: string
+  repository_dispatch:
+    types: [trigger_b64_build]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: android-build-${{ github.run_id }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Get Package Name from Payload
+        id: pkg
+        run: |
+          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
+            PKG="${{ github.event.client_payload.package_name }}"
+          elif [ -n "${{ github.event.inputs.package_name }}" ]; then
+            PKG="${{ github.event.inputs.package_name }}"
+          else
+            PKG="com.example.app"
+          fi
+          
+          PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
+          echo "package_name=$PKG" >> $GITHUB_OUTPUT
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
+          echo "Using package: $PKG"
+
+      - name: Get App Name from Payload
+        id: app
+        run: |
+          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
+            APP_NAME="${{ github.event.client_payload.app_name }}"
+          elif [ -n "${{ github.event.inputs.app_name }}" ]; then
+            APP_NAME="${{ github.event.inputs.app_name }}"
+          else
+            APP_NAME="MyApp"
+          fi
+          
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "Using app name: $APP_NAME"
+
+      - name: Create Project Directories
+        run: |
+          rm -rf app
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/assets
+
+      - name: Decode Keystore
+        run: |
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "WARNING: No keystore found, creating debug keystore"
+            keytool -genkey -v -keystore keystore.jks -alias release -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown" -storepass android -keypass android
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
+            echo "KEY_ALIAS=release" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+          else
+            KEYSTORE_ABS="$GITHUB_WORKSPACE/keystore.jks"
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 -d > "$KEYSTORE_ABS"
+            echo "KEYSTORE_PATH=$KEYSTORE_ABS" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+          fi
+
+      - name: Generate Files from Payload
+        run: |
+          export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
+          export APP_NAME="${{ steps.app.outputs.app_name }}"
+          
+          cat > /tmp/payload.json << 'PAYLOAD_EOF'
+          ${{ toJson(github.event.client_payload.files) }}
+          PAYLOAD_EOF
+
+          cat > generate.py << 'EOF'
+          import json
+          import os
+          import re
+          import sys
+          import traceback
+
+          def main():
+              try:
+                  pkg = os.environ.get("NEW_PKG", "com.example.app")
+                  app_name = os.environ.get("APP_NAME", "MyApp")
+                  pkg_path = pkg.replace(".", "/")
+                  
+                  print(f"📦 Target Package: {pkg}")
+                  print(f"📱 Target App Name: {app_name}")
+                  
+                  files = {}
+                  payload_file = "/tmp/payload.json"
+                  if os.path.exists(payload_file):
+                      with open(payload_file, 'r') as f:
+                          content = f.read().strip()
+                          if content and content != "null" and content != "{}":
+                              try:
+                                  files = json.loads(content)
+                                  print(f"✓ Loaded {len(files)} files from payload")
+                              except:
+                                  print("⚠️ No valid files in payload")
+                  
+                  created_count = 0
+                  
+                  for path, content in files.items():
+                      clean_path = path.strip("/")
+                      print(f"Processing: {clean_path}")
+                      
+                      if clean_path.endswith(".java"):
+                          content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
+                          if not re.search(r'^package ', content, re.MULTILINE):
+                              content = f'package {pkg};\n\n{content}'
+                          filename = os.path.basename(clean_path)
+                          new_path = f"app/src/main/java/{pkg_path}/{filename}"
+                          os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                          with open(new_path, "w", encoding="utf-8") as out:
+                              out.write(content)
+                          print(f"✓ Java: {filename}")
+                          created_count += 1
+                          
+                      elif clean_path.endswith(".xml"):
+                          if "AndroidManifest.xml" in clean_path:
+                              new_path = "app/src/main/AndroidManifest.xml"
+                              content = re.sub(r'\s+package="[^"]*"', '', content)
+                              content = re.sub(r'package="[^"]*"', '', content)
+                              if 'xmlns:android' not in content:
+                                  content = content.replace('<manifest', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"')
+                              content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', content)
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print(f"✓ AndroidManifest.xml")
+                              created_count += 1
+                              
+                          elif "layout" in clean_path and ".xml" in clean_path:
+                              filename = os.path.basename(clean_path)
+                              new_path = f"app/src/main/res/layout/{filename}"
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print(f"✓ Layout: {filename}")
+                              created_count += 1
+                              
+                          elif "values/strings.xml" in clean_path:
+                              new_path = "app/src/main/res/values/strings.xml"
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              if '<string name="app_name">' in content:
+                                  content = re.sub(r'<string name="app_name">.*?</string>', f'<string name="app_name">{app_name}</string>', content)
+                              else:
+                                  content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print(f"✓ strings.xml (app_name: {app_name})")
+                              created_count += 1
+                              
+                          elif "values/colors.xml" in clean_path:
+                              new_path = "app/src/main/res/values/colors.xml"
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print("✓ colors.xml")
+                              created_count += 1
+                              
+                          elif "values/themes.xml" in clean_path or "values/styles.xml" in clean_path:
+                              new_path = "app/src/main/res/values/themes.xml"
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print("✓ themes.xml")
+                              created_count += 1
+                              
+                          else:
+                              if "drawable" in clean_path:
+                                  new_path = f"app/src/main/res/{clean_path}"
+                              else:
+                                  new_path = f"app/src/main/res/{clean_path}"
+                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                              with open(new_path, "w", encoding="utf-8") as out:
+                                  out.write(content)
+                              print(f"✓ XML: {clean_path}")
+                              created_count += 1
+                      else:
+                          new_path = f"app/src/main/{clean_path}"
+                          os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                          with open(new_path, "w", encoding="utf-8") as out:
+                              out.write(content)
+                          print(f"✓ File: {clean_path}")
+                          created_count += 1
+                  
+                  # Create missing default files
+                  strings_path = "app/src/main/res/values/strings.xml"
+                  if not os.path.exists(strings_path):
+                      os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+                      with open(strings_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<resources>\n')
+                          f.write(f'    <string name="app_name">{app_name}</string>\n')
+                          f.write('</resources>\n')
+                      print(f"✓ Created default strings.xml with app_name: {app_name}")
+                      created_count += 1
+                  
+                  colors_path = "app/src/main/res/values/colors.xml"
+                  if not os.path.exists(colors_path):
+                      os.makedirs(os.path.dirname(colors_path), exist_ok=True)
+                      with open(colors_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<resources>\n')
+                          f.write('    <color name="colorPrimary">#6200EE</color>\n')
+                          f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
+                          f.write('    <color name="colorAccent">#03DAC6</color>\n')
+                          f.write('    <color name="white">#FFFFFF</color>\n')
+                          f.write('    <color name="black">#000000</color>\n')
+                          f.write('</resources>\n')
+                      print("✓ Created default colors.xml")
+                      created_count += 1
+                  
+                  themes_path = "app/src/main/res/values/themes.xml"
+                  if not os.path.exists(themes_path):
+                      os.makedirs(os.path.dirname(themes_path), exist_ok=True)
+                      with open(themes_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<resources>\n')
+                          f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
+                          f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
+                          f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
+                          f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
+                          f.write('    </style>\n')
+                          f.write('</resources>\n')
+                      print("✓ Created default themes.xml")
+                      created_count += 1
+                  
+                  manifest_path = "app/src/main/AndroidManifest.xml"
+                  if not os.path.exists(manifest_path):
+                      with open(manifest_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="' + pkg + '">\n')
+                          f.write('    <application\n')
+                          f.write('        android:allowBackup="true"\n')
+                          f.write('        android:icon="@mipmap/ic_launcher"\n')
+                          f.write('        android:label="' + app_name + '"\n')
+                          f.write('        android:theme="@style/AppTheme">\n')
+                          f.write('        <activity\n')
+                          f.write('            android:name=".MainActivity"\n')
+                          f.write('            android:exported="true">\n')
+                          f.write('            <intent-filter>\n')
+                          f.write('                <action android:name="android.intent.action.MAIN" />\n')
+                          f.write('                <category android:name="android.intent.category.LAUNCHER" />\n')
+                          f.write('            </intent-filter>\n')
+                          f.write('        </activity>\n')
+                          f.write('    </application>\n')
+                          f.write('</manifest>\n')
+                      print("✓ Created default AndroidManifest.xml")
+                      created_count += 1
+                  
+                  print(f"\n✅ Project generation completed successfully")
+                  print(f"   Created {created_count} file(s)")
+                  print(f"   Package: {pkg}")
+                  print(f"   App Name: {app_name}")
+
+              except Exception as e:
+                  print(f"❌ Error: {e}")
+                  traceback.print_exc()
+                  sys.exit(1)
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+          python3 generate.py
+
+      - name: Force Update App Name in All Files
+        run: |
+          APP_NAME="${{ steps.app.outputs.app_name }}"
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          
+          echo "Force updating app name to: $APP_NAME"
+          
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">'"$APP_NAME"'<\/string>/g' app/src/main/res/values/strings.xml
+            echo "✓ Updated strings.xml"
+          fi
+          
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/g' app/src/main/AndroidManifest.xml
+            echo "✓ Updated AndroidManifest.xml label"
+          fi
+          
+          echo "✅ App name force updated to: $APP_NAME"
+
+      - name: Generate App Icons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
+          
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > /tmp/icon.png
+            if file /tmp/icon.png | grep -q 'PNG image'; then
+              echo "✅ Custom icon detected, generating all densities..."
+              
+              convert /tmp/icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+              convert /tmp/icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+              cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+              
+              echo "✅ Custom icon applied successfully"
+              exit 0
+            fi
+          fi
+          
+          echo "⚠️ No valid custom icon, generating fallback icons..."
+          for size in 48 72 96 144 192; do
+            case $size in
+              48) density="mdpi" ;;
+              72) density="hdpi" ;;
+              96) density="xhdpi" ;;
+              144) density="xxhdpi" ;;
+              192) density="xxxhdpi" ;;
+            esac
+            convert -size ${size}x${size} xc:#6200EE -gravity center \
+              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
+              app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
+            cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
+          done
+          echo "✅ Fallback icons generated"
+
+      - name: Verify App Name and Package
+        run: |
+          echo "=== Verification ==="
+          echo "Package: ${{ steps.pkg.outputs.package_name }}"
+          echo "App Name: ${{ steps.app.outputs.app_name }}"
+          
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            echo "strings.xml: $(grep 'name="app_name"' app/src/main/res/values/strings.xml)"
+          fi
+          
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            echo "Manifest label: $(grep 'android:label' app/src/main/AndroidManifest.xml)"
+          fi
+          
+          echo "✅ Verification complete"
+
+      - name: Create build.gradle
+        run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          
+          cat > app/build.gradle << EOF
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace "${PKG}"
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "${PKG}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+                  multiDexEnabled true
+              }
+
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("KEYSTORE_PATH") ?: "none")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                      signingConfig signingConfigs.release
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+
+              buildFeatures {
+                  buildConfig true
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.multidex:multidex:2.0.1'
+          }
+          EOF
+          
+          cat > app/proguard-rules.pro << 'EOF'
+          -keep class * extends androidx.appcompat.app.AppCompatActivity
+          -keepattributes Signature
+          EOF
+
+      - name: Create Gradle Settings
+        run: |
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AppBuilder"
+          include ':app'
+          EOF
+
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4096m
+          android.useAndroidX=true
+          android.enableJetifier=false
+          org.gradle.parallel=false
+          org.gradle.caching=false
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.5
+
+      - name: Clean Project
+        run: ./gradlew clean --no-daemon
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
+
+      - name: Build Release AAB
+        run: ./gradlew bundleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest-release
+          name: Latest Release
+          body: |
+            ## 🚀 APK and AAB Files
+            
+            ### APK
+            - Download the APK file below
+            
+            ### AAB  
+            - Download the AAB file below
+            
+            Generated by CodeForge Pro Build System
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          draft: false
+          prerelease: false
