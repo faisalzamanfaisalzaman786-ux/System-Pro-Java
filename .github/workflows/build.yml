@@ -6,12 +6,12 @@ on:
       package_name:
         description: 'Package Name'
         required: false
-        default: 'com.example.app'
+        default: 'com.counter.app'
         type: string
       app_name:
         description: 'App Name'
         required: false
-        default: 'MyApp'
+        default: 'Counter App'
         type: string
   repository_dispatch:
     types: [trigger_b64_build]
@@ -38,7 +38,7 @@ jobs:
       - name: Get Package Name
         id: pkg
         run: |
-          PKG="com.example.app"
+          PKG="com.counter.app"
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             PKG="${{ github.event.client_payload.package_name }}"
           elif [ -n "${{ github.event.inputs.package_name }}" ]; then
@@ -47,19 +47,17 @@ jobs:
           PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
           echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
-          echo "Using package: $PKG"
 
       - name: Get App Name
         id: app
         run: |
-          APP="MyApp"
+          APP="Counter App"
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             APP="${{ github.event.client_payload.app_name }}"
           elif [ -n "${{ github.event.inputs.app_name }}" ]; then
             APP="${{ github.event.inputs.app_name }}"
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
-          echo "Using app name: $APP"
 
       - name: Create Project Directories
         run: |
@@ -72,43 +70,83 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
-          echo "Directories created"
 
-      - name: Generate Project Files
+      - name: Generate Counter App Files
         env:
           PKG: ${{ steps.pkg.outputs.package_name }}
           PKG_PATH: ${{ steps.pkg.outputs.package_path }}
           APP_NAME: ${{ steps.app.outputs.app_name }}
         run: |
-          # IMPORTANT: Create package directory first
+          # Create package directory
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # Create MainActivity.java
+          # Create MainActivity.java with Counter functionality
           cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
           package PKG_PLACEHOLDER;
           
           import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
           
           public class MainActivity extends AppCompatActivity {
+              private TextView counterTextView;
+              private Button incrementButton;
+              private Button decrementButton;
+              private Button resetButton;
+              private int counter = 0;
+              
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  TextView textView = findViewById(R.id.textView);
-                  if (textView != null) {
-                      textView.setText("Welcome to APP_NAME_PLACEHOLDER");
-                  }
+                  
+                  // Initialize views
+                  counterTextView = findViewById(R.id.counterTextView);
+                  incrementButton = findViewById(R.id.incrementButton);
+                  decrementButton = findViewById(R.id.decrementButton);
+                  resetButton = findViewById(R.id.resetButton);
+                  
+                  // Set initial counter value
+                  updateCounterDisplay();
+                  
+                  // Set click listeners
+                  incrementButton.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          counter++;
+                          updateCounterDisplay();
+                      }
+                  });
+                  
+                  decrementButton.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          counter--;
+                          updateCounterDisplay();
+                      }
+                  });
+                  
+                  resetButton.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          counter = 0;
+                          updateCounterDisplay();
+                      }
+                  });
+              }
+              
+              private void updateCounterDisplay() {
+                  counterTextView.setText(String.valueOf(counter));
               }
           }
           EOF
           
           # Replace placeholders
           sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
-          sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/java/$PKG_PATH/MainActivity.java
           
-          # Create activity_main.xml
+          # Create activity_main.xml with Counter UI
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -116,14 +154,59 @@ jobs:
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="16dp">
+              android:padding="24dp">
+              
               <TextView
-                  android:id="@+id/textView"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello World!"
-                  android:textSize="24sp"
-                  android:textColor="@android:color/black"/>
+                  android:text="Counter App"
+                  android:textSize="28sp"
+                  android:textStyle="bold"
+                  android:textColor="@android:color/black"
+                  android:layout_marginBottom="40dp"/>
+              
+              <TextView
+                  android:id="@+id/counterTextView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="0"
+                  android:textSize="80sp"
+                  android:textStyle="bold"
+                  android:textColor="#6200EE"
+                  android:layout_marginBottom="40dp"/>
+              
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal"
+                  android:gravity="center"
+                  android:layout_marginBottom="20dp">
+                  
+                  <Button
+                      android:id="@+id/decrementButton"
+                      android:layout_width="80dp"
+                      android:layout_height="80dp"
+                      android:text="-"
+                      android:textSize="32sp"
+                      android:layout_marginEnd="20dp"/>
+                  
+                  <Button
+                      android:id="@+id/incrementButton"
+                      android:layout_width="80dp"
+                      android:layout_height="80dp"
+                      android:text="+"
+                      android:textSize="32sp"/>
+              </LinearLayout>
+              
+              <Button
+                  android:id="@+id/resetButton"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Reset"
+                  android:textSize="18sp"
+                  android:paddingLeft="32dp"
+                  android:paddingRight="32dp"/>
+              
           </LinearLayout>
           EOF
           
@@ -178,12 +261,9 @@ jobs:
           </manifest>
           EOF
           
-          echo "All files generated successfully"
-          echo "Package: $PKG"
-          echo "Package Path: $PKG_PATH"
-          echo "App Name: $APP_NAME"
+          echo "Counter app files generated successfully"
 
-      - name: Generate Simple Icons
+      - name: Generate App Icons
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -197,11 +277,10 @@ jobs:
               192) density="xxxhdpi" ;;
             esac
             convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
+              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "C" \
               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
             cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
           done
-          echo "Icons generated"
 
       - name: Create build.gradle
         env:
@@ -239,12 +318,10 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
           
           touch app/proguard-rules.pro
-          echo "build.gradle created"
 
       - name: Create Gradle Settings
         run: |
@@ -263,7 +340,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "MyApp"
+          rootProject.name = "CounterApp"
           include ':app'
           EOF
 
@@ -278,7 +355,6 @@ jobs:
           android.useAndroidX=true
           android.enableJetifier=false
           EOF
-          echo "Gradle settings created"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -286,56 +362,39 @@ jobs:
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Verify Project Structure
-        run: |
-          echo "=== Verification ==="
-          echo "Package: ${{ steps.pkg.outputs.package_name }}"
-          echo ""
-          echo "Directory structure:"
-          ls -la app/src/main/java/
-          echo ""
-          echo "Java files:"
-          find app/src/main/java -name "*.java"
-          echo ""
-          echo "MainActivity content (first 5 lines):"
-          find app/src/main/java -name "MainActivity.java" -exec head -5 {} \;
-          echo ""
-          echo "Manifest:"
-          cat app/src/main/AndroidManifest.xml
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: counter-app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: debug-build-${{ github.run_number }}
-          name: Debug Build - ${{ steps.app.outputs.app_name }}
+          tag_name: counter-app-${{ github.run_number }}
+          name: Counter App - ${{ steps.app.outputs.app_name }}
           body: |
-            ## Debug APK Build Successful! 🎉
+            ## Counter App Built Successfully! 🎉
+            
+            ### Features:
+            - **+ Button** - Increment counter
+            - **- Button** - Decrement counter  
+            - **Reset Button** - Reset to zero
+            - Large counter display
             
             **App:** ${{ steps.app.outputs.app_name }}
             **Package:** ${{ steps.pkg.outputs.package_name }}
-            **Build Type:** Debug (unsigned)
             
-            ### How to Install:
-            1. Download the APK from below
-            2. Enable "Install from unknown sources" in Android settings
-            3. Tap on the APK to install
-            4. Open and test the app
-            
-            ### Next Steps:
-            Once testing is successful, we can add:
-            - Signing for release builds
-            - AAB format for Google Play
-            - ProGuard optimization
+            ### How to Use:
+            1. Download and install APK
+            2. Open the app
+            3. Click + to increase count
+            4. Click - to decrease count
+            5. Click Reset to start over
           files: |
             app/build/outputs/apk/debug/*.apk
           draft: false
