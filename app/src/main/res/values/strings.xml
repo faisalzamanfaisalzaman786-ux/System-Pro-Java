@@ -1,3 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CodeForge Pro</string>
+    <string name="app_name">Camera App</string>
+    <string name="open_camera">Open Camera</string>
+    <string name="permission_required">Camera permission is required to use this app</string>
+    <string name="permission_granted">Permissions granted. You can now use the camera.</string>
+    <string name="opening_camera">Opening camera...</string>
+    <string name="camera_info">Click the button above to open camera</string>
 </resources>
