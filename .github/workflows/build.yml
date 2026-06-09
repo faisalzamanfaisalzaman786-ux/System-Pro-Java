@@ -47,6 +47,7 @@ jobs:
           PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
           echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
+          echo "Using package: $PKG"
 
       - name: Get App Name
         id: app
@@ -58,6 +59,7 @@ jobs:
             APP="${{ github.event.inputs.app_name }}"
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
+          echo "Using app name: $APP"
 
       - name: Create Project Directories
         run: |
@@ -70,6 +72,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
+          echo "Directories created"
 
       - name: Generate Project Files
         env:
@@ -77,9 +80,12 @@ jobs:
           PKG_PATH: ${{ steps.pkg.outputs.package_path }}
           APP_NAME: ${{ steps.app.outputs.app_name }}
         run: |
+          # IMPORTANT: Create package directory first
+          mkdir -p app/src/main/java/$PKG_PATH
+          
           # Create MainActivity.java
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
-          package $PKG;
+          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
+          package PKG_PLACEHOLDER;
           
           import android.os.Bundle;
           import android.widget.TextView;
@@ -92,14 +98,18 @@ jobs:
                   setContentView(R.layout.activity_main);
                   TextView textView = findViewById(R.id.textView);
                   if (textView != null) {
-                      textView.setText("Welcome to $APP_NAME");
+                      textView.setText("Welcome to APP_NAME_PLACEHOLDER");
                   }
               }
           }
           EOF
           
+          # Replace placeholders
+          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
+          sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/java/$PKG_PATH/MainActivity.java
+          
           # Create activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << EOF
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -126,7 +136,7 @@ jobs:
           EOF
           
           # Create colors.xml
-          cat > app/src/main/res/values/colors.xml << EOF
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
@@ -136,7 +146,7 @@ jobs:
           EOF
           
           # Create themes.xml
-          cat > app/src/main/res/values/themes.xml << EOF
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -169,6 +179,9 @@ jobs:
           EOF
           
           echo "All files generated successfully"
+          echo "Package: $PKG"
+          echo "Package Path: $PKG_PATH"
+          echo "App Name: $APP_NAME"
 
       - name: Generate Simple Icons
         run: |
@@ -188,8 +201,9 @@ jobs:
               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
             cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
           done
+          echo "Icons generated"
 
-      - name: Create build.gradle (Debug Only)
+      - name: Create build.gradle
         env:
           PKG: ${{ steps.pkg.outputs.package_name }}
         run: |
@@ -230,6 +244,7 @@ jobs:
           EOF
           
           touch app/proguard-rules.pro
+          echo "build.gradle created"
 
       - name: Create Gradle Settings
         run: |
@@ -263,6 +278,7 @@ jobs:
           android.useAndroidX=true
           android.enableJetifier=false
           EOF
+          echo "Gradle settings created"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -270,8 +286,25 @@ jobs:
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
+      - name: Verify Project Structure
+        run: |
+          echo "=== Verification ==="
+          echo "Package: ${{ steps.pkg.outputs.package_name }}"
+          echo ""
+          echo "Directory structure:"
+          ls -la app/src/main/java/
+          echo ""
+          echo "Java files:"
+          find app/src/main/java -name "*.java"
+          echo ""
+          echo "MainActivity content (first 5 lines):"
+          find app/src/main/java -name "MainActivity.java" -exec head -5 {} \;
+          echo ""
+          echo "Manifest:"
+          cat app/src/main/AndroidManifest.xml
+
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -286,19 +319,23 @@ jobs:
           tag_name: debug-build-${{ github.run_number }}
           name: Debug Build - ${{ steps.app.outputs.app_name }}
           body: |
-            ## Debug APK Build
+            ## Debug APK Build Successful! 🎉
             
             **App:** ${{ steps.app.outputs.app_name }}
             **Package:** ${{ steps.pkg.outputs.package_name }}
-            **Build:** Debug (unsigned)
+            **Build Type:** Debug (unsigned)
             
-            ### Installation:
-            1. Download the APK
-            2. Enable "Unknown Sources" in Android settings
-            3. Install and test
+            ### How to Install:
+            1. Download the APK from below
+            2. Enable "Install from unknown sources" in Android settings
+            3. Tap on the APK to install
+            4. Open and test the app
             
-            ### Note:
-            This is a debug build without signing. For production, signing will be added later.
+            ### Next Steps:
+            Once testing is successful, we can add:
+            - Signing for release builds
+            - AAB format for Google Play
+            - ProGuard optimization
           files: |
             app/build/outputs/apk/debug/*.apk
           draft: false
