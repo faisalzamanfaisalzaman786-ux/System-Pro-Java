@@ -1,71 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp"
-    android:background="#F5F5F5">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Counter App"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="#6200EE"
-        android:layout_marginBottom="40dp" />
-
-    <TextView
-        android:id="@+id/counterTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="0"
-        android:textSize="80sp"
-        android:textStyle="bold"
-        android:textColor="#333333"
-        android:layout_marginBottom="40dp" />
+    android:background="@color/background">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp">
 
-        <Button
-            android:id="@+id/decrementButton"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="-"
-            android:textSize="32sp"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="28sp"
             android:textStyle="bold"
-            android:layout_marginEnd="16dp"
-            android:backgroundTint="#F44336" />
+            android:textColor="@color/colorPrimary"
+            android:layout_marginBottom="32dp" />
 
-        <Button
-            android:id="@+id/resetButton"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="Reset"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="#FF9800" />
+        <ImageView
+            android:id="@+id/imageViewPreview"
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:src="@drawable/ic_camera_placeholder"
+            android:scaleType="centerCrop"
+            android:background="@color/light_gray"
+            android:layout_marginBottom="32dp" />
 
-        <Button
-            android:id="@+id/incrementButton"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="+"
-            android:textSize="32sp"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonOpenCamera"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/open_camera"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:layout_marginStart="16dp"
-            android:backgroundTint="#4CAF50" />
+            android:backgroundTint="@color/colorPrimary"
+            android:textColor="@color/white"
+            app:cornerRadius="28dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/camera_info"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="24dp" />
 
     </LinearLayout>
 
-</LinearLayout>
+</ScrollView>
