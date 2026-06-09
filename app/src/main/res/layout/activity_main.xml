@@ -5,42 +5,39 @@
     android:orientation="vertical"
     android:gravity="center"
     android:padding="24dp"
-    android:background="@color/background">
+    android:background="#F5F5F5">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/app_name"
+        android:text="Camera App"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="@color/colorPrimary"
+        android:textColor="#6200EE"
         android:layout_marginBottom="32dp" />
 
     <ImageView
-        android:id="@+id/imageViewPreview"
+        android:id="@+id/imageView"
         android:layout_width="250dp"
         android:layout_height="250dp"
-        android:src="@drawable/ic_camera_placeholder"
-        android:scaleType="centerCrop"
-        android:background="@color/light_gray"
+        android:background="#E0E0E0"
         android:layout_marginBottom="32dp" />
 
     <Button
-        android:id="@+id/buttonOpenCamera"
+        android:id="@+id/cameraButton"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="@string/open_camera"
+        android:text="Open Camera"
         android:textSize="16sp"
         android:textStyle="bold"
-        android:backgroundTint="@color/colorPrimary"
-        android:textColor="@color/white" />
+        android:layout_marginBottom="12dp" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/camera_info"
-        android:textSize="12sp"
-        android:textColor="@color/text_secondary"
-        android:layout_marginTop="24dp" />
+    <Button
+        android:id="@+id/galleryButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Open Gallery"
+        android:textSize="16sp"
+        android:textStyle="bold" />
 
 </LinearLayout>
