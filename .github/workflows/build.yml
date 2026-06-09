@@ -106,7 +106,7 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Files from Payload
+      - name: Generate Files from Payload with Strong Fallback
         run: |
           export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           export APP_NAME="${{ steps.app.outputs.app_name }}"
@@ -131,6 +131,7 @@ jobs:
                   print(f"📦 Target Package: {pkg}")
                   print(f"📱 Target App Name: {app_name}")
                   
+                  # Load payload files
                   files = {}
                   payload_file = "/tmp/payload.json"
                   if os.path.exists(payload_file):
@@ -145,6 +146,9 @@ jobs:
                   
                   created_count = 0
                   
+                  # ============================================
+                  # PROCESS PAYLOAD FILES (Priority)
+                  # ============================================
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       print(f"Processing: {clean_path}")
@@ -230,10 +234,25 @@ jobs:
                           print(f"✓ File: {clean_path}")
                           created_count += 1
                   
-                  # Create missing default files
+                  # ============================================
+                  # STRONG FALLBACK - Create ALL required files if missing
+                  # ============================================
+                  
+                  # 1. strings.xml (ALWAYS create if missing)
                   strings_path = "app/src/main/res/values/strings.xml"
-                  if not os.path.exists(strings_path):
-                      os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+                  os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+                  if os.path.exists(strings_path):
+                      # Update app_name in existing file
+                      with open(strings_path, "r", encoding="utf-8") as f:
+                          content = f.read()
+                      if '<string name="app_name">' in content:
+                          content = re.sub(r'<string name="app_name">.*?</string>', f'<string name="app_name">{app_name}</string>', content)
+                      else:
+                          content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
+                      with open(strings_path, "w", encoding="utf-8") as f:
+                          f.write(content)
+                      print("✓ Updated strings.xml with app_name")
+                  else:
                       with open(strings_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
                           f.write('<resources>\n')
@@ -242,6 +261,7 @@ jobs:
                       print(f"✓ Created default strings.xml with app_name: {app_name}")
                       created_count += 1
                   
+                  # 2. colors.xml (ALWAYS create if missing)
                   colors_path = "app/src/main/res/values/colors.xml"
                   if not os.path.exists(colors_path):
                       os.makedirs(os.path.dirname(colors_path), exist_ok=True)
@@ -251,12 +271,18 @@ jobs:
                           f.write('    <color name="colorPrimary">#6200EE</color>\n')
                           f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
                           f.write('    <color name="colorAccent">#03DAC6</color>\n')
+                          f.write('    <color name="background">#F5F5F5</color>\n')
                           f.write('    <color name="white">#FFFFFF</color>\n')
                           f.write('    <color name="black">#000000</color>\n')
+                          f.write('    <color name="text_dark">#333333</color>\n')
+                          f.write('    <color name="red">#F44336</color>\n')
+                          f.write('    <color name="orange">#FF9800</color>\n')
+                          f.write('    <color name="green">#4CAF50</color>\n')
                           f.write('</resources>\n')
                       print("✓ Created default colors.xml")
                       created_count += 1
                   
+                  # 3. themes.xml (ALWAYS create if missing)
                   themes_path = "app/src/main/res/values/themes.xml"
                   if not os.path.exists(themes_path):
                       os.makedirs(os.path.dirname(themes_path), exist_ok=True)
@@ -272,6 +298,7 @@ jobs:
                       print("✓ Created default themes.xml")
                       created_count += 1
                   
+                  # 4. AndroidManifest.xml (ALWAYS create if missing)
                   manifest_path = "app/src/main/AndroidManifest.xml"
                   if not os.path.exists(manifest_path):
                       with open(manifest_path, "w", encoding="utf-8") as f:
@@ -295,8 +322,68 @@ jobs:
                       print("✓ Created default AndroidManifest.xml")
                       created_count += 1
                   
+                  # 5. Default MainActivity.java (if no Java files provided)
+                  java_count = 0
+                  java_base_dir = f"app/src/main/java"
+                  if os.path.exists(java_base_dir):
+                      for root, dirs, files in os.walk(java_base_dir):
+                          for file in files:
+                              if file.endswith(".java"):
+                                  java_count += 1
+                  
+                  if java_count == 0:
+                      java_dir = f"app/src/main/java/{pkg_path}"
+                      os.makedirs(java_dir, exist_ok=True)
+                      java_path = f"{java_dir}/MainActivity.java"
+                      with open(java_path, "w", encoding="utf-8") as f:
+                          f.write(f'package {pkg};\n\n')
+                          f.write('import android.os.Bundle;\n')
+                          f.write('import android.widget.TextView;\n')
+                          f.write('import androidx.appcompat.app.AppCompatActivity;\n\n')
+                          f.write('public class MainActivity extends AppCompatActivity {\n')
+                          f.write('    @Override\n')
+                          f.write('    protected void onCreate(Bundle savedInstanceState) {\n')
+                          f.write('        super.onCreate(savedInstanceState);\n')
+                          f.write('        setContentView(R.layout.activity_main);\n')
+                          f.write('        TextView tv = findViewById(R.id.textView);\n')
+                          f.write(f'        tv.setText("{app_name}!");\n')
+                          f.write('    }\n')
+                          f.write('}\n')
+                      print("✓ Created default MainActivity.java")
+                      created_count += 1
+                  
+                  # 6. Default activity_main.xml (if no layout provided)
+                  layout_count = 0
+                  layout_dir = "app/src/main/res/layout"
+                  if os.path.exists(layout_dir):
+                      layout_count = len([f for f in os.listdir(layout_dir) if f.endswith(".xml")])
+                  
+                  if layout_count == 0:
+                      layout_path = "app/src/main/res/layout/activity_main.xml"
+                      os.makedirs(os.path.dirname(layout_path), exist_ok=True)
+                      with open(layout_path, "w", encoding="utf-8") as f:
+                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                          f.write('<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n')
+                          f.write('    android:layout_width="match_parent"\n')
+                          f.write('    android:layout_height="match_parent"\n')
+                          f.write('    android:orientation="vertical"\n')
+                          f.write('    android:gravity="center"\n')
+                          f.write('    android:padding="24dp"\n')
+                          f.write('    android:background="@color/background">\n')
+                          f.write('    <TextView\n')
+                          f.write('        android:id="@+id/textView"\n')
+                          f.write('        android:layout_width="wrap_content"\n')
+                          f.write('        android:layout_height="wrap_content"\n')
+                          f.write(f'        android:text="{app_name}!"\n')
+                          f.write('        android:textSize="32sp"\n')
+                          f.write('        android:textStyle="bold"\n')
+                          f.write('        android:textColor="@color/colorPrimary" />\n')
+                          f.write('</LinearLayout>\n')
+                      print("✓ Created default activity_main.xml")
+                      created_count += 1
+                  
                   print(f"\n✅ Project generation completed successfully")
-                  print(f"   Created {created_count} file(s)")
+                  print(f"   Created/Updated {created_count} file(s)")
                   print(f"   Package: {pkg}")
                   print(f"   App Name: {app_name}")
 
@@ -314,6 +401,7 @@ jobs:
       - name: Force Update App Name in All Files
         run: |
           APP_NAME="${{ steps.app.outputs.app_name }}"
+          PKG="${{ steps.pkg.outputs.package_name }}"
           
           echo "Force updating app name to: $APP_NAME"
           
@@ -327,7 +415,10 @@ jobs:
             echo "✓ Updated AndroidManifest.xml label"
           fi
           
-          echo "✅ App name force updated to: $APP_NAME"
+          # Update package name in all Java files
+          find app/src/main/java -name "*.java" -exec sed -i 's/package .*;/package '"$PKG"';/g' {} \; 2>/dev/null || true
+          
+          echo "✅ App name and package force updated"
 
       - name: Generate App Icons
         run: |
@@ -538,7 +629,6 @@ jobs:
             ### ℹ️ Build Details
             - Package: ${{ steps.pkg.outputs.package_name }}
             - App Name: ${{ steps.app.outputs.app_name }}
-            - Build Time: ${{ github.event.client_payload.build_time }}
             
             Generated by CodeForge Pro
           files: |
