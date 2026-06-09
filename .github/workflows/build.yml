@@ -21,7 +21,7 @@ jobs:
 
       - name: Create Simple Counter App
         run: |
-          # Package name from payload
+          # Package name
           PKG="com.counter.app"
           APP_NAME="Counter App"
           
@@ -31,7 +31,7 @@ jobs:
           mkdir -p app/src/main/res/values
           
           # MainActivity.java
-          cat > app/src/main/java/$(echo $PKG | tr '.' '/')/MainActivity.java << 'EOF'
+          cat > app/src/main/java/$(echo $PKG | tr '.' '/')/MainActivity.java << 'JAVA_EOF'
           package com.counter.app;
           
           import android.os.Bundle;
@@ -57,26 +57,36 @@ jobs:
                   
                   updateCounter();
                   
-                  btnPlus.setOnClickListener(v -> { count++; updateCounter(); });
-                  btnMinus.setOnClickListener(v -> { count--; updateCounter(); });
-                  btnReset.setOnClickListener(v -> { count = 0; updateCounter(); });
+                  btnPlus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) { count++; updateCounter(); }
+                  });
+                  btnMinus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) { count--; updateCounter(); }
+                  });
+                  btnReset.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) { count = 0; updateCounter(); }
+                  });
               }
               
               private void updateCounter() {
                   counterText.setText(String.valueOf(count));
               }
           }
-          EOF
+          JAVA_EOF
           
           # activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          cat > app/src/main/res/layout/activity_main.xml << 'XML_EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="24dp">
+              android:padding="24dp"
+              android:background="#F5F5F5">
               
               <TextView
                   android:id="@+id/counterText"
@@ -85,7 +95,8 @@ jobs:
                   android:text="0"
                   android:textSize="80sp"
                   android:textStyle="bold"
-                  android:layout_marginBottom="32dp" />
+                  android:textColor="#333333"
+                  android:layout_marginBottom="40dp" />
               
               <LinearLayout
                   android:layout_width="match_parent"
@@ -99,6 +110,8 @@ jobs:
                       android:layout_weight="1"
                       android:text="-"
                       android:textSize="32sp"
+                      android:backgroundTint="#F44336"
+                      android:textColor="#FFFFFF"
                       android:layout_marginEnd="8dp" />
                   
                   <Button
@@ -108,6 +121,8 @@ jobs:
                       android:layout_weight="1"
                       android:text="Reset"
                       android:textSize="16sp"
+                      android:backgroundTint="#FF9800"
+                      android:textColor="#FFFFFF"
                       android:layout_marginStart="4dp"
                       android:layout_marginEnd="4dp" />
                   
@@ -118,14 +133,16 @@ jobs:
                       android:layout_weight="1"
                       android:text="+"
                       android:textSize="32sp"
+                      android:backgroundTint="#4CAF50"
+                      android:textColor="#FFFFFF"
                       android:layout_marginStart="8dp" />
                   
               </LinearLayout>
           </LinearLayout>
-          EOF
+          XML_EOF
           
           # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << EOF
+          cat > app/src/main/AndroidManifest.xml << MAN_EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${PKG}">
@@ -144,33 +161,81 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          EOF
+          MAN_EOF
           
-          # build.gradle
-          cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
-          android { compileSdk 34 defaultConfig { minSdk 21 targetSdk 34 versionCode 1 versionName '1.0' } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
-          EOF
-          
-          cat > settings.gradle << 'EOF'
-          rootProject.name = "App"
+          # settings.gradle with plugin management
+          cat > settings.gradle << 'SET_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "CounterApp"
           include ':app'
-          EOF
+          SET_EOF
           
-          cat > build.gradle << 'EOF'
-          plugins { id 'com.android.application' version '8.2.2' apply false }
-          EOF
+          # build.gradle (top level)
+          cat > build.gradle << 'BLD_EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          BLD_EOF
+          
+          # app/build.gradle
+          cat > app/build.gradle << 'APP_EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              namespace 'com.counter.app'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId 'com.counter.app'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          APP_EOF
+          
+          # gradle.properties
+          cat > gradle.properties << 'PRO_EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          PRO_EOF
           
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           
-          echo "✅ Simple Counter App created"
+          echo "✅ Counter App created successfully"
 
       - name: Build APK
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
