@@ -1,304 +1,204 @@
-name: Repair and Build Structure
-
+name: Publish release
 on:
-  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - release-artifact-finished
+concurrency:
+  group: publish-release-${{ github.event.client_payload.sha }}
+  cancel-in-progress: false
+
+
+permissions: read-all
+
 
 jobs:
-  repair:
-    runs-on: ubuntu-latest
+  publish-draft-release:
+    if: github.event.client_payload.event_name == 'push' && github.event.client_payload.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+
+
     permissions:
-      contents: write
+      actions: read
+      contents: read
+
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: checkout sources
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 2
 
-      - name: Create complete app structure
-        run: |
-          # Create all directories
-          mkdir -p app/src/main/java/com/counter/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p .github/workflows
-          
-          # MainActivity.java
-          cat > app/src/main/java/com/counter/app/MainActivity.java << 'JAVA'
-          package com.counter.app;
-          
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-          
-          public class MainActivity extends AppCompatActivity {
-              private TextView counterText;
-              private Button btnMinus, btnReset, btnPlus;
-              private int count = 0;
-              
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  
-                  counterText = findViewById(R.id.counterText);
-                  btnMinus = findViewById(R.id.btnMinus);
-                  btnReset = findViewById(R.id.btnReset);
-                  btnPlus = findViewById(R.id.btnPlus);
-                  
-                  counterText.setText("0");
-                  
-                  btnMinus.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          count--;
-                          counterText.setText(String.valueOf(count));
-                      }
-                  });
-                  
-                  btnReset.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          count = 0;
-                          counterText.setText("0");
-                      }
-                  });
-                  
-                  btnPlus.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          count++;
-                          counterText.setText(String.valueOf(count));
-                      }
-                  });
-              }
-          }
-          JAVA
-          
-          # activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << 'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp"
-              android:background="#F5F5F5">
-              
-              <TextView
-                  android:id="@+id/counterText"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="0"
-                  android:textSize="80sp"
-                  android:textStyle="bold"
-                  android:textColor="#333333"
-                  android:layout_marginBottom="40dp" />
-              
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal">
-                  
-                  <Button
-                      android:id="@+id/btnMinus"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="-"
-                      android:textSize="32sp"
-                      android:backgroundTint="#F44336"
-                      android:textColor="#FFFFFF"
-                      android:layout_marginEnd="8dp" />
-                  
-                  <Button
-                      android:id="@+id/btnReset"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="Reset"
-                      android:textSize="16sp"
-                      android:backgroundTint="#FF9800"
-                      android:textColor="#FFFFFF"
-                      android:layout_marginStart="4dp"
-                      android:layout_marginEnd="4dp" />
-                  
-                  <Button
-                      android:id="@+id/btnPlus"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="+"
-                      android:textSize="32sp"
-                      android:backgroundTint="#4CAF50"
-                      android:textColor="#FFFFFF"
-                      android:layout_marginStart="8dp" />
-                  
-              </LinearLayout>
-          </LinearLayout>
-          XML
-          
-          # colors.xml
-          cat > app/src/main/res/values/colors.xml << 'COL'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC6</color>
-              <color name="background">#F5F5F5</color>
-              <color name="white">#FFFFFF</color>
-              <color name="red">#F44336</color>
-              <color name="orange">#FF9800</color>
-              <color name="green">#4CAF50</color>
-          </resources>
-          COL
-          
-          # themes.xml
-          cat > app/src/main/res/values/themes.xml << 'THE'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          THE
-          
-          # strings.xml
-          cat > app/src/main/res/values/strings.xml << 'STR'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">Counter App</string>
-          </resources>
-          STR
-          
-          # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << 'MAN'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.counter.app">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          MAN
-          
-          # settings.gradle
-          cat > settings.gradle << 'SET'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "CounterApp"
-          include ':app'
-          SET
-          
-          # build.gradle
-          cat > build.gradle << 'BLD'
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          BLD
-          
-          # app/build.gradle
-          cat > app/build.gradle << 'APP'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              namespace 'com.counter.app'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId 'com.counter.app'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          APP
-          
-          # gradle.properties
-          cat > gradle.properties << 'PRO'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          PRO
-          
-          # Build workflow
-          cat > .github/workflows/build.yml << 'WF'
-          name: Build APK
-          on:
-            repository_dispatch:
-              types: [trigger_b64_build]
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                - name: Setup JDK
-                  uses: actions/setup-java@v4
-                  with:
-                    distribution: temurin
-                    java-version: 17
-                - name: Setup Android SDK
-                  uses: android-actions/setup-android@v3
-                - name: Build
-                  run: ./gradlew assembleRelease
-                - name: Upload
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: app-release-apk
-                    path: app/build/outputs/apk/release/*.apk
-          WF
-          
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          
-          echo "✅ All files created successfully"
 
-      - name: Push to repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Repair: Complete app structure restored" || echo "No changes"
-          git push
+    - name: Assess completion state of release publisher workflows
+      id: assess
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -eu
+
+        SHA="${{ github.event.client_payload.sha }}"
+        TAG="${{ github.event.client_payload.tag }}"
+        TRIGGER_WORKFLOW="${{ github.event.client_payload.workflow }}"
+        TRIGGER_RUN_ID="${{ github.event.client_payload.run_id }}"
+        TRIGGER_CONCLUSION="${{ github.event.client_payload.conclusion }}"
+
+        if [ -z "$SHA" ]; then
+          echo "Missing commit SHA in dispatch payload."
+          exit 1
+        fi
+
+        mapfile -t marked_paths < <(grep -lE 'RELEASE_PUBLISHER:[[:space:]]*"true"' .github/workflows/*.yml)
+
+        if [ ${#marked_paths[@]} -eq 0 ]; then
+          echo "No workflows marked with RELEASE_PUBLISHER: \"true\"."
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        marked_json=$(printf '%s\n' "${marked_paths[@]}" | jq -R . | jq -s .)
+        workflows_json=$(gh api repos/${{ github.repository }}/actions/workflows --paginate)
+
+        required_workflows=$(jq -c --argjson marked "$marked_json" '
+          [.workflows[] | select(.path != "" and (.path as $p | $marked | index($p))) | {id, name, path}] | unique_by(.path)
+        ' <<< "$workflows_json")
+
+        required_count=$(jq 'length' <<< "$required_workflows")
+        if [ "$required_count" -eq 0 ]; then
+          echo "No workflow IDs matched marked workflow files."
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Get list of changed files in the commit for path filter matching
+        # Prefer GitHub API compare (works with shallow checkout), then fall back to local git diff.
+        echo "Getting changed files for commit $SHA..."
+        changed_files=""
+        parent_sha=$(gh api repos/${{ github.repository }}/commits/$SHA --jq '.parents[0].sha // ""' 2>/dev/null || echo "")
+        if [ -n "$parent_sha" ]; then
+          changed_files=$(gh api repos/${{ github.repository }}/compare/$parent_sha...$SHA --jq '.files[]?.filename' 2>/dev/null || echo "")
+        fi
+        if [ -z "$changed_files" ]; then
+          changed_files=$(git diff --name-only $SHA^..$SHA 2>/dev/null || echo "")
+        fi
+        if [ -z "$changed_files" ]; then
+          echo "Warning: Could not determine changed files. Will wait for all workflows."
+        fi
+
+        all_runs_json=$(gh run list --repo ${{ github.repository }} --branch master --event push --commit "$SHA" \
+          --json workflowName,status,conclusion,databaseId --limit 200 2>/dev/null || echo '[]')
+
+        run_count=$(jq 'length' <<< "$all_runs_json")
+        echo "Detected workflow runs for $SHA: $run_count"
+        if [ "$run_count" -gt 0 ]; then
+          echo "Detected workflow names:"
+          jq -r '.[].workflowName' <<< "$all_runs_json" | sed '/^$/d' | sort -u | sed 's/^/- /'
+        fi
+
+        pending=0
+
+        while IFS= read -r row; do
+          name=$(jq -r '.name' <<< "$row")
+          path=$(jq -r '.path' <<< "$row")
+
+          if [ -n "$TRIGGER_WORKFLOW" ] && [ "$name" = "$TRIGGER_WORKFLOW" ] && [ -n "$TRIGGER_CONCLUSION" ] && [ "$TRIGGER_CONCLUSION" != "missing" ]; then
+            echo "Completed (dispatch): $name ($TRIGGER_CONCLUSION)."
+            continue
+          fi
+
+          run_json=$(jq -c --arg name "$name" '
+            [.[] | select(.workflowName == $name)][0]
+          ' <<< "$all_runs_json")
+
+          status=$(jq -r '.status // "missing"' <<< "$run_json")
+          conclusion=$(jq -r '.conclusion // "missing"' <<< "$run_json")
+
+          if [ "$status" = "missing" ]; then
+            # Check if workflow has path filters that don't match changed files
+            if [ -n "$changed_files" ] && [ -f "$path" ]; then
+              # Extract path filters from workflow file (simplified check for 'paths:' section)
+              has_path_filter=$(grep -A 20 "^on:" "$path" | grep -E "^\s+paths:" | head -1)
+              
+              if [ -n "$has_path_filter" ]; then
+                # Get the path patterns (this is a simplified extraction)
+                path_patterns=$(grep -A 20 "^on:" "$path" | sed -n '/^\s\+paths:/,/^\s\+[a-z]/p' | grep '^\s\+-' | sed 's/^\s*-\s*//')
+                
+                matched=false
+                while IFS= read -r pattern; do
+                  [ -z "$pattern" ] && continue
+                  # Convert glob pattern to grep pattern (simplified: ** -> .*, * -> [^/]*)
+                  grep_pattern=$(echo "$pattern" | sed 's|\*\*|.*|g' | sed 's|\*|[^/]*|g' | sed 's|^|^|' | sed 's|$|$|')
+                  
+                  if echo "$changed_files" | grep -qE "$grep_pattern"; then
+                    matched=true
+                    break
+                  fi
+                done <<< "$path_patterns"
+                
+                if [ "$matched" = false ]; then
+                  echo "Skipped: $name (path filters don't match changed files)."
+                  continue
+                fi
+              fi
+            fi
+            
+            echo "Waiting: $name has not started for $SHA yet."
+            pending=1
+            continue
+          fi
+
+          if [ "$status" != "completed" ]; then
+            echo "Waiting: $name is $status for $SHA."
+            pending=1
+            continue
+          fi
+
+          echo "Completed: $name ($conclusion)."
+        done < <(jq -c '.[]' <<< "$required_workflows")
+
+        if [ "$pending" -eq 1 ]; then
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+        fi
+        echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+    - name: Publish draft release in nightly-builds
+      if: steps.assess.outputs.ready == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.NIGHTLY_BUILDS }}
+      run: |
+        set -eu
+
+        OWNER="${{ github.repository_owner }}"
+        TARGET_REPO="$OWNER/nightly-builds"
+        TAG="${{ steps.assess.outputs.release_tag }}"
+
+        if [ -z "$TAG" ]; then
+          echo "No release tag provided in event payload; refusing to guess a draft release to publish."
+          exit 1
+        fi
+
+        releases_json=$(gh api repos/$TARGET_REPO/releases)
+
+        published_id=$(jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and .draft == false) | .id' <<< "$releases_json" | head -n1)
+        if [ -n "$published_id" ]; then
+          echo "Release $TAG is already published."
+          exit 0
+        fi
+
+        draft_id=$(jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and .draft == true) | .id' <<< "$releases_json" | head -n1)
+        if [ -z "$draft_id" ]; then
+          echo "No draft release found for tag $TAG."
+          exit 0
+        fi
+
+        # With immutable releases enabled, request GitHub to recompute the
+        # repository 'latest' release when publishing this draft.
+        gh api --method PATCH repos/$TARGET_REPO/releases/$draft_id \
+          -f draft=false -f prerelease=false -f make_latest=legacy >/dev/null
+
+        echo "Published release $TAG in $TARGET_REPO."
+
+
