@@ -1,4 +1,4 @@
-name: Android CI/CD with Dispatch
+name: Build Android APK + AAB (Release Only)
 
 on:
   workflow_dispatch:
@@ -7,37 +7,58 @@ on:
         description: 'Package Name'
         required: false
         default: 'com.example.app'
+        type: string
       app_name:
         description: 'App Name'
         required: false
         default: 'MyApp'
+        type: string
+      icon:
+        description: 'App Icon Base64'
+        required: false
+        type: string
   repository_dispatch:
     types: [trigger_b64_build]
 
+concurrency:
+  group: android-build-${{ github.event.client_payload.build_id || github.run_id }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
-  actions: write
+  actions: read
 
 env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  build-android-app:
+    name: Build Android APK and AAB
+    runs-on: ubuntu-24.04
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'repository_dispatch' && github.event.action == 'trigger_b64_build')
+    
     steps:
-      - name: Checkout code
+      # Step 1: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      # Step 2: Setup JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: temurin
+          java-version: 17
+          cache: gradle
 
+      # Step 3: Setup Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Step 4: Get Package Name (Priority: Payload > Manual > Default)
       - name: Get Package Name
         id: pkg
         run: |
@@ -48,9 +69,13 @@ jobs:
           else
             PKG="com.example.app"
           fi
+          PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
           echo "✅ Package: $PKG"
 
+      # Step 5: Get App Name (Priority: Payload > Manual > Default)
       - name: Get App Name
         id: app
         run: |
@@ -64,128 +89,150 @@ jobs:
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "✅ App Name: $APP_NAME"
 
-      - name: Create Directories
+      # Step 6: Create Project Directories
+      - name: Create Project Directories
         run: |
+          rm -rf app
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/assets
 
-      - name: Generate Files from Payload
+      # Step 7: Get Icon from Payload
+      - name: Get Icon
+        id: icon
+        run: |
+          if [ -n "${{ github.event.client_payload.icon }}" ]; then
+            ICON="${{ github.event.client_payload.icon }}"
+            echo "$ICON" | base64 -d > /tmp/app_icon.png 2>/dev/null || true
+            echo "icon_exists=true" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.event.inputs.icon }}" ]; then
+            ICON="${{ github.event.inputs.icon }}"
+            echo "$ICON" | base64 -d > /tmp/app_icon.png 2>/dev/null || true
+            echo "icon_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "icon_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 8: Generate App Files
+      - name: Generate App Files
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           APP_NAME="${{ steps.app.outputs.app_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           
-          # Create MainActivity.java if exists in payload
-          echo '${{ toJson(github.event.client_payload.files) }}' > /tmp/files.json
+          # Create MainActivity.java
+          cat > app/src/main/java/${PKG_PATH}/MainActivity.java << 'JAVA_EOF'
+          package PKG_PLACEHOLDER;
           
-          # Process files using python
-          python3 << 'EOF'
-          import json, os, re
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
           
-          with open('/tmp/files.json', 'r') as f:
-              content = f.read().strip()
-              files = json.loads(content) if content and content != 'null' else {}
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  TextView tv = findViewById(R.id.textView);
+                  tv.setText("APP_NAME_PLACEHOLDER!");
+              }
+          }
+          JAVA_EOF
           
-          pkg = os.environ.get('PKG', 'com.example.app')
-          app_name = os.environ.get('APP_NAME', 'MyApp')
-          pkg_path = pkg.replace('.', '/')
+          # Replace placeholders
+          sed -i "s/PKG_PLACEHOLDER/${PKG}/g" app/src/main/java/${PKG_PATH}/MainActivity.java
+          sed -i "s/APP_NAME_PLACEHOLDER/${APP_NAME}/g" app/src/main/java/${PKG_PATH}/MainActivity.java
           
-          for path, file_content in files.items():
-              clean_path = path.strip('/')
-              
-              if clean_path.endswith('.java'):
-                  # Fix package name
-                  file_content = re.sub(r'^package .*?;', f'package {pkg};', file_content, flags=re.MULTILINE)
-                  filename = os.path.basename(clean_path)
-                  new_path = f"app/src/main/java/{pkg_path}/{filename}"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print(f"✅ Java: {filename}")
-                  
-              elif 'AndroidManifest.xml' in clean_path:
-                  new_path = "app/src/main/AndroidManifest.xml"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print("✅ AndroidManifest.xml")
-                  
-              elif 'layout' in clean_path and clean_path.endswith('.xml'):
-                  filename = os.path.basename(clean_path)
-                  new_path = f"app/src/main/res/layout/{filename}"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print(f"✅ Layout: {filename}")
-                  
-              elif 'strings.xml' in clean_path:
-                  new_path = "app/src/main/res/values/strings.xml"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print("✅ strings.xml")
-                  
-              elif 'colors.xml' in clean_path:
-                  new_path = "app/src/main/res/values/colors.xml"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print("✅ colors.xml")
-                  
-              elif 'themes.xml' in clean_path:
-                  new_path = "app/src/main/res/values/themes.xml"
-                  os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                  with open(new_path, 'w') as out:
-                      out.write(file_content)
-                  print("✅ themes.xml")
+          # Create activity_main.xml
+          cat > app/src/main/res/layout/activity_main.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="24dp"
+              android:background="#F5F5F5">
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="APP_NAME_PLACEHOLDER!"
+                  android:textSize="32sp"
+                  android:textStyle="bold"
+                  android:textColor="#6200EE" />
+          </LinearLayout>
+          XML_EOF
           
-          # Create fallback files if missing
-          if not os.path.exists("app/src/main/res/values/strings.xml"):
-              os.makedirs("app/src/main/res/values", exist_ok=True)
-              with open("app/src/main/res/values/strings.xml", 'w') as f:
-                  f.write(f'''<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">{app_name}</string>
-</resources>''')
-              print("⚠️ Created fallback strings.xml")
+          sed -i "s/APP_NAME_PLACEHOLDER/${APP_NAME}/g" app/src/main/res/layout/activity_main.xml
           
-          if not os.path.exists("app/src/main/res/values/colors.xml"):
-              with open("app/src/main/res/values/colors.xml", 'w') as f:
-                  f.write('''<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#03DAC6</color>
-</resources>''')
-              print("⚠️ Created fallback colors.xml")
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << STR_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">${APP_NAME}</string>
+          </resources>
+          STR_EOF
           
-          if not os.path.exists("app/src/main/AndroidManifest.xml"):
-              with open("app/src/main/AndroidManifest.xml", 'w') as f:
-                  f.write(f'''<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
-    <application android:label="{app_name}" android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>''')
-              print("⚠️ Created fallback AndroidManifest.xml")
-          EOF
+          # Create colors.xml
+          cat > app/src/main/res/values/colors.xml << COL_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC6</color>
+              <color name="background">#F5F5F5</color>
+          </resources>
+          COL_EOF
+          
+          # Create themes.xml
+          cat > app/src/main/res/values/themes.xml << THE_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          THE_EOF
+          
+          # Create AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << MAN_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${PKG}">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MAN_EOF
+          
+          echo "✅ Generated all app files"
 
+      # Step 9: Generate App Icons
       - name: Generate App Icons
         run: |
-          ICON_B64="${{ github.event.client_payload.icon }}"
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
+          if [ "${{ steps.icon.outputs.icon_exists }}" = "true" ] && [ -f /tmp/app_icon.png ]; then
+            echo "✅ Custom icon detected..."
             for size in 48 72 96 144 192; do
               case $size in
                 48) density="mdpi" ;;
@@ -194,43 +241,184 @@ jobs:
                 144) density="xxhdpi" ;;
                 192) density="xxxhdpi" ;;
               esac
-              convert icon.png -resize ${size}x${size} app/src/main/res/mipmap-${density}/ic_launcher.png
-              cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png
+              convert /tmp/app_icon.png -resize ${size}x${size} app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
+              cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
             done
             echo "✅ Custom icon applied"
+          else
+            echo "⚠️ No custom icon, generating fallback icons..."
+            for size in 48 72 96 144 192; do
+              case $size in
+                48) density="mdpi" ;;
+                72) density="hdpi" ;;
+                96) density="xhdpi" ;;
+                144) density="xxhdpi" ;;
+                192) density="xxxhdpi" ;;
+              esac
+              convert -size ${size}x${size} xc:#6200EE -gravity center \
+                -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
+                app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
+              cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
+            done
           fi
 
+      # Step 10: Create Keystore (Debug)
+      - name: Create Debug Keystore
+        run: |
+          keytool -genkey -v -keystore keystore.jks -alias release \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown" \
+            -storepass android -keypass android
+          echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
+          echo "KEY_ALIAS=release" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+
+      # Step 11: Create build.gradle
+      - name: Create build.gradle
+        run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              namespace "${PKG}"
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId "${PKG}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+                  multiDexEnabled true
+              }
+              
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("KEYSTORE_PATH") ?: "none")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      signingConfig signingConfigs.release
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+          
+          sed -i "s/\${PKG}/${PKG}/g" app/build.gradle
+          
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "MyApp"
+          include ':app'
+          EOF
+          
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+          
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.enableJetifier=false
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          EOF
+          
+          echo "✅ Created Gradle files"
+
+      # Step 12: Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      # Step 13: Generate Gradle Wrapper
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Build APK Release
-        run: ./gradlew assembleRelease --no-daemon
+      # Step 14: Clean Project
+      - name: Clean Project
+        run: ./gradlew clean --no-daemon
 
-      - name: Build AAB Release
-        run: ./gradlew bundleRelease --no-daemon
+      # Step 15: Build Release APK
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
 
-      - name: Upload APK
+      # Step 16: Build Release AAB
+      - name: Build Release AAB
+        run: ./gradlew bundleRelease --stacktrace --no-daemon
+
+      # Step 17: Upload APK Artifact
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
-      - name: Upload AAB
+      # Step 18: Upload AAB Artifact
+      - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
 
+      # Step 19: Create GitHub Release
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest-release
-          name: Latest Build - ${{ steps.app.outputs.app_name }}
+          tag_name: latest-release-${{ github.run_number }}
+          name: "Build #${{ github.run_number }} - ${{ steps.app.outputs.app_name }}"
+          body: |
+            ## ✅ Build Successful!
+            
+            ### 📦 App Details
+            - **Package:** `${{ steps.pkg.outputs.package_name }}`
+            - **App Name:** `${{ steps.app.outputs.app_name }}`
+            - **Build Number:** ${{ github.run_number }}
+            
+            ### 📱 Download Files
+            - **APK** - Direct install on Android devices
+            - **AAB** - For Google Play Store upload
+            
+            🔧 Built with CodeForge Pro on GitHub Actions
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+          draft: false
+          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
