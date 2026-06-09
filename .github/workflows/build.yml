@@ -54,6 +54,7 @@ jobs:
             PKG="com.example.app"
           fi
           
+          # Clean package name
           PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
@@ -106,31 +107,54 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Files from Payload
+      - name: Generate and Fix Package Names Everywhere
         run: |
           export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           export APP_NAME="${{ steps.app.outputs.app_name }}"
+          export PKG_PATH="${{ steps.pkg.outputs.package_path }}"
           
           cat > /tmp/payload.json << 'PAYLOAD_EOF'
           ${{ toJson(github.event.client_payload.files) }}
           PAYLOAD_EOF
 
-          cat > generate.py << 'EOF'
+          cat > generate_and_fix.py << 'EOF'
           import json
           import os
           import re
           import sys
           import traceback
+          import shutil
+
+          def fix_package_in_content(content, old_pkg_pattern, new_pkg):
+              """Fix package names in file content"""
+              # Fix package declaration
+              content = re.sub(r'^package\s+[\w.]+;', f'package {new_pkg};', content, flags=re.MULTILINE)
+              
+              # Fix import statements
+              if old_pkg_pattern:
+                  content = re.sub(f'import\\s+{old_pkg_pattern}\\.', f'import {new_pkg}.', content)
+              
+              # Fix fully qualified class names
+              content = re.sub(f'{old_pkg_pattern}\\.', f'{new_pkg}.', content)
+              
+              return content
+
+          def extract_package_from_content(content):
+              """Extract package name from file content"""
+              match = re.search(r'^package\s+([\w.]+);', content, re.MULTILINE)
+              return match.group(1) if match else None
 
           def main():
               try:
-                  pkg = os.environ.get("NEW_PKG", "com.example.app")
+                  target_pkg = os.environ.get("NEW_PKG", "com.example.app")
                   app_name = os.environ.get("APP_NAME", "MyApp")
-                  pkg_path = pkg.replace(".", "/")
+                  pkg_path = target_pkg.replace(".", "/")
                   
-                  print(f"📦 Target Package: {pkg}")
+                  print(f"📦 Target Package: {target_pkg}")
                   print(f"📱 Target App Name: {app_name}")
+                  print(f"📁 Package Path: {pkg_path}")
                   
+                  # Load payload files
                   files = {}
                   payload_file = "/tmp/payload.json"
                   if os.path.exists(payload_file):
@@ -144,44 +168,65 @@ jobs:
                                   print("⚠️ No valid files in payload")
                   
                   created_count = 0
+                  updated_count = 0
                   
+                  # First pass: process all payload files
                   for path, content in files.items():
                       clean_path = path.strip("/")
-                      print(f"Processing: {clean_path}")
+                      print(f"\n📄 Processing: {clean_path}")
                       
+                      # Handle Java files
                       if clean_path.endswith(".java"):
-                          content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
-                          if not re.search(r'^package ', content, re.MULTILINE):
-                              content = f'package {pkg};\n\n{content}'
+                          # Extract old package if exists
+                          old_pkg = extract_package_from_content(content)
+                          if old_pkg and old_pkg != target_pkg:
+                              print(f"   🔄 Fixing package: {old_pkg} -> {target_pkg}")
+                              content = fix_package_in_content(content, old_pkg, target_pkg)
+                              updated_count += 1
+                          elif not old_pkg:
+                              # Add package declaration if missing
+                              content = f'package {target_pkg};\n\n{content}'
+                              print(f"   ➕ Added package declaration: {target_pkg}")
+                              updated_count += 1
+                          
                           filename = os.path.basename(clean_path)
                           new_path = f"app/src/main/java/{pkg_path}/{filename}"
                           os.makedirs(os.path.dirname(new_path), exist_ok=True)
                           with open(new_path, "w", encoding="utf-8") as out:
                               out.write(content)
-                          print(f"✓ Java: {filename}")
+                          print(f"   ✓ Java file: {filename}")
                           created_count += 1
-                          
+                      
+                      # Handle XML files
                       elif clean_path.endswith(".xml"):
                           if "AndroidManifest.xml" in clean_path:
                               new_path = "app/src/main/AndroidManifest.xml"
-                              content = re.sub(r'\s+package="[^"]*"', '', content)
-                              content = re.sub(r'package="[^"]*"', '', content)
+                              # Fix package in manifest
+                              content = re.sub(r'package="[^"]*"', f'package="{target_pkg}"', content)
+                              # Ensure manifest has package
+                              if 'package="' not in content:
+                                  content = content.replace('<manifest', f'<manifest package="{target_pkg}"')
+                              # Add xmlns if missing
                               if 'xmlns:android' not in content:
                                   content = content.replace('<manifest', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"')
+                              # Fix app name
                               content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', content)
+                              
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print(f"✓ AndroidManifest.xml")
+                              print(f"   ✓ AndroidManifest.xml (package: {target_pkg})")
                               created_count += 1
                               
                           elif "layout" in clean_path and ".xml" in clean_path:
                               filename = os.path.basename(clean_path)
                               new_path = f"app/src/main/res/layout/{filename}"
+                              # Fix any hardcoded package names in layout
+                              content = re.sub(r'package="[^"]*"', f'package="{target_pkg}"', content)
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print(f"✓ Layout: {filename}")
+                              print(f"   ✓ Layout: {filename}")
                               created_count += 1
                               
                           elif "values/strings.xml" in clean_path:
@@ -193,44 +238,88 @@ jobs:
                                   content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print(f"✓ strings.xml (app_name: {app_name})")
+                              print(f"   ✓ strings.xml (app_name: {app_name})")
                               created_count += 1
-                              
-                          elif "values/colors.xml" in clean_path:
-                              new_path = "app/src/main/res/values/colors.xml"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                              print("✓ colors.xml")
-                              created_count += 1
-                              
-                          elif "values/themes.xml" in clean_path or "values/styles.xml" in clean_path:
-                              new_path = "app/src/main/res/values/themes.xml"
-                              os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              with open(new_path, "w", encoding="utf-8") as out:
-                                  out.write(content)
-                              print("✓ themes.xml")
-                              created_count += 1
-                              
                           else:
-                              if "drawable" in clean_path:
-                                  new_path = f"app/src/main/res/{clean_path}"
-                              else:
-                                  new_path = f"app/src/main/res/{clean_path}"
+                              # Other XML files
+                              new_path = f"app/src/main/res/{clean_path}"
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
-                              print(f"✓ XML: {clean_path}")
+                              print(f"   ✓ XML: {clean_path}")
                               created_count += 1
                       else:
+                          # Other files
                           new_path = f"app/src/main/{clean_path}"
                           os.makedirs(os.path.dirname(new_path), exist_ok=True)
                           with open(new_path, "w", encoding="utf-8") as out:
                               out.write(content)
-                          print(f"✓ File: {clean_path}")
+                          print(f"   ✓ File: {clean_path}")
                           created_count += 1
                   
-                  # Create missing default files
+                  # Second pass: Create default MainActivity with correct package
+                  main_activity_path = f"app/src/main/java/{pkg_path}/MainActivity.java"
+                  if not os.path.exists(main_activity_path):
+                      print(f"\n📝 Creating default MainActivity.java")
+                      with open(main_activity_path, "w", encoding="utf-8") as f:
+                          f.write(f'''package {target_pkg};
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {{
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {{
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        TextView textView = findViewById(R.id.textView);
+        if (textView != null) {{
+            textView.setText("Welcome to {app_name}");
+        }}
+    }}
+}}
+''')
+                      print(f"   ✓ Created MainActivity.java with package: {target_pkg}")
+                      created_count += 1
+                  
+                  # Create default layout if missing
+                  layout_path = "app/src/main/res/layout/activity_main.xml"
+                  if not os.path.exists(layout_path):
+                      print(f"\n📝 Creating default activity_main.xml")
+                      with open(layout_path, "w", encoding="utf-8") as f:
+                          f.write('''<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp">
+    
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hello World!"
+        android:textSize="24sp"
+        android:textColor="@android:color/black"/>
+    
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Click Me"
+        android:layout_marginTop="20dp"
+        android:onClick="onButtonClick"/>
+        
+</LinearLayout>
+''')
+                      print(f"   ✓ Created activity_main.xml")
+                      created_count += 1
+                  
+                  # Create strings.xml if missing
                   strings_path = "app/src/main/res/values/strings.xml"
                   if not os.path.exists(strings_path):
                       os.makedirs(os.path.dirname(strings_path), exist_ok=True)
@@ -239,67 +328,118 @@ jobs:
                           f.write('<resources>\n')
                           f.write(f'    <string name="app_name">{app_name}</string>\n')
                           f.write('</resources>\n')
-                      print(f"✓ Created default strings.xml with app_name: {app_name}")
+                      print(f"   ✓ Created strings.xml")
                       created_count += 1
                   
+                  # Create colors.xml if missing
                   colors_path = "app/src/main/res/values/colors.xml"
                   if not os.path.exists(colors_path):
                       os.makedirs(os.path.dirname(colors_path), exist_ok=True)
                       with open(colors_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<resources>\n')
-                          f.write('    <color name="colorPrimary">#6200EE</color>\n')
-                          f.write('    <color name="colorPrimaryDark">#3700B3</color>\n')
-                          f.write('    <color name="colorAccent">#03DAC6</color>\n')
-                          f.write('    <color name="white">#FFFFFF</color>\n')
-                          f.write('    <color name="black">#000000</color>\n')
-                          f.write('</resources>\n')
-                      print("✓ Created default colors.xml")
+                          f.write('''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#6200EE</color>
+    <color name="colorPrimaryDark">#3700B3</color>
+    <color name="colorAccent">#03DAC6</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
+''')
+                      print(f"   ✓ Created colors.xml")
                       created_count += 1
                   
+                  # Create themes.xml if missing
                   themes_path = "app/src/main/res/values/themes.xml"
                   if not os.path.exists(themes_path):
                       os.makedirs(os.path.dirname(themes_path), exist_ok=True)
                       with open(themes_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<resources>\n')
-                          f.write('    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">\n')
-                          f.write('        <item name="colorPrimary">@color/colorPrimary</item>\n')
-                          f.write('        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>\n')
-                          f.write('        <item name="colorAccent">@color/colorAccent</item>\n')
-                          f.write('    </style>\n')
-                          f.write('</resources>\n')
-                      print("✓ Created default themes.xml")
+                          f.write('''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+</resources>
+''')
+                      print(f"   ✓ Created themes.xml")
                       created_count += 1
                   
+                  # Create AndroidManifest.xml if missing or fix existing
                   manifest_path = "app/src/main/AndroidManifest.xml"
                   if not os.path.exists(manifest_path):
                       with open(manifest_path, "w", encoding="utf-8") as f:
-                          f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="' + pkg + '">\n')
-                          f.write('    <application\n')
-                          f.write('        android:allowBackup="true"\n')
-                          f.write('        android:icon="@mipmap/ic_launcher"\n')
-                          f.write('        android:label="' + app_name + '"\n')
-                          f.write('        android:theme="@style/AppTheme">\n')
-                          f.write('        <activity\n')
-                          f.write('            android:name=".MainActivity"\n')
-                          f.write('            android:exported="true">\n')
-                          f.write('            <intent-filter>\n')
-                          f.write('                <action android:name="android.intent.action.MAIN" />\n')
-                          f.write('                <category android:name="android.intent.category.LAUNCHER" />\n')
-                          f.write('            </intent-filter>\n')
-                          f.write('        </activity>\n')
-                          f.write('    </application>\n')
-                          f.write('</manifest>\n')
-                      print("✓ Created default AndroidManifest.xml")
+                          f.write(f'''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="{target_pkg}">
+    
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="{app_name}"
+        android:theme="@style/AppTheme">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+    
+</manifest>
+''')
+                      print(f"   ✓ Created AndroidManifest.xml with package: {target_pkg}")
                       created_count += 1
+                  else:
+                      # Fix existing manifest
+                      with open(manifest_path, 'r') as f:
+                          manifest_content = f.read()
+                      manifest_content = re.sub(r'package="[^"]*"', f'package="{target_pkg}"', manifest_content)
+                      if 'package="' not in manifest_content:
+                          manifest_content = manifest_content.replace('<manifest', f'<manifest package="{target_pkg}"')
+                      with open(manifest_path, 'w') as f:
+                          f.write(manifest_content)
+                      print(f"   ✓ Fixed existing AndroidManifest.xml package to: {target_pkg}")
                   
-                  print(f"\n✅ Project generation completed successfully")
-                  print(f"   Created {created_count} file(s)")
-                  print(f"   Package: {pkg}")
-                  print(f"   App Name: {app_name}")
-
+                  # Final verification
+                  print("\n" + "="*50)
+                  print("✅ FINAL VERIFICATION")
+                  print("="*50)
+                  
+                  # Check all Java files for correct package
+                  java_files = []
+                  for root, dirs, files in os.walk("app/src/main/java"):
+                      for file in files:
+                          if file.endswith(".java"):
+                              java_files.append(os.path.join(root, file))
+                  
+                  print(f"\n📋 Checking {len(java_files)} Java file(s):")
+                  for java_file in java_files:
+                      with open(java_file, 'r') as f:
+                          content = f.read()
+                          pkg_match = re.search(r'^package\s+([\w.]+);', content, re.MULTILINE)
+                          if pkg_match:
+                              pkg_found = pkg_match.group(1)
+                              if pkg_found == target_pkg:
+                                  print(f"   ✓ {os.path.basename(java_file)}: {pkg_found}")
+                              else:
+                                  print(f"   ⚠️ {os.path.basename(java_file)}: {pkg_found} (should be {target_pkg})")
+                          else:
+                              print(f"   ⚠️ {os.path.basename(java_file)}: No package declaration")
+                  
+                  print(f"\n📋 Manifest package:")
+                  with open(manifest_path, 'r') as f:
+                      manifest_content = f.read()
+                      pkg_match = re.search(r'package="([^"]*)"', manifest_content)
+                      if pkg_match:
+                          print(f"   ✓ {pkg_match.group(1)}")
+                  
+                  print(f"\n📋 App Name: {app_name}")
+                  print(f"\n📊 Summary: {created_count} file(s) created, {updated_count} package update(s)")
+                  
               except Exception as e:
                   print(f"❌ Error: {e}")
                   traceback.print_exc()
@@ -309,26 +449,35 @@ jobs:
               main()
           EOF
 
-          python3 generate.py
+          python3 generate_and_fix.py
 
-      - name: Force Update App Name in All Files
+      - name: Final Package Name Verification
         run: |
-          APP_NAME="${{ steps.app.outputs.app_name }}"
-          PKG="${{ steps.pkg.outputs.package_name }}"
+          TARGET_PKG="${{ steps.pkg.outputs.package_name }}"
+          echo "=== FINAL PACKAGE VERIFICATION ==="
+          echo "Target Package: $TARGET_PKG"
           
-          echo "Force updating app name to: $APP_NAME"
+          # Verify all Java files
+          find app/src/main/java -name "*.java" -type f | while read file; do
+            echo -n "Checking $file: "
+            if grep -q "^package $TARGET_PKG;" "$file"; then
+              echo "✓ OK"
+            else
+              echo "⚠️ WRONG PACKAGE - Fixing..."
+              sed -i "s/^package .*;/package $TARGET_PKG;/" "$file"
+            fi
+          done
           
-          if [ -f "app/src/main/res/values/strings.xml" ]; then
-            sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">'"$APP_NAME"'<\/string>/g' app/src/main/res/values/strings.xml
-            echo "✓ Updated strings.xml"
+          # Verify Manifest
+          echo -n "Manifest package: "
+          if grep -q "package=\"$TARGET_PKG\"" app/src/main/AndroidManifest.xml; then
+            echo "✓ OK"
+          else
+            echo "⚠️ FIXING..."
+            sed -i "s/package=\"[^\"]*\"/package=\"$TARGET_PKG\"/" app/src/main/AndroidManifest.xml
           fi
           
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/g' app/src/main/AndroidManifest.xml
-            echo "✓ Updated AndroidManifest.xml label"
-          fi
-          
-          echo "✅ App name force updated to: $APP_NAME"
+          echo "✅ All package names are consistent: $TARGET_PKG"
 
       - name: Generate App Icons
         run: |
@@ -375,23 +524,7 @@ jobs:
           done
           echo "✅ Fallback icons generated"
 
-      - name: Verify App Name and Package
-        run: |
-          echo "=== Verification ==="
-          echo "Package: ${{ steps.pkg.outputs.package_name }}"
-          echo "App Name: ${{ steps.app.outputs.app_name }}"
-          
-          if [ -f "app/src/main/res/values/strings.xml" ]; then
-            echo "strings.xml: $(grep 'name="app_name"' app/src/main/res/values/strings.xml)"
-          fi
-          
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            echo "Manifest label: $(grep 'android:label' app/src/main/AndroidManifest.xml)"
-          fi
-          
-          echo "✅ Verification complete"
-
-      - name: Create build.gradle
+      - name: Create build.gradle with Correct Package
         run: |
           PKG="${{ steps.pkg.outputs.package_name }}"
           
@@ -494,14 +627,35 @@ jobs:
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Clean Project
-        run: ./gradlew clean --no-daemon
+      - name: Clean and Verify Build
+        run: |
+          ./gradlew clean --no-daemon
+          echo "=== Build Configuration Verification ==="
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon 2>&1 | head -20 || true
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
 
       - name: Build Release AAB
         run: ./gradlew bundleRelease --stacktrace --no-daemon --no-parallel --no-build-cache
+
+      - name: Verify APK Package Name
+        run: |
+          echo "=== APK Package Verification ==="
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            # Use aapt2 to check package name if available
+            if command -v aapt2 &> /dev/null; then
+              PACKAGE=$(aapt2 dump packagename app/build/outputs/apk/release/app-release.apk 2>/dev/null || echo "unknown")
+              echo "APK Package: $PACKAGE"
+              echo "Expected: ${{ steps.pkg.outputs.package_name }}"
+            else
+              echo "aapt2 not available, skipping APK verification"
+            fi
+            echo "✅ APK generated successfully"
+          else
+            echo "❌ APK not found!"
+            exit 1
+          fi
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
@@ -526,6 +680,8 @@ jobs:
             ## 🚀 APK and AAB Files
             
             ### APK
+            - Package: ${{ steps.pkg.outputs.package_name }}
+            - App Name: ${{ steps.app.outputs.app_name }}
             - Download the APK file below
             
             ### AAB  
