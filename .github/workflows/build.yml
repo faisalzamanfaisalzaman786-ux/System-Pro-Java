@@ -1,0 +1,293 @@
+name: Restore Repository
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create full app structure
+        run: |
+          # Create all directories
+          mkdir -p .github/workflows
+          mkdir -p app/src/main/java/com/counter/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          
+          # ========== MAINACTIVITY.JAVA ==========
+          cat > app/src/main/java/com/counter/app/MainActivity.java << 'JAVA'
+          package com.counter.app;
+          
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              private TextView counterText;
+              private Button btnMinus, btnReset, btnPlus;
+              private int count = 0;
+              
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  
+                  counterText = findViewById(R.id.counterText);
+                  btnMinus = findViewById(R.id.btnMinus);
+                  btnReset = findViewById(R.id.btnReset);
+                  btnPlus = findViewById(R.id.btnPlus);
+                  
+                  counterText.setText("0");
+                  
+                  btnMinus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count--;
+                          counterText.setText(String.valueOf(count));
+                      }
+                  });
+                  
+                  btnReset.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count = 0;
+                          counterText.setText("0");
+                      }
+                  });
+                  
+                  btnPlus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count++;
+                          counterText.setText(String.valueOf(count));
+                      }
+                  });
+              }
+          }
+          JAVA
+          
+          # ========== ACTIVITY_MAIN.XML ==========
+          cat > app/src/main/res/layout/activity_main.xml << 'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="24dp"
+              android:background="#F5F5F5">
+              
+              <TextView
+                  android:id="@+id/counterText"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="0"
+                  android:textSize="80sp"
+                  android:textStyle="bold"
+                  android:textColor="#333333"
+                  android:layout_marginBottom="40dp" />
+              
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal">
+                  
+                  <Button
+                      android:id="@+id/btnMinus"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="-"
+                      android:textSize="32sp"
+                      android:backgroundTint="#F44336"
+                      android:textColor="#FFFFFF"
+                      android:layout_marginEnd="8dp" />
+                  
+                  <Button
+                      android:id="@+id/btnReset"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="Reset"
+                      android:textSize="16sp"
+                      android:backgroundTint="#FF9800"
+                      android:textColor="#FFFFFF"
+                      android:layout_marginStart="4dp"
+                      android:layout_marginEnd="4dp" />
+                  
+                  <Button
+                      android:id="@+id/btnPlus"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="+"
+                      android:textSize="32sp"
+                      android:backgroundTint="#4CAF50"
+                      android:textColor="#FFFFFF"
+                      android:layout_marginStart="8dp" />
+                  
+              </LinearLayout>
+          </LinearLayout>
+          XML
+          
+          # ========== COLORS.XML ==========
+          cat > app/src/main/res/values/colors.xml << 'COL'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC6</color>
+              <color name="background">#F5F5F5</color>
+          </resources>
+          COL
+          
+          # ========== THEMES.XML ==========
+          cat > app/src/main/res/values/themes.xml << 'THE'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          THE
+          
+          # ========== STRINGS.XML ==========
+          cat > app/src/main/res/values/strings.xml << 'STR'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Counter App</string>
+          </resources>
+          STR
+          
+          # ========== ANDROIDMANIFEST.XML ==========
+          cat > app/src/main/AndroidManifest.xml << 'MAN'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.counter.app">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MAN
+          
+          # ========== GRADLE FILES ==========
+          cat > settings.gradle << 'SET'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "CounterApp"
+          include ':app'
+          SET
+          
+          cat > build.gradle << 'BLD'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          BLD
+          
+          cat > app/build.gradle << 'APP'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              namespace 'com.counter.app'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId 'com.counter.app'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          APP
+          
+          cat > gradle.properties << 'PRO'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          PRO
+          
+          # ========== WORKFLOW FILE ==========
+          cat > .github/workflows/build.yml << 'WF'
+          name: Build APK
+          on:
+            repository_dispatch:
+              types: [trigger_b64_build]
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - name: Setup JDK
+                  uses: actions/setup-java@v4
+                  with:
+                    distribution: temurin
+                    java-version: 17
+                - name: Setup Android SDK
+                  uses: android-actions/setup-android@v3
+                - name: Build APK
+                  run: ./gradlew assembleRelease
+                - name: Upload
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: app-release-apk
+                    path: app/build/outputs/apk/release/*.apk
+          WF
+          
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          
+          echo "✅ Full repository restored successfully!"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git commit -m "Restore full app structure" || echo "No changes"
+          git push
