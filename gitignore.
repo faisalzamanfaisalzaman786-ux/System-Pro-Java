@@ -1,0 +1,25 @@
+# Compiled files
+build/
+out/
+bin/
+*.class
+
+# Gradle files
+.gradle/
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
