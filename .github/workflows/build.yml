@@ -90,7 +90,10 @@ jobs:
           export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           export APP_NAME="${{ steps.app.outputs.app_name }}"
           
-          FILES_JSON='${{ toJson(github.event.client_payload.files) }}'
+          # Save payload to file directly (bypass environment variable issues)
+          cat > /tmp/payload.json << 'PAYLOAD_EOF'
+          ${{ toJson(github.event.client_payload) }}
+          PAYLOAD_EOF
 
           cat > generate.py << 'EOF'
           import json
@@ -105,28 +108,23 @@ jobs:
                   app_name = os.environ.get("APP_NAME", "MyApp")
                   pkg_path = pkg.replace(".", "/")
                   
-                  files_json = os.environ.get("FILES_JSON", "{}")
+                  # Read from file
+                  with open('/tmp/payload.json', 'r') as f:
+                      payload = json.load(f)
                   
-                  print(f"DEBUG: files_json = {files_json[:200]}...")
+                  files = payload.get('files', {})
                   
-                  files = {}
-                  if files_json and files_json != "null" and files_json != "{}":
-                      try:
-                          files = json.loads(files_json)
-                          print(f"✓ Loaded {len(files)} files from payload")
-                      except json.JSONDecodeError as e:
-                          print(f"❌ JSON parse error: {e}")
-                          sys.exit(1)
-                  else:
+                  print(f"✓ Loaded {len(files)} files from payload")
+                  
+                  if len(files) == 0:
                       print("❌ ERROR: No files found in payload!")
-                      print("Please send files with the trigger. Example:")
-                      print('  files: { "app/src/main/java/.../MainActivity.java": "content", ... }')
+                      print("Please make sure your UI is sending files.")
                       sys.exit(1)
                   
                   # Track created files
                   created_count = 0
                   
-                  # Process ONLY payload files
+                  # Process files
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       print(f"Processing: {clean_path}")
@@ -147,10 +145,8 @@ jobs:
                       elif clean_path.endswith(".xml"):
                           if "AndroidManifest.xml" in clean_path:
                               new_path = "app/src/main/AndroidManifest.xml"
-                              # Remove package attribute if present
                               content = re.sub(r'\s+package="[^"]*"', '', content)
                               content = re.sub(r'package="[^"]*"', '', content)
-                              # Ensure manifest has correct structure
                               if 'xmlns:android' not in content:
                                   content = content.replace('<manifest', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"')
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
@@ -171,7 +167,6 @@ jobs:
                           elif "values/strings.xml" in clean_path:
                               new_path = "app/src/main/res/values/strings.xml"
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              # Ensure app_name is set
                               if '<string name="app_name">' not in content:
                                   content = content.replace('</resources>', f'    <string name="app_name">{app_name}</string>\n</resources>')
                               with open(new_path, "w", encoding="utf-8") as out:
@@ -197,14 +192,18 @@ jobs:
                               
                           else:
                               # Other XML files (drawables, etc.)
-                              new_path = f"app/src/main/res/{clean_path}"
+                              # Handle drawable files specially
+                              if "drawable" in clean_path:
+                                  new_path = f"app/src/main/res/{clean_path}"
+                              else:
+                                  new_path = f"app/src/main/res/{clean_path}"
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
                                   out.write(content)
                               print(f"✓ XML: {clean_path}")
                               created_count += 1
                       else:
-                          # Other file types
+                          # Other file types (gradle, properties, etc.)
                           new_path = f"app/src/main/{clean_path}"
                           os.makedirs(os.path.dirname(new_path), exist_ok=True)
                           with open(new_path, "w", encoding="utf-8") as out:
@@ -214,7 +213,6 @@ jobs:
                   
                   if created_count == 0:
                       print("❌ ERROR: No files were created!")
-                      print("Please check your payload format.")
                       sys.exit(1)
                   
                   print(f"\n✅ Project generation completed successfully")
@@ -280,7 +278,7 @@ jobs:
       - name: Verify Required Files
         run: |
           echo "=== Checking created files ==="
-          find app/src -type f -name "*.java" -o -name "*.xml" | head -20
+          find app/src -type f \( -name "*.java" -o -name "*.xml" \) | head -30
           
           if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
             echo "❌ ERROR: AndroidManifest.xml not found!"
