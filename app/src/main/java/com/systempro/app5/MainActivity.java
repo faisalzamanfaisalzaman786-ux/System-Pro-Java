@@ -1,4 +1,4 @@
-package com.example.counter;
+package com.faisal.codeeditor2;
 
 import android.os.Bundle;
 import android.view.View;
