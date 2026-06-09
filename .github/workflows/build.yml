@@ -1,4 +1,4 @@
-name: Build Android APK + AAB
+name: Build Android APK (Debug Only)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   build:
@@ -45,6 +44,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.package_name }}" ]; then
             PKG="${{ github.event.inputs.package_name }}"
           fi
+          PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
           echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
 
@@ -59,42 +59,26 @@ jobs:
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
 
-      - name: Create Project Structure
+      - name: Create Project Directories
         run: |
+          rm -rf app
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Decode Keystore
+      - name: Generate Project Files
+        env:
+          PKG: ${{ steps.pkg.outputs.package_name }}
+          PKG_PATH: ${{ steps.pkg.outputs.package_path }}
+          APP_NAME: ${{ steps.app.outputs.app_name }}
         run: |
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            keytool -genkey -v -keystore keystore.jks -alias release -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown" -storepass android -keypass android
-            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
-            echo "KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
-            echo "KEY_ALIAS=release" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
-          else
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
-            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-          fi
-
-      - name: Create MainActivity
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          PKG_PATH="${{ steps.pkg.outputs.package_path }}"
-          APP_NAME="${{ steps.app.outputs.app_name }}"
-          
-          mkdir -p app/src/main/java/$PKG_PATH
-          
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << JAVA_EOF
+          # Create MainActivity.java
+          cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
           package $PKG;
           
           import android.os.Bundle;
@@ -112,50 +96,47 @@ jobs:
                   }
               }
           }
-          JAVA_EOF
-
-      - name: Create Layout
-        run: |
-          cat > app/src/main/res/layout/activity_main.xml << XML_EOF
+          EOF
+          
+          # Create activity_main.xml
+          cat > app/src/main/res/layout/activity_main.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:gravity="center">
+              android:gravity="center"
+              android:padding="16dp">
               <TextView
                   android:id="@+id/textView"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="Hello World!"
-                  android:textSize="24sp"/>
+                  android:textSize="24sp"
+                  android:textColor="@android:color/black"/>
           </LinearLayout>
-          XML_EOF
-
-      - name: Create Strings XML
-        run: |
-          APP_NAME="${{ steps.app.outputs.app_name }}"
-          cat > app/src/main/res/values/strings.xml << XML_EOF
+          EOF
+          
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">$APP_NAME</string>
           </resources>
-          XML_EOF
-
-      - name: Create Colors XML
-        run: |
-          cat > app/src/main/res/values/colors.xml << XML_EOF
+          EOF
+          
+          # Create colors.xml
+          cat > app/src/main/res/values/colors.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="colorPrimaryDark">#3700B3</color>
               <color name="colorAccent">#03DAC6</color>
           </resources>
-          XML_EOF
-
-      - name: Create Themes XML
-        run: |
-          cat > app/src/main/res/values/themes.xml << XML_EOF
+          EOF
+          
+          # Create themes.xml
+          cat > app/src/main/res/values/themes.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -164,16 +145,12 @@ jobs:
                   <item name="colorAccent">@color/colorAccent</item>
               </style>
           </resources>
-          XML_EOF
-
-      - name: Create Android Manifest
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          APP_NAME="${{ steps.app.outputs.app_name }}"
-          cat > app/src/main/AndroidManifest.xml << XML_EOF
+          EOF
+          
+          # Create AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$PKG">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -189,9 +166,11 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          XML_EOF
+          EOF
+          
+          echo "All files generated successfully"
 
-      - name: Create Icons
+      - name: Generate Simple Icons
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -205,15 +184,16 @@ jobs:
               192) density="xxxhdpi" ;;
             esac
             convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "App" \
+              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
             cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
           done
 
-      - name: Create build.gradle
+      - name: Create build.gradle (Debug Only)
+        env:
+          PKG: ${{ steps.pkg.outputs.package_name }}
         run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          cat > app/build.gradle << GRADLE_EOF
+          cat > app/build.gradle << EOF
           plugins {
               id 'com.android.application'
           }
@@ -228,23 +208,11 @@ jobs:
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
-                  multiDexEnabled true
-              }
-
-              signingConfigs {
-                  release {
-                      storeFile file(System.getenv("KEYSTORE_PATH"))
-                      storePassword System.getenv("KEYSTORE_PASSWORD")
-                      keyAlias System.getenv("KEY_ALIAS")
-                      keyPassword System.getenv("KEY_PASSWORD")
-                  }
               }
 
               buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                      signingConfig signingConfigs.release
+                  debug {
+                      debuggable true
                   }
               }
 
@@ -258,9 +226,8 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              implementation 'androidx.multidex:multidex:2.0.1'
           }
-          GRADLE_EOF
+          EOF
           
           touch app/proguard-rules.pro
 
@@ -300,48 +267,39 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Generate Wrapper
+      - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Clean Project
-        run: ./gradlew clean --no-daemon
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Build Release AAB
-        run: ./gradlew bundleRelease --no-daemon
-
-      - name: Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab
-          path: app/build/outputs/bundle/release/*.aab
-          if-no-files-found: warn
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest-release
-          name: Latest Release
+          tag_name: debug-build-${{ github.run_number }}
+          name: Debug Build - ${{ steps.app.outputs.app_name }}
           body: |
-            ## Build Complete
+            ## Debug APK Build
             
-            - Package: ${{ steps.pkg.outputs.package_name }}
-            - App Name: ${{ steps.app.outputs.app_name }}
+            **App:** ${{ steps.app.outputs.app_name }}
+            **Package:** ${{ steps.pkg.outputs.package_name }}
+            **Build:** Debug (unsigned)
             
-            ### Files:
-            - APK file attached below
-            - AAB file attached below
+            ### Installation:
+            1. Download the APK
+            2. Enable "Unknown Sources" in Android settings
+            3. Install and test
+            
+            ### Note:
+            This is a debug build without signing. For production, signing will be added later.
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/debug/*.apk
           draft: false
-          prerelease: false
+          prerelease: true
