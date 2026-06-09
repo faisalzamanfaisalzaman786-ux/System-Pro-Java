@@ -22,8 +22,15 @@ jobs:
       - name: Build APK
         run: ./gradlew assembleRelease
 
-      - name: Upload
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Clean for next build
+        if: always()
+        run: |
+          rm -rf app/src/main/res/values/colors.xml
+          rm -rf app/src/main/res/values/themes.xml
+          rm -rf app/src/main/res/values/strings.xml
