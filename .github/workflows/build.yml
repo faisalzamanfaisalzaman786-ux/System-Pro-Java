@@ -19,55 +19,56 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Clean old resources and create fresh ones
+      - name: Create Simple Counter App
         run: |
-          # Clean old resource directories
-          rm -rf app/src/main/res/values/colors.xml
-          rm -rf app/src/main/res/values/themes.xml
-          rm -rf app/src/main/res/values/strings.xml
-          rm -rf app/src/main/res/layout/activity_main.xml
+          # Package name from payload
+          PKG="com.counter.app"
+          APP_NAME="Counter App"
           
-          # Create fresh directories
-          mkdir -p app/src/main/res/values
+          # Create directories
+          mkdir -p app/src/main/java/$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           
-          # Create fresh colors.xml
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC6</color>
-              <color name="background">#F5F5F5</color>
-              <color name="text_dark">#333333</color>
-              <color name="white">#FFFFFF</color>
-              <color name="red">#F44336</color>
-              <color name="orange">#FF9800</color>
-              <color name="green">#4CAF50</color>
-          </resources>
+          # MainActivity.java
+          cat > app/src/main/java/$(echo $PKG | tr '.' '/')/MainActivity.java << 'EOF'
+          package com.counter.app;
+          
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              private TextView counterText;
+              private Button btnPlus, btnMinus, btnReset;
+              private int count = 0;
+              
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  
+                  counterText = findViewById(R.id.counterText);
+                  btnPlus = findViewById(R.id.btnPlus);
+                  btnMinus = findViewById(R.id.btnMinus);
+                  btnReset = findViewById(R.id.btnReset);
+                  
+                  updateCounter();
+                  
+                  btnPlus.setOnClickListener(v -> { count++; updateCounter(); });
+                  btnMinus.setOnClickListener(v -> { count--; updateCounter(); });
+                  btnReset.setOnClickListener(v -> { count = 0; updateCounter(); });
+              }
+              
+              private void updateCounter() {
+                  counterText.setText(String.valueOf(count));
+              }
+          }
           EOF
           
-          # Create fresh themes.xml
-          cat > app/src/main/res/values/themes.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          EOF
-          
-          # Create fresh strings.xml
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">MyApp</string>
-          </resources>
-          EOF
-          
-          # Create fresh activity_main.xml
+          # activity_main.xml
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -75,20 +76,95 @@ jobs:
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="24dp"
-              android:background="@color/background">
+              android:padding="24dp">
+              
               <TextView
-                  android:id="@+id/textView"
+                  android:id="@+id/counterText"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello World!"
-                  android:textSize="32sp"
+                  android:text="0"
+                  android:textSize="80sp"
                   android:textStyle="bold"
-                  android:textColor="@color/colorPrimary" />
+                  android:layout_marginBottom="32dp" />
+              
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal">
+                  
+                  <Button
+                      android:id="@+id/btnMinus"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="-"
+                      android:textSize="32sp"
+                      android:layout_marginEnd="8dp" />
+                  
+                  <Button
+                      android:id="@+id/btnReset"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="Reset"
+                      android:textSize="16sp"
+                      android:layout_marginStart="4dp"
+                      android:layout_marginEnd="4dp" />
+                  
+                  <Button
+                      android:id="@+id/btnPlus"
+                      android:layout_width="0dp"
+                      android:layout_height="60dp"
+                      android:layout_weight="1"
+                      android:text="+"
+                      android:textSize="32sp"
+                      android:layout_marginStart="8dp" />
+                  
+              </LinearLayout>
           </LinearLayout>
           EOF
           
-          echo "✅ Fresh resources created"
+          # AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${PKG}">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="${APP_NAME}"
+                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          
+          # build.gradle
+          cat > app/build.gradle << 'EOF'
+          plugins { id 'com.android.application' }
+          android { compileSdk 34 defaultConfig { minSdk 21 targetSdk 34 versionCode 1 versionName '1.0' } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
+          EOF
+          
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "App"
+          include ':app'
+          EOF
+          
+          cat > build.gradle << 'EOF'
+          plugins { id 'com.android.application' version '8.2.2' apply false }
+          EOF
+          
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          
+          echo "✅ Simple Counter App created"
 
       - name: Build APK
         run: ./gradlew assembleRelease
