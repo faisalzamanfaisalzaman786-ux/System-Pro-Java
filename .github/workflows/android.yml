@@ -1,26 +1,101 @@
-name: Android CI
+name: Build Android APK + AAB (Release Only)
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: false
+        default: 'com.example.app'
+        type: string
+      app_name:
+        description: 'App Name'
+        required: false
+        default: 'SystemProApp'
+        type: string
+  repository_dispatch:
+    types: [trigger_b64_build]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: android-build-${{ github.run_id }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: set up JDK 11
-      uses: actions/setup-java@v4
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: gradle
+      - uses: actions/checkout@v4
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # فولڈر سٹرکچر کی تیاری
+      - name: Create Standard Project Structure
+        run: |
+          mkdir -p app/src/main/java/com/example/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+      - name: Create Gradle Build Files
+        run: |
+          # Settings Gradle
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
+          # Root Build Gradle
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          # App Build Gradle
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace "com.example.app"
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.example.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+          }
+          EOF
+
+      - name: Setup Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+      - name: Build Project
+        run: ./gradlew assembleRelease bundleRelease
