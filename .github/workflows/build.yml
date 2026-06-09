@@ -1,205 +1,226 @@
-name: Build APK
+name: Complete Java Project Generator
 
 on:
-  repository_dispatch:
-    types: [trigger_b64_build]
+  workflow_dispatch:
 
 jobs:
-  build:
+  generate-full-project:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+    - name: Delete everything except .git
+      run: |
+        find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
 
-      - name: Create full Android project
-        run: |
-          # Create directory structure
-          mkdir -p app/src/main/java/com/counter/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          
-          # MainActivity.java
-          cat > app/src/main/java/com/counter/app/MainActivity.java << 'EOF'
-          package com.counter.app;
-          
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-          
-          public class MainActivity extends AppCompatActivity {
-              private TextView tv;
-              private Button minus, reset, plus;
-              private int count = 0;
-              
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  
-                  tv = findViewById(R.id.tv);
-                  minus = findViewById(R.id.minus);
-                  reset = findViewById(R.id.reset);
-                  plus = findViewById(R.id.plus);
-                  
-                  tv.setText("0");
-                  
-                  minus.setOnClickListener(v -> { count--; tv.setText(count+""); });
-                  reset.setOnClickListener(v -> { count=0; tv.setText("0"); });
-                  plus.setOnClickListener(v -> { count++; tv.setText(count+""); });
-              }
-          }
-          EOF
-          
-          # activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp">
-              <TextView
-                  android:id="@+id/tv"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="0"
-                  android:textSize="80sp"
-                  android:layout_marginBottom="40dp" />
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal">
-                  <Button
-                      android:id="@+id/minus"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="-"
-                      android:textSize="32sp"
-                      android:layout_marginEnd="8dp" />
-                  <Button
-                      android:id="@+id/reset"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="Reset"
-                      android:textSize="16sp"
-                      android:layout_marginStart="4dp"
-                      android:layout_marginEnd="4dp" />
-                  <Button
-                      android:id="@+id/plus"
-                      android:layout_width="0dp"
-                      android:layout_height="60dp"
-                      android:layout_weight="1"
-                      android:text="+"
-                      android:textSize="32sp"
-                      android:layout_marginStart="8dp" />
-              </LinearLayout>
-          </LinearLayout>
-          EOF
-          
-          # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.counter.app">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="Counter App"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          
-          # settings.gradle
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "CounterApp"
-          include ':app'
-          EOF
-          
-          # build.gradle (project level)
-          cat > build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
-          
-          # app/build.gradle
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-          
-          android {
-              namespace 'com.counter.app'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId 'com.counter.app'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-          
-          # gradle.properties
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          EOF
-          
-          echo "✅ Project created successfully"
+    - name: Create complete Java project structure
+      run: |
+        # Standard Maven project structure
+        mkdir -p src/main/java/com/example/app
+        mkdir -p src/main/resources
+        mkdir -p src/test/java/com/example/app
+        mkdir -p src/test/resources
 
-      - name: Build APK
-        run: ./gradlew assembleRelease
+    - name: Create pom.xml (Maven build file)
+      run: |
+        cat > pom.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/*.apk
+    <groupId>com.example</groupId>
+    <artifactId>java-app</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.example.app.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+
+    - name: Create main Java class
+      run: |
+        cat > src/main/java/com/example/app/Main.java << 'EOF'
+package com.example.app;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello from Java Project!");
+        System.out.println("Project successfully restored.");
+        
+        Calculator calc = new Calculator();
+        System.out.println("10 + 5 = " + calc.add(10, 5));
+    }
+}
+EOF
+
+    - name: Create additional Java class
+      run: |
+        cat > src/main/java/com/example/app/Calculator.java << 'EOF'
+package com.example.app;
+
+public class Calculator {
+    public int add(int a, int b) {
+        return a + b;
+    }
+    
+    public int subtract(int a, int b) {
+        return a - b;
+    }
+    
+    public int multiply(int a, int b) {
+        return a * b;
+    }
+    
+    public int divide(int a, int b) {
+        if (b == 0) {
+            throw new IllegalArgumentException("Cannot divide by zero");
+        }
+        return a / b;
+    }
+}
+EOF
+
+    - name: Create test class
+      run: |
+        cat > src/test/java/com/example/app/CalculatorTest.java << 'EOF'
+package com.example.app;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class CalculatorTest {
+    
+    private final Calculator calc = new Calculator();
+    
+    @Test
+    void testAdd() {
+        assertEquals(15, calc.add(10, 5));
+        assertEquals(0, calc.add(-5, 5));
+    }
+    
+    @Test
+    void testSubtract() {
+        assertEquals(5, calc.subtract(10, 5));
+        assertEquals(-15, calc.subtract(-10, 5));
+    }
+    
+    @Test
+    void testMultiply() {
+        assertEquals(50, calc.multiply(10, 5));
+        assertEquals(0, calc.multiply(0, 5));
+    }
+    
+    @Test
+    void testDivide() {
+        assertEquals(2, calc.divide(10, 5));
+        assertThrows(IllegalArgumentException.class, () -> calc.divide(10, 0));
+    }
+}
+EOF
+
+    - name: Create application properties
+      run: |
+        cat > src/main/resources/application.properties << 'EOF'
+app.name=Java Restored Application
+app.version=1.0.0
+app.author=GitHub Actions
+EOF
+
+    - name: Create .gitignore
+      run: |
+        cat > .gitignore << 'EOF'
+# Compiled files
+target/
+*.class
+
+# IDE files
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven wrapper (optional to track)
+!/.mvn/wrapper/maven-wrapper.jar
+EOF
+
+    - name: Generate Maven Wrapper
+      run: |
+        mvn -N wrapper:wrapper
+        chmod +x mvnw
+
+    - name: Create README.md
+      run: |
+        cat > README.md << 'EOF'
+# Java Project
+
+This project was automatically generated by GitHub Actions.
+
+## Build and Run
+
+```bash
+# Build the project
+./mvnw clean compile
+
+# Run tests
+./mvnw test
+
+# Package JAR
+./mvnw package
+
+# Run the application
+./mvnw exec:java -Dexec.mainClass="com.example.app.Main"
