@@ -4,70 +4,53 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp"
-    android:background="@color/background">
+    android:padding="24dp">
 
     <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Counter App"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="@color/colorPrimary"
-        android:layout_marginBottom="40dp" />
-
-    <TextView
-        android:id="@+id/counterTextView"
+        android:id="@+id/counterText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="0"
         android:textSize="80sp"
         android:textStyle="bold"
-        android:textColor="@color/text_dark"
+        android:textColor="#333333"
         android:layout_marginBottom="40dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
+        android:orientation="horizontal">
 
         <Button
-            android:id="@+id/decrementButton"
+            android:id="@+id/decrementBtn"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
             android:text="-"
             android:textSize="32sp"
             android:textStyle="bold"
-            android:layout_marginEnd="16dp"
-            android:backgroundTint="@color/red"
-            android:textColor="@color/white" />
+            android:layout_marginEnd="8dp" />
 
         <Button
-            android:id="@+id/resetButton"
+            android:id="@+id/resetBtn"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
             android:text="Reset"
-            android:textSize="18sp"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/orange"
-            android:textColor="@color/white" />
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
 
         <Button
-            android:id="@+id/incrementButton"
+            android:id="@+id/incrementBtn"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
             android:text="+"
             android:textSize="32sp"
             android:textStyle="bold"
-            android:layout_marginStart="16dp"
-            android:backgroundTint="@color/green"
-            android:textColor="@color/white" />
+            android:layout_marginStart="8dp" />
 
     </LinearLayout>
 
