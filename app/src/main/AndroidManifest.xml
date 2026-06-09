@@ -3,14 +3,15 @@
     package="com.camera.app">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     
     <uses-feature android:name="android.hardware.camera" android:required="true" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:theme="@style/AppTheme"
+        android:label="Camera App"
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
         android:supportsRtl="true">
 
         <activity
