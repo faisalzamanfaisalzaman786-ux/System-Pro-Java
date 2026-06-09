@@ -7,51 +7,47 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
-    
-    private TextView counterTextView;
-    private Button incrementButton;
-    private Button decrementButton;
-    private Button resetButton;
-    private int counter = 0;
-    
+
+    private TextView counterText;
+    private Button incrementBtn;
+    private Button decrementBtn;
+    private Button resetBtn;
+    private int count = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        
-        counterTextView = findViewById(R.id.counterTextView);
-        incrementButton = findViewById(R.id.incrementButton);
-        decrementButton = findViewById(R.id.decrementButton);
-        resetButton = findViewById(R.id.resetButton);
-        
-        updateCounterDisplay();
-        
-        incrementButton.setOnClickListener(new View.OnClickListener() {
+
+        counterText = findViewById(R.id.counterText);
+        incrementBtn = findViewById(R.id.incrementBtn);
+        decrementBtn = findViewById(R.id.decrementBtn);
+        resetBtn = findViewById(R.id.resetBtn);
+
+        counterText.setText("0");
+
+        incrementBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                counter++;
-                updateCounterDisplay();
+                count++;
+                counterText.setText(String.valueOf(count));
             }
         });
-        
-        decrementButton.setOnClickListener(new View.OnClickListener() {
+
+        decrementBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                counter--;
-                updateCounterDisplay();
+                count--;
+                counterText.setText(String.valueOf(count));
             }
         });
-        
-        resetButton.setOnClickListener(new View.OnClickListener() {
+
+        resetBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                counter = 0;
-                updateCounterDisplay();
+                count = 0;
+                counterText.setText("0");
             }
         });
-    }
-    
-    private void updateCounterDisplay() {
-        counterTextView.setText(String.valueOf(counter));
     }
 }
