@@ -85,12 +85,11 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Files from Payload Only
+      - name: Generate Files from Payload
         run: |
           export NEW_PKG="${{ steps.pkg.outputs.package_name }}"
           export APP_NAME="${{ steps.app.outputs.app_name }}"
           
-          # Save payload to file directly (bypass environment variable issues)
           cat > /tmp/payload.json << 'PAYLOAD_EOF'
           ${{ toJson(github.event.client_payload) }}
           PAYLOAD_EOF
@@ -108,7 +107,6 @@ jobs:
                   app_name = os.environ.get("APP_NAME", "MyApp")
                   pkg_path = pkg.replace(".", "/")
                   
-                  # Read from file
                   with open('/tmp/payload.json', 'r') as f:
                       payload = json.load(f)
                   
@@ -118,19 +116,15 @@ jobs:
                   
                   if len(files) == 0:
                       print("❌ ERROR: No files found in payload!")
-                      print("Please make sure your UI is sending files.")
                       sys.exit(1)
                   
-                  # Track created files
                   created_count = 0
                   
-                  # Process files
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       print(f"Processing: {clean_path}")
                       
                       if clean_path.endswith(".java"):
-                          # Fix package name
                           content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
                           if not re.search(r'^package ', content, re.MULTILINE):
                               content = f'package {pkg};\n\n{content}'
@@ -191,8 +185,6 @@ jobs:
                               created_count += 1
                               
                           else:
-                              # Other XML files (drawables, etc.)
-                              # Handle drawable files specially
                               if "drawable" in clean_path:
                                   new_path = f"app/src/main/res/{clean_path}"
                               else:
@@ -203,7 +195,6 @@ jobs:
                               print(f"✓ XML: {clean_path}")
                               created_count += 1
                       else:
-                          # Other file types (gradle, properties, etc.)
                           new_path = f"app/src/main/{clean_path}"
                           os.makedirs(os.path.dirname(new_path), exist_ok=True)
                           with open(new_path, "w", encoding="utf-8") as out:
@@ -231,7 +222,7 @@ jobs:
 
           python3 generate.py
 
-      - name: Generate App Icons
+      - name: Generate App Icons (Priority to Custom Icon)
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -239,27 +230,49 @@ jobs:
           
           ICON_B64="${{ github.event.client_payload.icon }}"
           
+          # Check if custom icon is provided
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && [ "$ICON_B64" != "" ]; then
             echo "$ICON_B64" | base64 -d > /tmp/icon.png
             if file /tmp/icon.png | grep -q 'PNG image'; then
-              echo "Custom icon detected, generating all densities..."
+              echo "✅ Custom icon detected, generating all densities..."
+              
+              # Generate icons for all densities from custom icon
               convert /tmp/icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
               cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+              
               convert /tmp/icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
               cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+              
               convert /tmp/icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+              
               convert /tmp/icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+              
               convert /tmp/icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-              echo "Custom icon applied successfully"
+              
+              echo "✅ Custom icon applied successfully to all densities"
+              
+              # Verify icons were created
+              if [ -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
+                echo "✅ Icon verification passed"
+              else
+                echo "⚠️ Icon verification failed"
+              fi
+              
+              # Exit successfully, skip fallback icons
+              exit 0
             else
-              echo "Invalid icon file, using fallback"
+              echo "⚠️ Invalid icon file (not PNG), using fallback"
             fi
           fi
           
-          echo "Generating fallback icons..."
+          # ============================================
+          # FALLBACK ICONS - Only runs if NO custom icon
+          # ============================================
+          echo "⚠️ No valid custom icon, generating fallback icons..."
+          
           for size in 48 72 96 144 192; do
             case $size in
               48) density="mdpi" ;;
@@ -273,12 +286,12 @@ jobs:
               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
             cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
           done
-          echo "Icons generated"
+          echo "✅ Fallback icons generated"
 
       - name: Verify Required Files
         run: |
           echo "=== Checking created files ==="
-          find app/src -type f \( -name "*.java" -o -name "*.xml" \) | head -30
+          find app/src -type f \( -name "*.java" -o -name "*.xml" -o -name "*.png" \) | head -30
           
           if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
             echo "❌ ERROR: AndroidManifest.xml not found!"
@@ -295,6 +308,10 @@ jobs:
           if [ $LAYOUT_COUNT -eq 0 ]; then
             echo "⚠️ WARNING: No layout files found!"
           fi
+          
+          # Check if icons were created
+          ICON_COUNT=$(find app/src/main/res/mipmap-* -name "ic_launcher.png" 2>/dev/null | wc -l)
+          echo "📱 Icon files found: $ICON_COUNT"
           
           echo "✅ File verification passed"
 
