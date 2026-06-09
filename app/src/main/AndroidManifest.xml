@@ -2,14 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.camera.app">
 
-    <!-- Camera Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     
-    <!-- Camera Hardware Features -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
-    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <application
         android:allowBackup="true"
