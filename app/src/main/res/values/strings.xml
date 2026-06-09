@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Camera App</string>
-    <string name="open_camera">Open Camera</string>
-    <string name="camera_info">Click the button above to take a photo</string>
+    <string name="app_name">Counter App</string>
 </resources>
