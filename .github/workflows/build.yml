@@ -46,7 +46,6 @@ jobs:
       - name: Get Package Name from Payload
         id: pkg
         run: |
-          # First try client_payload, then workflow_dispatch inputs
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             PKG="${{ github.event.client_payload.package_name }}"
           elif [ -n "${{ github.event.inputs.package_name }}" ]; then
@@ -64,7 +63,6 @@ jobs:
       - name: Get App Name from Payload
         id: app
         run: |
-          # First try client_payload, then workflow_dispatch inputs
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             APP_NAME="${{ github.event.client_payload.app_name }}"
           elif [ -n "${{ github.event.inputs.app_name }}" ]; then
@@ -133,7 +131,6 @@ jobs:
                   print(f"📦 Target Package: {pkg}")
                   print(f"📱 Target App Name: {app_name}")
                   
-                  # Read files from payload
                   files = {}
                   payload_file = "/tmp/payload.json"
                   if os.path.exists(payload_file):
@@ -148,13 +145,11 @@ jobs:
                   
                   created_count = 0
                   
-                  # First, process all files from payload
                   for path, content in files.items():
                       clean_path = path.strip("/")
                       print(f"Processing: {clean_path}")
                       
                       if clean_path.endswith(".java"):
-                          # Fix package name in Java files
                           content = re.sub(r'^package .*?;', f'package {pkg};', content, flags=re.MULTILINE)
                           if not re.search(r'^package ', content, re.MULTILINE):
                               content = f'package {pkg};\n\n{content}'
@@ -173,7 +168,6 @@ jobs:
                               content = re.sub(r'package="[^"]*"', '', content)
                               if 'xmlns:android' not in content:
                                   content = content.replace('<manifest', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"')
-                              # Ensure app name is set in manifest
                               content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', content)
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
                               with open(new_path, "w", encoding="utf-8") as out:
@@ -193,7 +187,6 @@ jobs:
                           elif "values/strings.xml" in clean_path:
                               new_path = "app/src/main/res/values/strings.xml"
                               os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                              # Force update app_name in strings.xml
                               if '<string name="app_name">' in content:
                                   content = re.sub(r'<string name="app_name">.*?</string>', f'<string name="app_name">{app_name}</string>', content)
                               else:
@@ -220,7 +213,6 @@ jobs:
                               created_count += 1
                               
                           else:
-                              # Other XML files (drawables, etc.)
                               if "drawable" in clean_path:
                                   new_path = f"app/src/main/res/{clean_path}"
                               else:
@@ -231,7 +223,6 @@ jobs:
                               print(f"✓ XML: {clean_path}")
                               created_count += 1
                       else:
-                          # Other file types
                           new_path = f"app/src/main/{clean_path}"
                           os.makedirs(os.path.dirname(new_path), exist_ok=True)
                           with open(new_path, "w", encoding="utf-8") as out:
@@ -239,11 +230,7 @@ jobs:
                           print(f"✓ File: {clean_path}")
                           created_count += 1
                   
-                  # ============================================
-                  # CREATE DEFAULT FILES IF MISSING
-                  # ============================================
-                  
-                  # Create strings.xml if missing (with correct app name)
+                  # Create missing default files
                   strings_path = "app/src/main/res/values/strings.xml"
                   if not os.path.exists(strings_path):
                       os.makedirs(os.path.dirname(strings_path), exist_ok=True)
@@ -255,7 +242,6 @@ jobs:
                       print(f"✓ Created default strings.xml with app_name: {app_name}")
                       created_count += 1
                   
-                  # Create colors.xml if missing
                   colors_path = "app/src/main/res/values/colors.xml"
                   if not os.path.exists(colors_path):
                       os.makedirs(os.path.dirname(colors_path), exist_ok=True)
@@ -271,7 +257,6 @@ jobs:
                       print("✓ Created default colors.xml")
                       created_count += 1
                   
-                  # Create themes.xml if missing
                   themes_path = "app/src/main/res/values/themes.xml"
                   if not os.path.exists(themes_path):
                       os.makedirs(os.path.dirname(themes_path), exist_ok=True)
@@ -287,17 +272,15 @@ jobs:
                       print("✓ Created default themes.xml")
                       created_count += 1
                   
-                  # Create AndroidManifest.xml if missing
                   manifest_path = "app/src/main/AndroidManifest.xml"
                   if not os.path.exists(manifest_path):
                       with open(manifest_path, "w", encoding="utf-8") as f:
                           f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n')
-                          f.write(f'    <package="{pkg}">\n')
+                          f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="' + pkg + '">\n')
                           f.write('    <application\n')
                           f.write('        android:allowBackup="true"\n')
                           f.write('        android:icon="@mipmap/ic_launcher"\n')
-                          f.write(f'        android:label="{app_name}"\n')
+                          f.write('        android:label="' + app_name + '"\n')
                           f.write('        android:theme="@style/AppTheme">\n')
                           f.write('        <activity\n')
                           f.write('            android:name=".MainActivity"\n')
@@ -334,26 +317,20 @@ jobs:
           PKG="${{ steps.pkg.outputs.package_name }}"
           
           echo "Force updating app name to: $APP_NAME"
-          echo "Force updating package to: $PKG"
           
-          # Update strings.xml
           if [ -f "app/src/main/res/values/strings.xml" ]; then
             sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">'"$APP_NAME"'<\/string>/g' app/src/main/res/values/strings.xml
             echo "✓ Updated strings.xml"
           fi
           
-          # Update AndroidManifest.xml
           if [ -f "app/src/main/AndroidManifest.xml" ]; then
             sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/g' app/src/main/AndroidManifest.xml
             echo "✓ Updated AndroidManifest.xml label"
           fi
           
-          # Update any XML layout files that might contain app name
-          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/CodeForge Pro/'"$APP_NAME"'/g' {} \; 2>/dev/null || true
-          
           echo "✅ App name force updated to: $APP_NAME"
 
-      - name: Generate App Icons (Priority to Custom Icon)
+      - name: Generate App Icons
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
@@ -368,16 +345,12 @@ jobs:
               
               convert /tmp/icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
               cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-              
               convert /tmp/icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
               cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-              
               convert /tmp/icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-              
               convert /tmp/icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-              
               convert /tmp/icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
               cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
               
@@ -548,6 +521,19 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest-release
+          name: Latest Release
+          body: |
+            ## 🚀 APK and AAB Files
+            
+            ### APK
+            - Download the APK file below
+            
+            ### AAB  
+            - Download the AAB file below
+            
+            Generated by CodeForge Pro Build System
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+          draft: false
+          prerelease: false
