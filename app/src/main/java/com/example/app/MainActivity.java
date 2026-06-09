@@ -1,4 +1,4 @@
-package com.example.counter;
+package com.systempro.counter1;
 
 import android.os.Bundle;
 import android.view.View;
