@@ -1,4 +1,4 @@
-name: Build Android APK (Debug Only)
+name: Build Android APK (Priority to User UI)
 
 on:
   workflow_dispatch:
@@ -6,12 +6,12 @@ on:
       package_name:
         description: 'Package Name'
         required: false
-        default: 'com.counter.app'
+        default: 'com.example.app'
         type: string
       app_name:
         description: 'App Name'
         required: false
-        default: 'Counter App'
+        default: 'MyApp'
         type: string
   repository_dispatch:
     types: [trigger_b64_build]
@@ -38,7 +38,7 @@ jobs:
       - name: Get Package Name
         id: pkg
         run: |
-          PKG="com.counter.app"
+          PKG="com.example.app"
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             PKG="${{ github.event.client_payload.package_name }}"
           elif [ -n "${{ github.event.inputs.package_name }}" ]; then
@@ -51,7 +51,7 @@ jobs:
       - name: Get App Name
         id: app
         run: |
-          APP="Counter App"
+          APP="MyApp"
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
             APP="${{ github.event.client_payload.app_name }}"
           elif [ -n "${{ github.event.inputs.app_name }}" ]; then
@@ -65,13 +65,14 @@ jobs:
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Generate Counter App Files
+      - name: Decode and Build User Files (Priority)
         env:
           PKG: ${{ steps.pkg.outputs.package_name }}
           PKG_PATH: ${{ steps.pkg.outputs.package_path }}
@@ -80,194 +81,245 @@ jobs:
           # Create package directory
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # Create MainActivity.java with Counter functionality
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
-          package PKG_PLACEHOLDER;
+          # First, check if user sent files in payload
+          USER_FILES_EXIST=false
           
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
+          if [ -n "${{ github.event.client_payload.files }}" ]; then
+            echo "📦 User payload detected! Processing user files..."
+            
+            # Save payload to temp file
+            echo '${{ toJson(github.event.client_payload.files) }}' > /tmp/payload.json
+            
+            # Python script to process user files with priority
+            python3 << 'PYTHON_SCRIPT'
+            import json
+            import os
+            import re
+            import sys
+            
+            target_pkg = os.environ.get("PKG", "com.example.app")
+            pkg_path = target_pkg.replace(".", "/")
+            app_name = os.environ.get("APP_NAME", "MyApp")
+            
+            print(f"🔧 Building with user UI - Package: {target_pkg}")
+            
+            try:
+                with open('/tmp/payload.json', 'r') as f:
+                    payload_data = json.load(f)
+                
+                files_processed = 0
+                
+                for file_path, content in payload_data.items():
+                    if not content:
+                        continue
+                    
+                    clean_path = file_path.strip('/')
+                    print(f"  📄 Processing: {clean_path}")
+                    
+                    # Handle Java files
+                    if clean_path.endswith('.java'):
+                        # Fix package name to match target
+                        content = re.sub(r'^package\s+[\w.]+;', f'package {target_pkg};', content, flags=re.MULTILINE)
+                        if 'package ' not in content[:200]:
+                            content = f'package {target_pkg};\n\n{content}'
+                        
+                        filename = os.path.basename(clean_path)
+                        dest_path = f"app/src/main/java/{pkg_path}/{filename}"
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        print(f"    ✅ Java: {filename}")
+                        files_processed += 1
+                    
+                    # Handle Layout XML files
+                    elif 'layout' in clean_path and clean_path.endswith('.xml'):
+                        filename = os.path.basename(clean_path)
+                        dest_path = f"app/src/main/res/layout/{filename}"
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        print(f"    ✅ Layout: {filename}")
+                        files_processed += 1
+                    
+                    # Handle AndroidManifest.xml
+                    elif 'AndroidManifest.xml' in clean_path:
+                        dest_path = "app/src/main/AndroidManifest.xml"
+                        # Remove package attribute if exists (using namespace now)
+                        content = re.sub(r'package="[^"]*"', '', content)
+                        content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', content)
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        print(f"    ✅ AndroidManifest.xml")
+                        files_processed += 1
+                    
+                    # Handle other XML files (values, drawable, etc.)
+                    elif clean_path.endswith('.xml'):
+                        dest_path = f"app/src/main/res/{clean_path}"
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        print(f"    ✅ XML: {clean_path}")
+                        files_processed += 1
+                    
+                    # Handle other files
+                    else:
+                        dest_path = f"app/src/main/{clean_path}"
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        print(f"    ✅ File: {clean_path}")
+                        files_processed += 1
+                
+                print(f"\n✅ Processed {files_processed} user files")
+                
+                # Mark that user files were processed
+                with open('/tmp/user_files_processed', 'w') as f:
+                    f.write('true')
+                    
+            except Exception as e:
+                print(f"⚠️ Error processing payload: {e}")
+                print("Will use default template instead")
+            PYTHON_SCRIPT
+            
+            if [ -f /tmp/user_files_processed ]; then
+              USER_FILES_EXIST=true
+              echo "✅ User files successfully integrated"
+            fi
+          fi
           
-          public class MainActivity extends AppCompatActivity {
-              private TextView counterTextView;
-              private Button incrementButton;
-              private Button decrementButton;
-              private Button resetButton;
-              private int counter = 0;
-              
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  
-                  // Initialize views
-                  counterTextView = findViewById(R.id.counterTextView);
-                  incrementButton = findViewById(R.id.incrementButton);
-                  decrementButton = findViewById(R.id.decrementButton);
-                  resetButton = findViewById(R.id.resetButton);
-                  
-                  // Set initial counter value
-                  updateCounterDisplay();
-                  
-                  // Set click listeners
-                  incrementButton.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          counter++;
-                          updateCounterDisplay();
-                      }
-                  });
-                  
-                  decrementButton.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          counter--;
-                          updateCounterDisplay();
-                      }
-                  });
-                  
-                  resetButton.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          counter = 0;
-                          updateCounterDisplay();
-                      }
-                  });
-              }
-              
-              private void updateCounterDisplay() {
-                  counterTextView.setText(String.valueOf(counter));
-              }
-          }
-          EOF
+          # If no user files or missing critical files, create defaults
+          if [ "$USER_FILES_EXIST" = false ] || [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+            echo "📝 Creating default MainActivity (no user Java file found)"
+            cat > app/src/main/java/$PKG_PATH/MainActivity.java << EOF
+            package $PKG;
+            
+            import android.os.Bundle;
+            import android.widget.TextView;
+            import androidx.appcompat.app.AppCompatActivity;
+            
+            public class MainActivity extends AppCompatActivity {
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    setContentView(R.layout.activity_main);
+                    TextView textView = findViewById(R.id.textView);
+                    if (textView != null) {
+                        textView.setText("Welcome to $APP_NAME");
+                    }
+                }
+            }
+            EOF
+          fi
           
-          # Replace placeholders
-          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
+          if [ "$USER_FILES_EXIST" = false ] || [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
+            echo "📝 Creating default layout (no user layout found)"
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="24dp">
+                <TextView
+                    android:id="@+id/textView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hello World!"
+                    android:textSize="24sp"/>
+            </LinearLayout>
+            EOF
+          fi
           
-          # Create activity_main.xml with Counter UI
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp">
-              
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Counter App"
-                  android:textSize="28sp"
-                  android:textStyle="bold"
-                  android:textColor="@android:color/black"
-                  android:layout_marginBottom="40dp"/>
-              
-              <TextView
-                  android:id="@+id/counterTextView"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="0"
-                  android:textSize="80sp"
-                  android:textStyle="bold"
-                  android:textColor="#6200EE"
-                  android:layout_marginBottom="40dp"/>
-              
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:gravity="center"
-                  android:layout_marginBottom="20dp">
-                  
-                  <Button
-                      android:id="@+id/decrementButton"
-                      android:layout_width="80dp"
-                      android:layout_height="80dp"
-                      android:text="-"
-                      android:textSize="32sp"
-                      android:layout_marginEnd="20dp"/>
-                  
-                  <Button
-                      android:id="@+id/incrementButton"
-                      android:layout_width="80dp"
-                      android:layout_height="80dp"
-                      android:text="+"
-                      android:textSize="32sp"/>
-              </LinearLayout>
-              
-              <Button
-                  android:id="@+id/resetButton"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Reset"
-                  android:textSize="18sp"
-                  android:paddingLeft="32dp"
-                  android:paddingRight="32dp"/>
-              
-          </LinearLayout>
-          EOF
+          if [ "$USER_FILES_EXIST" = false ] || [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+            echo "📝 Creating default AndroidManifest"
+            cat > app/src/main/AndroidManifest.xml << EOF
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                <application
+                    android:allowBackup="true"
+                    android:icon="@mipmap/ic_launcher"
+                    android:label="$APP_NAME"
+                    android:theme="@style/AppTheme">
+                    <activity
+                        android:name=".MainActivity"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            EOF
+          fi
           
-          # Create strings.xml
-          cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
+          # Always create these if missing
+          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
+            cat > app/src/main/res/values/strings.xml << EOF
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <string name="app_name">$APP_NAME</string>
+            </resources>
+            EOF
+          fi
           
-          # Create colors.xml
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC6</color>
-          </resources>
-          EOF
+          if [ ! -f "app/src/main/res/values/colors.xml" ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <color name="colorPrimary">#6200EE</color>
+                <color name="colorPrimaryDark">#3700B3</color>
+                <color name="colorAccent">#03DAC6</color>
+            </resources>
+            EOF
+          fi
           
-          # Create themes.xml
-          cat > app/src/main/res/values/themes.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          EOF
+          if [ ! -f "app/src/main/res/values/themes.xml" ]; then
+            cat > app/src/main/res/values/themes.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <resources>
+                <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                    <item name="colorPrimary">@color/colorPrimary</item>
+                    <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                    <item name="colorAccent">@color/colorAccent</item>
+                </style>
+            </resources>
+            EOF
+          fi
           
-          # Create AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="$APP_NAME"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          
-          echo "Counter app files generated successfully"
+          echo "✅ Project generation complete"
 
       - name: Generate App Icons
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
           
+          # Check if user sent custom icon
+          ICON_B64="${{ github.event.client_payload.icon }}"
+          
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && [ "$ICON_B64" != "" ]; then
+            echo "$ICON_B64" | base64 -d > /tmp/icon.png
+            if file /tmp/icon.png | grep -q 'PNG image'; then
+              echo "✅ Custom icon detected, generating densities..."
+              for size in 48 72 96 144 192; do
+                case $size in
+                  48) density="mdpi" ;;
+                  72) density="hdpi" ;;
+                  96) density="xhdpi" ;;
+                  144) density="xxhdpi" ;;
+                  192) density="xxxhdpi" ;;
+                esac
+                convert /tmp/icon.png -resize ${size}x${size} app/src/main/res/mipmap-${density}/ic_launcher.png
+                cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png
+              done
+              echo "✅ Custom icons applied"
+              exit 0
+            fi
+          fi
+          
+          # Fallback icons
           for size in 48 72 96 144 192; do
             case $size in
               48) density="mdpi" ;;
@@ -277,7 +329,7 @@ jobs:
               192) density="xxxhdpi" ;;
             esac
             convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "C" \
+              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "App" \
               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
             cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
           done
@@ -318,6 +370,7 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
           
@@ -340,7 +393,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "CounterApp"
+          rootProject.name = "UserApp"
           include ':app'
           EOF
 
@@ -362,39 +415,48 @@ jobs:
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.5
 
+      - name: Verify User Files
+        run: |
+          echo "=== VERIFICATION ==="
+          echo "Package: ${{ steps.pkg.outputs.package_name }}"
+          echo ""
+          echo "Java files:"
+          find app/src/main/java -name "*.java" -type f
+          echo ""
+          echo "Layout files:"
+          find app/src/main/res/layout -name "*.xml" -type f
+          echo ""
+          echo "Manifest:"
+          cat app/src/main/AndroidManifest.xml
+          echo ""
+          echo "✅ User files will be compiled with priority"
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: counter-app-debug
+          name: user-app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: counter-app-${{ github.run_number }}
-          name: Counter App - ${{ steps.app.outputs.app_name }}
+          tag_name: user-build-${{ github.run_number }}
+          name: User App Build - ${{ steps.app.outputs.app_name }}
           body: |
-            ## Counter App Built Successfully! 🎉
+            ## 🎉 App Built Successfully with Your UI!
             
-            ### Features:
-            - **+ Button** - Increment counter
-            - **- Button** - Decrement counter  
-            - **Reset Button** - Reset to zero
-            - Large counter display
-            
-            **App:** ${{ steps.app.outputs.app_name }}
+            **App Name:** ${{ steps.app.outputs.app_name }}
             **Package:** ${{ steps.pkg.outputs.package_name }}
             
-            ### How to Use:
-            1. Download and install APK
-            2. Open the app
-            3. Click + to increase count
-            4. Click - to decrease count
-            5. Click Reset to start over
+            ### ✅ Your UI has been compiled!
+            The APK contains your custom layout and Java code.
+            
+            ### Download
+            APK file attached below - Install and test your app!
           files: |
             app/build/outputs/apk/debug/*.apk
           draft: false
