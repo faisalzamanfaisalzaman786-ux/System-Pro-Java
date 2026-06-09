@@ -1,4 +1,4 @@
-name: Build Android APK + AAB (Release Only)
+name: Build Android APK + AAB
 
 on:
   workflow_dispatch:
@@ -20,13 +20,6 @@ permissions:
   contents: write
   actions: write
 
-concurrency:
-  group: android-build-${{ github.run_id }}
-  cancel-in-progress: true
-
-env:
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,39 +39,33 @@ jobs:
       - name: Get Package Name
         id: pkg
         run: |
+          PKG="com.example.app"
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             PKG="${{ github.event.client_payload.package_name }}"
           elif [ -n "${{ github.event.inputs.package_name }}" ]; then
             PKG="${{ github.event.inputs.package_name }}"
-          else
-            PKG="com.example.app"
           fi
-          PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
-          PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          echo "package_path=$PKG_PATH" >> $GITHUB_OUTPUT
+          echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
 
       - name: Get App Name
         id: app
         run: |
+          APP="MyApp"
           if [ -n "${{ github.event.client_payload.app_name }}" ]; then
-            APP_NAME="${{ github.event.client_payload.app_name }}"
+            APP="${{ github.event.client_payload.app_name }}"
           elif [ -n "${{ github.event.inputs.app_name }}" ]; then
-            APP_NAME="${{ github.event.inputs.app_name }}"
-          else
-            APP_NAME="MyApp"
+            APP="${{ github.event.inputs.app_name }}"
           fi
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "app_name=$APP" >> $GITHUB_OUTPUT
 
-      - name: Create Directories
+      - name: Create Project Structure
         run: |
-          rm -rf app
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
@@ -99,120 +86,116 @@ jobs:
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           fi
 
-      - name: Generate Project Files
-        env:
-          NEW_PKG: ${{ steps.pkg.outputs.package_name }}
-          APP_NAME: ${{ steps.app.outputs.app_name }}
-          PKG_PATH: ${{ steps.pkg.outputs.package_path }}
+      - name: Create MainActivity
         run: |
-          python3 << 'PYTHON_SCRIPT'
-          import json, os, re, sys
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          PKG_PATH="${{ steps.pkg.outputs.package_path }}"
+          APP_NAME="${{ steps.app.outputs.app_name }}"
           
-          target_pkg = os.environ.get("NEW_PKG", "com.example.app")
-          app_name = os.environ.get("APP_NAME", "MyApp")
-          pkg_path = target_pkg.replace(".", "/")
+          mkdir -p app/src/main/java/$PKG_PATH
           
-          print(f"Package: {target_pkg}")
-          print(f"App Name: {app_name}")
+          cat > app/src/main/java/$PKG_PATH/MainActivity.java << JAVA_EOF
+          package $PKG;
           
-          # Create MainActivity
-          main_activity = f"""package {target_pkg};
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
           
-import android.os.Bundle;
-import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  TextView textView = findViewById(R.id.textView);
+                  if (textView != null) {
+                      textView.setText("Welcome to $APP_NAME");
+                  }
+              }
+          }
+          JAVA_EOF
 
-public class MainActivity extends AppCompatActivity {{
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {{
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        TextView tv = findViewById(R.id.textView);
-        if (tv != null) tv.setText("Welcome to {app_name}");
-    }}
-}}"""
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
-              f.write(main_activity)
-          
-          # Create layout
-          layout = """<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!"
-        android:textSize="24sp"/>
-</LinearLayout>"""
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write(layout)
-          
-          # Create strings.xml
-          strings = f"""<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">{app_name}</string>
-</resources>"""
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-          with open("app/src/main/res/values/strings.xml", "w") as f:
-              f.write(strings)
-          
-          # Create colors.xml
-          colors = """<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#03DAC6</color>
-</resources>"""
-          with open("app/src/main/res/values/colors.xml", "w") as f:
-              f.write(colors)
-          
-          # Create themes.xml
-          themes = """<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-    </style>
-</resources>"""
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write(themes)
-          
-          # Create AndroidManifest.xml
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="{target_pkg}">
-    <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="{app_name}"
-        android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(manifest)
-          
-          print("Project files generated successfully")
-          PYTHON_SCRIPT
+      - name: Create Layout
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml << XML_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center">
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Hello World!"
+                  android:textSize="24sp"/>
+          </LinearLayout>
+          XML_EOF
 
-      - name: Generate Icons
+      - name: Create Strings XML
+        run: |
+          APP_NAME="${{ steps.app.outputs.app_name }}"
+          cat > app/src/main/res/values/strings.xml << XML_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          XML_EOF
+
+      - name: Create Colors XML
+        run: |
+          cat > app/src/main/res/values/colors.xml << XML_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC6</color>
+          </resources>
+          XML_EOF
+
+      - name: Create Themes XML
+        run: |
+          cat > app/src/main/res/values/themes.xml << XML_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          XML_EOF
+
+      - name: Create Android Manifest
+        run: |
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          APP_NAME="${{ steps.app.outputs.app_name }}"
+          cat > app/src/main/AndroidManifest.xml << XML_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="$APP_NAME"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          XML_EOF
+
+      - name: Create Icons
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
           
-          # Create simple colored icons
           for size in 48 72 96 144 192; do
             case $size in
               48) density="mdpi" ;;
@@ -229,17 +212,18 @@ public class MainActivity extends AppCompatActivity {{
 
       - name: Create build.gradle
         run: |
-          cat > app/build.gradle << 'EOF'
+          PKG="${{ steps.pkg.outputs.package_name }}"
+          cat > app/build.gradle << GRADLE_EOF
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace "com.example.app"
+              namespace "$PKG"
               compileSdk 34
 
               defaultConfig {
-                  applicationId "com.example.app"
+                  applicationId "$PKG"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -249,7 +233,7 @@ public class MainActivity extends AppCompatActivity {{
 
               signingConfigs {
                   release {
-                      storeFile file(System.getenv("KEYSTORE_PATH") ?: "none")
+                      storeFile file(System.getenv("KEYSTORE_PATH"))
                       storePassword System.getenv("KEYSTORE_PASSWORD")
                       keyAlias System.getenv("KEY_ALIAS")
                       keyPassword System.getenv("KEY_PASSWORD")
@@ -276,14 +260,9 @@ public class MainActivity extends AppCompatActivity {{
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
               implementation 'androidx.multidex:multidex:2.0.1'
           }
-          EOF
-
-      - name: Update build.gradle with correct package
-        run: |
-          PKG="${{ steps.pkg.outputs.package_name }}"
-          sed -i "s/namespace \"com.example.app\"/namespace \"$PKG\"/" app/build.gradle
-          sed -i "s/applicationId \"com.example.app\"/applicationId \"$PKG\"/" app/build.gradle
-          echo "Updated build.gradle with package: $PKG"
+          GRADLE_EOF
+          
+          touch app/proguard-rules.pro
 
       - name: Create Gradle Settings
         run: |
@@ -302,7 +281,7 @@ public class MainActivity extends AppCompatActivity {{
                   mavenCentral()
               }
           }
-          rootProject.name = "AppBuilder"
+          rootProject.name = "MyApp"
           include ':app'
           EOF
 
@@ -327,10 +306,10 @@ public class MainActivity extends AppCompatActivity {{
       - name: Clean Project
         run: ./gradlew clean --no-daemon
 
-      - name: Build APK
+      - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Build AAB
+      - name: Build Release AAB
         run: ./gradlew bundleRelease --no-daemon
 
       - name: Upload APK
@@ -353,12 +332,14 @@ public class MainActivity extends AppCompatActivity {{
           tag_name: latest-release
           name: Latest Release
           body: |
-            ## APK and AAB Files
+            ## Build Complete
             
             - Package: ${{ steps.pkg.outputs.package_name }}
             - App Name: ${{ steps.app.outputs.app_name }}
             
-            Generated by Android Builder
+            ### Files:
+            - APK file attached below
+            - AAB file attached below
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
