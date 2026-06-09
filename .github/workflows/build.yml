@@ -1,10 +1,10 @@
-name: Restore Repository
+name: Repair and Build Structure
 
 on:
   workflow_dispatch:
 
 jobs:
-  restore:
+  repair:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -13,12 +13,17 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create all files
+      - name: Create complete app structure
         run: |
-          # Create directories
+          # Create all directories
           mkdir -p app/src/main/java/com/counter/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
           mkdir -p .github/workflows
           
           # MainActivity.java
@@ -32,8 +37,8 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity;
           
           public class MainActivity extends AppCompatActivity {
-              private TextView tv;
-              private Button minus, reset, plus;
+              private TextView counterText;
+              private Button btnMinus, btnReset, btnPlus;
               private int count = 0;
               
               @Override
@@ -41,16 +46,36 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
                   
-                  tv = findViewById(R.id.tv);
-                  minus = findViewById(R.id.minus);
-                  reset = findViewById(R.id.reset);
-                  plus = findViewById(R.id.plus);
+                  counterText = findViewById(R.id.counterText);
+                  btnMinus = findViewById(R.id.btnMinus);
+                  btnReset = findViewById(R.id.btnReset);
+                  btnPlus = findViewById(R.id.btnPlus);
                   
-                  tv.setText("0");
+                  counterText.setText("0");
                   
-                  minus.setOnClickListener(v -> { count--; tv.setText(String.valueOf(count)); });
-                  reset.setOnClickListener(v -> { count = 0; tv.setText("0"); });
-                  plus.setOnClickListener(v -> { count++; tv.setText(String.valueOf(count)); });
+                  btnMinus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count--;
+                          counterText.setText(String.valueOf(count));
+                      }
+                  });
+                  
+                  btnReset.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count = 0;
+                          counterText.setText("0");
+                      }
+                  });
+                  
+                  btnPlus.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          count++;
+                          counterText.setText(String.valueOf(count));
+                      }
+                  });
               }
           }
           JAVA
@@ -67,7 +92,7 @@ jobs:
               android:background="#F5F5F5">
               
               <TextView
-                  android:id="@+id/tv"
+                  android:id="@+id/counterText"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="0"
@@ -82,7 +107,7 @@ jobs:
                   android:orientation="horizontal">
                   
                   <Button
-                      android:id="@+id/minus"
+                      android:id="@+id/btnMinus"
                       android:layout_width="0dp"
                       android:layout_height="60dp"
                       android:layout_weight="1"
@@ -93,7 +118,7 @@ jobs:
                       android:layout_marginEnd="8dp" />
                   
                   <Button
-                      android:id="@+id/reset"
+                      android:id="@+id/btnReset"
                       android:layout_width="0dp"
                       android:layout_height="60dp"
                       android:layout_weight="1"
@@ -105,7 +130,7 @@ jobs:
                       android:layout_marginEnd="4dp" />
                   
                   <Button
-                      android:id="@+id/plus"
+                      android:id="@+id/btnPlus"
                       android:layout_width="0dp"
                       android:layout_height="60dp"
                       android:layout_weight="1"
@@ -127,6 +152,10 @@ jobs:
               <color name="colorPrimaryDark">#3700B3</color>
               <color name="colorAccent">#03DAC6</color>
               <color name="background">#F5F5F5</color>
+              <color name="white">#FFFFFF</color>
+              <color name="red">#F44336</color>
+              <color name="orange">#FF9800</color>
+              <color name="green">#4CAF50</color>
           </resources>
           COL
           
@@ -182,6 +211,7 @@ jobs:
               }
           }
           dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories {
                   google()
                   mavenCentral()
@@ -234,7 +264,7 @@ jobs:
           android.useAndroidX=true
           PRO
           
-          # Workflow file
+          # Build workflow
           cat > .github/workflows/build.yml << 'WF'
           name: Build APK
           on:
@@ -261,12 +291,14 @@ jobs:
                     path: app/build/outputs/apk/release/*.apk
           WF
           
-          echo "✅ All files created"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          
+          echo "✅ All files created successfully"
 
       - name: Push to repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Restore complete app structure" || echo "No changes to commit"
-          git push origin main --force
+          git commit -m "Repair: Complete app structure restored" || echo "No changes"
+          git push
