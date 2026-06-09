@@ -19,15 +19,20 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create all missing resource files (Fallback)
+      - name: Clean old resources and create fresh ones
         run: |
+          # Clean old resource directories
+          rm -rf app/src/main/res/values/colors.xml
+          rm -rf app/src/main/res/values/themes.xml
+          rm -rf app/src/main/res/values/strings.xml
+          rm -rf app/src/main/res/layout/activity_main.xml
+          
+          # Create fresh directories
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/java/com/example/app
           
-          # ========== COLORS.XML FALLBACK ==========
-          if [ ! -f "app/src/main/res/values/colors.xml" ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
+          # Create fresh colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
@@ -41,14 +46,9 @@ jobs:
               <color name="green">#4CAF50</color>
           </resources>
           EOF
-            echo "✅ Fallback: colors.xml created"
-          else
-            echo "✅ colors.xml already exists"
-          fi
           
-          # ========== THEMES.XML FALLBACK ==========
-          if [ ! -f "app/src/main/res/values/themes.xml" ]; then
-            cat > app/src/main/res/values/themes.xml << 'EOF'
+          # Create fresh themes.xml
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -58,27 +58,17 @@ jobs:
               </style>
           </resources>
           EOF
-            echo "✅ Fallback: themes.xml created"
-          else
-            echo "✅ themes.xml already exists"
-          fi
           
-          # ========== STRINGS.XML FALLBACK ==========
-          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-            cat > app/src/main/res/values/strings.xml << 'EOF'
+          # Create fresh strings.xml
+          cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">MyApp</string>
           </resources>
           EOF
-            echo "✅ Fallback: strings.xml created"
-          else
-            echo "✅ strings.xml already exists"
-          fi
           
-          # ========== LAYOUT FALLBACK ==========
-          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          # Create fresh activity_main.xml
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -97,65 +87,8 @@ jobs:
                   android:textColor="@color/colorPrimary" />
           </LinearLayout>
           EOF
-            echo "✅ Fallback: activity_main.xml created"
-          else
-            echo "✅ activity_main.xml already exists"
-          fi
           
-          # ========== MAINACTIVITY.JAVA FALLBACK ==========
-          PKG=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml 2>/dev/null || echo "com.example.app")
-          PKG_PATH=$(echo $PKG | tr '.' '/')
-          
-          if [ ! -f "app/src/main/java/${PKG_PATH}/MainActivity.java" ]; then
-            mkdir -p app/src/main/java/${PKG_PATH}
-            cat > app/src/main/java/${PKG_PATH}/MainActivity.java << EOF
-          package ${PKG};
-          
-          import android.os.Bundle;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-          
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  TextView tv = findViewById(R.id.textView);
-                  tv.setText("Hello World!");
-              }
-          }
-          EOF
-            echo "✅ Fallback: MainActivity.java created"
-          else
-            echo "✅ MainActivity.java already exists"
-          fi
-          
-          # ========== ANDROIDMANIFEST.XML FALLBACK ==========
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat > app/src/main/AndroidManifest.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${PKG}">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-            echo "✅ Fallback: AndroidManifest.xml created"
-          else
-            echo "✅ AndroidManifest.xml already exists"
-          fi
+          echo "✅ Fresh resources created"
 
       - name: Build APK
         run: ./gradlew assembleRelease
