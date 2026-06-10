@@ -94,6 +94,7 @@ jobs:
         run: |
           if [ -d "app/src/main/java" ]; then
             find app/src/main/java -name "*.java" -type f | while read file; do
+              echo "Fixing package in: $file"
               sed -i "s/^package .*;/package $PKG;/" "$file"
             done
           fi
@@ -118,6 +119,7 @@ jobs:
               <color name="colorPrimary">#6200EE</color>
               <color name="colorPrimaryDark">#3700B3</color>
               <color name="colorAccent">#03DAC6</color>
+              <color name="background">#FFFFFF</color>
           </resources>
           EOF
           fi
@@ -139,7 +141,7 @@ jobs:
         env:
           PKG: ${{ steps.params.outputs.name }}
         run: |
-          cat > app/build.gradle << 'GRADLE_EOF'
+          cat > app/build.gradle << GRADLE_EOF
           plugins {
               id 'com.android.application' version '8.2.2'
           }
@@ -147,6 +149,7 @@ jobs:
           android {
               namespace "$PKG"
               compileSdk 34
+              compileSdkVersion 34
 
               defaultConfig {
                   applicationId "$PKG"
@@ -223,6 +226,9 @@ jobs:
         run: |
           echo "=== Verification ==="
           echo "Package: ${{ steps.params.outputs.name }}"
+          echo ""
+          echo "build.gradle content:"
+          cat app/build.gradle
           echo ""
           echo "Java files:"
           find app/src/main/java -name "*.java" -type f
