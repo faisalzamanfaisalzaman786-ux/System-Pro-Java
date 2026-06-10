@@ -41,7 +41,6 @@ jobs:
       - name: Get Build Parameters
         id: params
         run: |
-          # Get package name from payload or input
           PKG="${{ github.event.client_payload.package_name }}"
           if [ -z "$PKG" ] || [ "$PKG" = "null" ]; then
             PKG="${{ github.event.inputs.package_name }}"
@@ -52,7 +51,6 @@ jobs:
           echo "package_name=$PKG" >> $GITHUB_OUTPUT
           echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
           
-          # Get app name
           APP="${{ github.event.client_payload.app_name }}"
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="${{ github.event.inputs.app_name }}"
@@ -72,49 +70,33 @@ jobs:
           echo "Java files in repository:"
           find app/src/main/java -name "*.java" -type f 2>/dev/null || echo "No Java files found"
           echo ""
-          echo "Layout files in repository:"
-          find app/src/main/res/layout -name "*.xml" -type f 2>/dev/null || echo "No layout files found"
-          echo ""
-          echo "Drawable files:"
-          find app/src/main/res/drawable -type f 2>/dev/null || echo "No drawable files"
-          echo ""
-          echo "Menu files:"
-          find app/src/main/res/menu -type f 2>/dev/null || echo "No menu files"
+          echo "Layout files:"
+          find app/src/main/res/layout -name "*.xml" -type f 2>/dev/null || echo "No layout files"
           echo ""
           echo "Values files:"
           find app/src/main/res/values -name "*.xml" -type f 2>/dev/null || echo "No values files"
-          echo ""
-          echo "Assets:"
-          find app/src/main/assets -type f 2>/dev/null || echo "No assets"
 
       - name: Fix Package Names in Java Files
         env:
           PKG: ${{ steps.params.outputs.package_name }}
         run: |
-          echo "Fixing package names in all Java files..."
-          
-          # Find all Java files and fix package declaration
-          find app/src/main/java -name "*.java" -type f | while read file; do
-            echo "Processing: $file"
-            # Fix package line
-            sed -i "s/^package .*;/package $PKG;/" "$file"
-            # Also fix any hardcoded package imports
-            sed -i "s/import com\.[a-zA-Z0-9_.]*\./import $PKG./g" "$file"
-          done
-          
-          echo "✅ Package names fixed to: $PKG"
+          if [ -d "app/src/main/java" ]; then
+            find app/src/main/java -name "*.java" -type f | while read file; do
+              echo "Fixing package in: $file"
+              sed -i "s/^package .*;/package $PKG;/" "$file"
+            done
+            echo "✅ Package names fixed to: $PKG"
+          else
+            echo "⚠️ No Java files found"
+          fi
 
-      - name: Update AndroidManifest.xml
+      - name: Update AndroidManifest
         env:
           APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
           if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            echo "Updating AndroidManifest.xml..."
-            # Update app name
             sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/g' app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest.xml updated"
-          else
-            echo "⚠️ No AndroidManifest.xml found"
+            echo "✅ AndroidManifest updated"
           fi
 
       - name: Update strings.xml
@@ -122,23 +104,17 @@ jobs:
           APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
           if [ -f "app/src/main/res/values/strings.xml" ]; then
-            echo "Updating strings.xml..."
             sed -i 's/<string name="app_name">.*</<string name="app_name">'"$APP_NAME"'</g' app/src/main/res/values/strings.xml
             echo "✅ strings.xml updated"
           fi
 
-      - name: Process Custom Icon
+      - name: Process Icons
         run: |
-          # Check for icon in multiple possible locations
-          ICON_PATH=""
-          if [ -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
-            echo "✅ Icon already exists in mipmap folders"
+          if [ -d "app/src/main/res/mipmap-hdpi" ] && [ -f "app/src/main/res/mipmap-hdpi/ic_launcher.png" ]; then
+            echo "✅ Icons already present"
           elif [ -f "build_assets/app_icon.png" ]; then
-            echo "📱 Custom icon found in build_assets, generating densities..."
             sudo apt-get update
             sudo apt-get install -y imagemagick
-            sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true
-            
             for size in 48 72 96 144 192; do
               case $size in
                 48) density="mdpi" ;;
@@ -149,101 +125,89 @@ jobs:
               esac
               mkdir -p app/src/main/res/mipmap-${density}
               convert build_assets/app_icon.png -resize ${size}x${size} app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
-              cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
             done
-            echo "✅ Custom icon applied"
+            echo "✅ Icons generated from custom icon"
           else
-            echo "⚠️ No custom icon found, using default Android icon"
+            echo "⚠️ No icons found"
           fi
 
-      - name: Create Default build.gradle
+      - name: Create build.gradle
         env:
           PKG: ${{ steps.params.outputs.package_name }}
         run: |
-          # Only create build.gradle if it doesn't exist
           if [ ! -f "app/build.gradle" ]; then
-            echo "Creating default build.gradle..."
-            cat > app/build.gradle << GRADLE_EOF
-            plugins {
-                id 'com.android.application'
-            }
+            echo "Creating build.gradle..."
+            echo 'plugins {
+    id "com.android.application"
+}
 
-            android {
-                namespace "$PKG"
-                compileSdk 34
+android {
+    namespace "'$PKG'"
+    compileSdk 34
 
-                defaultConfig {
-                    applicationId "$PKG"
-                    minSdk 21
-                    targetSdk 34
-                    versionCode 1
-                    versionName "1.0"
-                }
+    defaultConfig {
+        applicationId "'$PKG'"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
 
-                buildTypes {
-                    debug {
-                        debuggable true
-                    }
-                }
+    buildTypes {
+        debug {
+            debuggable true
+        }
+    }
 
-                compileOptions {
-                    sourceCompatibility JavaVersion.VERSION_11
-                    targetCompatibility JavaVersion.VERSION_11
-                }
-            }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
 
-            dependencies {
-                implementation 'androidx.appcompat:appcompat:1.6.1'
-                implementation 'com.google.android.material:material:1.10.0'
-                implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            }
-            GRADLE_EOF
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation "com.google.android.material:material:1.10.0"
+}' > app/build.gradle
             touch app/proguard-rules.pro
             echo "✅ build.gradle created"
           else
-            echo "✅ Using existing build.gradle"
-            # Still update namespace and applicationId
+            echo "Using existing build.gradle"
             sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
             sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
           fi
 
-      - name: Create Gradle Settings (if missing)
+      - name: Create Gradle Files
         run: |
           if [ ! -f "settings.gradle" ]; then
-            cat > settings.gradle << 'SETTINGS_EOF'
-            pluginManagement {
-                repositories {
-                    google()
-                    mavenCentral()
-                    gradlePluginPortal()
-                }
-            }
-            dependencyResolutionManagement {
-                repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-            }
-            rootProject.name = "MyApp"
-            include ':app'
-            SETTINGS_EOF
+            echo 'pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "MyApp"
+include ":app"' > settings.gradle
           fi
           
           if [ ! -f "build.gradle" ]; then
-            cat > build.gradle << 'BUILD_EOF'
-            plugins {
-                id 'com.android.application' version '8.2.2' apply false
-            }
-            BUILD_EOF
+            echo 'plugins {
+    id "com.android.application" version "8.2.2" apply false
+}' > build.gradle
           fi
           
           if [ ! -f "gradle.properties" ]; then
-            cat > gradle.properties << 'PROP_EOF'
-            org.gradle.jvmargs=-Xmx4096m
-            android.useAndroidX=true
-            android.enableJetifier=false
-            PROP_EOF
+            echo 'org.gradle.jvmargs=-Xmx4096m
+android.useAndroidX=true
+android.enableJetifier=false' > gradle.properties
           fi
 
       - name: Setup Gradle
@@ -254,14 +218,12 @@ jobs:
           if [ ! -f "gradlew" ]; then
             gradle wrapper --gradle-version 8.5
           fi
-
-      - name: Clean Build
-        run: |
           chmod +x gradlew
-          ./gradlew clean --no-daemon
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Clean and Build
+        run: |
+          ./gradlew clean --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -274,19 +236,12 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }} - ${{ steps.params.outputs.app_name }}
+          name: Build ${{ github.run_number }}
           body: |
             ## APK Built from Repository Files
             
             **App:** ${{ steps.params.outputs.app_name }}
             **Package:** ${{ steps.params.outputs.package_name }}
-            **Build:** Debug (unsigned)
-            
-            ### Repository files used:
-            - Java files from `app/src/main/java/`
-            - Layouts from `app/src/main/res/layout/`
-            - Resources from `app/src/main/res/values/`
-            - Icons from `app/src/main/res/mipmap-*/`
             
             Download APK below.
           files: |
