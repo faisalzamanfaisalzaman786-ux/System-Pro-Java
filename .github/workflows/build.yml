@@ -53,24 +53,12 @@ jobs:
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="${{ github.event.inputs.app_name }}"
           fi
-          if [ -z "$APP" || [ "$APP" = "null" ]; then
+          if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="MyApp"
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
 
-      - name: Check Repository Files
-        run: |
-          echo "=== Repository Files Found ==="
-          echo "Java files:"
-          find app/src/main/java -name "*.java" 2>/dev/null || echo "None"
-          echo ""
-          echo "Layout files:"
-          find app/src/main/res/layout -name "*.xml" 2>/dev/null || echo "None"
-          echo ""
-          echo "Manifest:"
-          cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "None"
-
-      - name: Create Missing Directories
+      - name: Create Directories
         env:
           PKG_PATH: ${{ steps.params.outputs.path }}
         run: |
@@ -100,18 +88,17 @@ jobs:
             cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png 2>/dev/null || true
           fi
 
-      - name: Fix Package Names in All Java Files
+      - name: Fix Package Names in Java Files
         env:
           PKG: ${{ steps.params.outputs.name }}
         run: |
           if [ -d "app/src/main/java" ]; then
             find app/src/main/java -name "*.java" -type f | while read file; do
-              echo "Fixing package in: $file"
               sed -i "s/^package .*;/package $PKG;/" "$file"
             done
           fi
 
-      - name: Update App Name in Manifest and Strings
+      - name: Update App Name
         env:
           APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
@@ -122,9 +109,8 @@ jobs:
             sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">$APP_NAME</" app/src/main/res/values/strings.xml
           fi
 
-      - name: Ensure Required Files Exist
+      - name: Create Default Resource Files
         run: |
-          # Create default colors.xml if missing
           if [ ! -f "app/src/main/res/values/colors.xml" ]; then
             cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -136,7 +122,6 @@ jobs:
           EOF
           fi
           
-          # Create default themes.xml if missing
           if [ ! -f "app/src/main/res/values/themes.xml" ]; then
             cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -154,9 +139,9 @@ jobs:
         env:
           PKG: ${{ steps.params.outputs.name }}
         run: |
-          cat > app/build.gradle << GRADLE_EOF
+          cat > app/build.gradle << 'GRADLE_EOF'
           plugins {
-              id 'com.android.application'
+              id 'com.android.application' version '8.2.2'
           }
 
           android {
@@ -191,10 +176,9 @@ jobs:
           GRADLE_EOF
           touch app/proguard-rules.pro
 
-      - name: Create Gradle Files
+      - name: Create Root Gradle Files
         run: |
-          if [ ! -f "settings.gradle" ]; then
-            cat > settings.gradle << 'EOF'
+          cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -212,38 +196,18 @@ jobs:
           rootProject.name = "MyApp"
           include ':app'
           EOF
-          fi
-          
-          if [ ! -f "build.gradle" ]; then
-            cat > build.gradle << 'EOF'
+
+          cat > build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
-          fi
-          
-          if [ ! -f "gradle.properties" ]; then
-            cat > gradle.properties << 'EOF'
+
+          cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
           android.useAndroidX=true
           android.enableJetifier=false
           EOF
-          fi
-
-      - name: Verify Files Before Build
-        run: |
-          echo "=== Verification Before Build ==="
-          echo "Package: ${{ steps.params.outputs.name }}"
-          echo "App Name: ${{ steps.params.outputs.app_name }}"
-          echo ""
-          echo "Java files to compile:"
-          find app/src/main/java -name "*.java" -type f
-          echo ""
-          echo "Layout files:"
-          find app/src/main/res/layout -name "*.xml" -type f
-          echo ""
-          echo "Manifest content:"
-          cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "No manifest"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -254,6 +218,17 @@ jobs:
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
+
+      - name: Verify Build Files
+        run: |
+          echo "=== Verification ==="
+          echo "Package: ${{ steps.params.outputs.name }}"
+          echo ""
+          echo "Java files:"
+          find app/src/main/java -name "*.java" -type f
+          echo ""
+          echo "Layout files:"
+          find app/src/main/res/layout -name "*.xml" -type f
 
       - name: Build APK
         run: ./gradlew clean assembleDebug --no-daemon --stacktrace
@@ -273,7 +248,6 @@ jobs:
           body: |
             **App:** ${{ steps.params.outputs.app_name }}
             **Package:** ${{ steps.params.outputs.name }}
-            **Build:** Successful
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
