@@ -1,4 +1,4 @@
-name: Build APK from UI
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -10,13 +10,9 @@ on:
       app_name:
         description: 'App Name'
         required: false
-        default: 'Counter_1'
+        default: 'Counter App'
   repository_dispatch:
     types: [trigger_b64_build]
-
-permissions:
-  contents: write
-  actions: write
 
 jobs:
   build:
@@ -24,8 +20,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -33,16 +27,16 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools"
-          accept-android-sdk-licenses: true
+      - name: Setup Android SDK (Simple)
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Get Parameters from Payload
+      - name: Get Parameters
         id: params
         run: |
-          # Get package name from payload or input
           PKG="${{ github.event.client_payload.package_name }}"
           if [ -z "$PKG" ] || [ "$PKG" = "null" ]; then
             PKG="${{ github.event.inputs.package_name }}"
@@ -53,108 +47,59 @@ jobs:
           echo "name=$PKG" >> $GITHUB_OUTPUT
           echo "path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
           
-          # Get app name from payload or input
           APP="${{ github.event.client_payload.app_name }}"
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="${{ github.event.inputs.app_name }}"
           fi
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
-            APP="Counter_1"
+            APP="Counter App"
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
-          
-          echo "Package: $PKG"
-          echo "App Name: $APP"
 
-      - name: Clean Old Project
-        run: |
-          rm -rf app
-          rm -rf build_assets_temp
-          echo "Cleaned old project"
-
-      - name: Create Dynamic Folder Structure
+      - name: Create Project Structure
         env:
           PKG_PATH: ${{ steps.params.outputs.path }}
         run: |
-          # Create exact package structure
+          rm -rf app
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          echo "Created folder structure for: $PKG_PATH"
 
-      - name: Move Files from build_assets to Correct Package Location
+      - name: Create Files from build_assets
         env:
           PKG: ${{ steps.params.outputs.name }}
           PKG_PATH: ${{ steps.params.outputs.path }}
           APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
-          echo "=== Moving files to correct package: $PKG ==="
-          
-          # Check if build_assets exists
-          if [ ! -d "build_assets" ]; then
-            echo "❌ build_assets folder not found!"
-            exit 1
-          fi
-          
-          # 1. MainActivity.java
+          # MainActivity.java
           if [ -f "build_assets/MainActivity.java" ]; then
-            # Update package name in Java file
             sed "s/package .*;/package $PKG;/" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
-            echo "✅ MainActivity.java moved to $PKG_PATH/"
           else
-            echo "❌ MainActivity.java not found"
+            echo "No MainActivity.java found"
             exit 1
           fi
           
-          # 2. activity_main.xml
+          # activity_main.xml
           if [ -f "build_assets/activity_main.xml" ]; then
             cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
-            echo "✅ activity_main.xml moved"
           else
-            echo "❌ activity_main.xml not found"
+            echo "No activity_main.xml found"
             exit 1
           fi
           
-          # 3. AndroidManifest.xml
+          # AndroidManifest.xml
           if [ -f "build_assets/AndroidManifest.xml" ]; then
-            # Remove package attribute if exists (modern Android)
             sed -i 's/package="[^"]*"//g' build_assets/AndroidManifest.xml
-            # Update app label
             sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" build_assets/AndroidManifest.xml
             cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest.xml moved"
           else
-            echo "❌ AndroidManifest.xml not found"
+            echo "No AndroidManifest.xml found"
             exit 1
           fi
           
-          # 4. strings.xml (optional)
-          if [ -f "build_assets/strings.xml" ]; then
-            sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">$APP_NAME</" build_assets/strings.xml
-            cp build_assets/strings.xml app/src/main/res/values/strings.xml
-            echo "✅ strings.xml moved"
-          else
-            cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
-            echo "✅ Default strings.xml created"
-          fi
-          
-          # 5. colors.xml (optional)
-          if [ -f "build_assets/colors.xml" ]; then
-            cp build_assets/colors.xml app/src/main/res/values/colors.xml
-            echo "✅ colors.xml moved"
-          else
-            cat > app/src/main/res/values/colors.xml << 'EOF'
+          # colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
@@ -162,15 +107,9 @@ jobs:
               <color name="colorAccent">#03DAC6</color>
           </resources>
           EOF
-            echo "✅ Default colors.xml created"
-          fi
           
-          # 6. themes.xml (optional)
-          if [ -f "build_assets/themes.xml" ]; then
-            cp build_assets/themes.xml app/src/main/res/values/themes.xml
-            echo "✅ themes.xml moved"
-          else
-            cat > app/src/main/res/values/themes.xml << 'EOF'
+          # themes.xml
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -180,46 +119,35 @@ jobs:
               </style>
           </resources>
           EOF
-            echo "✅ Default themes.xml created"
-          fi
           
-          # 7. App Icon
+          # strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+          
+          # Icon
           if [ -f "build_assets/app_icon.png" ]; then
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            # Round icons
-            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-            echo "✅ Custom icon applied"
-          else
-            echo "⚠️ No icon found, using default"
+            cp build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
-          
-          echo "=== All files moved successfully ==="
 
       - name: Create build.gradle
         env:
           PKG: ${{ steps.params.outputs.name }}
         run: |
-          cat > app/build.gradle << GRADLE_EOF
+          cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.2'
           }
 
           android {
-              namespace "$PKG"
+              namespace "PKG_PLACEHOLDER"
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PKG"
+                  applicationId "PKG_PLACEHOLDER"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -231,19 +159,13 @@ jobs:
                       debuggable true
                   }
               }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_11
-                  targetCompatibility JavaVersion.VERSION_11
-              }
           }
 
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
-          GRADLE_EOF
+          EOF
+          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/build.gradle
           touch app/proguard-rules.pro
 
       - name: Create Gradle Files
@@ -257,13 +179,12 @@ jobs:
               }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories {
                   google()
                   mavenCentral()
               }
           }
-          rootProject.name = "DynamicApp"
+          rootProject.name = "App"
           include ':app'
           EOF
 
@@ -276,7 +197,6 @@ jobs:
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
           android.useAndroidX=true
-          android.enableJetifier=false
           EOF
 
       - name: Setup Gradle
@@ -289,44 +209,24 @@ jobs:
           fi
           chmod +x gradlew
 
-      - name: Verify Structure
-        run: |
-          echo "=== Verification ==="
-          echo "Package: ${{ steps.params.outputs.name }}"
-          echo "App Name: ${{ steps.params.outputs.app_name }}"
-          echo ""
-          echo "Java files in correct location:"
-          find app/src/main/java -name "*.java" -type f
-          echo ""
-          echo "Package line in MainActivity:"
-          grep "^package" app/src/main/java/${{ steps.params.outputs.path }}/MainActivity.java 2>/dev/null || echo "Not found"
-          echo ""
-          echo "Manifest label:"
-          grep "android:label" app/src/main/AndroidManifest.xml
-
       - name: Build APK
-        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+        run: ./gradlew clean assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ steps.params.outputs.name }}
+          name: app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Create Release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: build-${{ github.run_number }}
           name: ${{ steps.params.outputs.app_name }}
           body: |
-            ## 🎉 Build Successful!
-            
             **App:** ${{ steps.params.outputs.app_name }}
             **Package:** ${{ steps.params.outputs.name }}
-            **Build:** Debug
-            
-            Download APK below.
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
