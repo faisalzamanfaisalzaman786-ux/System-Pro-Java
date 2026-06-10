@@ -28,10 +28,10 @@
         android:textStyle="bold"
         android:textColor="@color/colorPrimary"
         android:layout_marginBottom="40dp"
-        android:background="@drawable/circle_background"
         android:padding="30dp"
         android:minWidth="200dp"
-        android:gravity="center"/>
+        android:gravity="center"
+        android:background="@android:drawable/edit_text"/>
     
     <!-- Buttons Row -->
     <LinearLayout
@@ -41,7 +41,7 @@
         android:layout_marginBottom="30dp">
         
         <!-- Decrement Button -->
-        <com.google.android.material.button.MaterialButton
+        <Button
             android:id="@+id/decrementButton"
             android:layout_width="80dp"
             android:layout_height="80dp"
@@ -49,12 +49,11 @@
             android:textSize="40sp"
             android:textStyle="bold"
             android:textColor="@android:color/white"
-            app:backgroundTint="@color/button_negative"
-            android:layout_marginEnd="20dp"
-            app:cornerRadius="40dp"/>
+            android:backgroundTint="#F44336"
+            android:layout_marginEnd="20dp"/>
         
         <!-- Increment Button -->
-        <com.google.android.material.button.MaterialButton
+        <Button
             android:id="@+id/incrementButton"
             android:layout_width="80dp"
             android:layout_height="80dp"
@@ -62,13 +61,12 @@
             android:textSize="40sp"
             android:textStyle="bold"
             android:textColor="@android:color/white"
-            app:backgroundTint="@color/button_positive"
-            app:cornerRadius="40dp"/>
+            android:backgroundTint="#4CAF50"/>
         
     </LinearLayout>
     
     <!-- Reset Button -->
-    <com.google.android.material.button.MaterialButton
+    <Button
         android:id="@+id/resetButton"
         android:layout_width="200dp"
         android:layout_height="60dp"
@@ -76,10 +74,7 @@
         android:textSize="18sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
-        app:backgroundTint="@color/button_reset"
-        app:cornerRadius="30dp"
-        android:icon="@android:drawable/ic_menu_close_clear_cancel"
-        android:iconGravity="textStart"/>
+        android:backgroundTint="#FF9800"/>
     
     <!-- Counter Info -->
     <TextView
@@ -87,7 +82,7 @@
         android:layout_height="wrap_content"
         android:text="Click + to increase\nClick - to decrease\nClick RESET to zero"
         android:textSize="12sp"
-        android:textColor="@color/text_secondary"
+        android:textColor="#757575"
         android:gravity="center"
         android:layout_marginTop="30dp"
         android:lineSpacingExtra="4dp"/>
