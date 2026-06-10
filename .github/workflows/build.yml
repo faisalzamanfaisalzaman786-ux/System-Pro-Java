@@ -27,18 +27,19 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Check build_assets
+      # Skip setup-android - use pre-installed SDK
+      - name: Set ANDROID_HOME
         run: |
-          echo "=== Checking build_assets ==="
-          ls -la build_assets/ 2>/dev/null || echo "build_assets folder not found"
-          echo ""
-          echo "Files in build_assets:"
-          find build_assets -type f 2>/dev/null || echo "No files"
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Setup Project
+      - name: Clean old Java files
+        run: |
+          rm -rf app/src/main/java/com/example 2>/dev/null || true
+          rm -rf app/src/main/java/com/systempro 2>/dev/null || true
+          echo "Cleaned old files"
+
+      - name: Setup project from build_assets
         env:
           PKG: ${{ github.event.inputs.package_name }}
           APP_NAME: ${{ github.event.inputs.app_name }}
@@ -47,46 +48,28 @@ jobs:
           APP_NAME="${APP_NAME:-Counter_1}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
-          # Create directories
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
           
-          # Copy files from build_assets if they exist
           if [ -f "build_assets/MainActivity.java" ]; then
             sed "s/package .*;/package $PKG;/" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
             echo "✅ MainActivity.java copied"
-          else
-            echo "❌ MainActivity.java not found"
-            exit 1
           fi
           
           if [ -f "build_assets/activity_main.xml" ]; then
             cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
             echo "✅ activity_main.xml copied"
-          else
-            echo "❌ activity_main.xml not found"
-            exit 1
           fi
           
           if [ -f "build_assets/AndroidManifest.xml" ]; then
-            sed -i 's/package="[^"]*"//g' build_assets/AndroidManifest.xml
-            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" build_assets/AndroidManifest.xml
             cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
-          else
-            echo "❌ AndroidManifest.xml not found"
-            exit 1
           fi
           
-          # Default colors.xml if not exists
-          if [ ! -f "build_assets/colors.xml" ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
+          # Default resources
+          cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
@@ -94,13 +77,8 @@ jobs:
               <color name="colorAccent">#03DAC6</color>
           </resources>
           EOF
-          else
-            cp build_assets/colors.xml app/src/main/res/values/colors.xml
-          fi
           
-          # Default themes.xml if not exists
-          if [ ! -f "build_assets/themes.xml" ]; then
-            cat > app/src/main/res/values/themes.xml << 'EOF'
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -110,33 +88,17 @@ jobs:
               </style>
           </resources>
           EOF
-          else
-            cp build_assets/themes.xml app/src/main/res/values/themes.xml
-          fi
           
-          # strings.xml
-          if [ -f "build_assets/strings.xml" ]; then
-            sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">$APP_NAME</" build_assets/strings.xml
-            cp build_assets/strings.xml app/src/main/res/values/strings.xml
-          else
-            cat > app/src/main/res/values/strings.xml << EOF
+          cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
-          fi
           
-          # Icon
           if [ -f "build_assets/app_icon.png" ]; then
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            echo "✅ Icon applied"
+            cp build_assets/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            echo "✅ Icon copied"
           fi
 
       - name: Create build.gradle
@@ -144,17 +106,17 @@ jobs:
           PKG: ${{ github.event.inputs.package_name }}
         run: |
           PKG="${PKG:-com.counter.app}"
-          cat > app/build.gradle << EOF
+          cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.2'
           }
 
           android {
-              namespace "$PKG"
+              namespace "PKG_PLACEHOLDER"
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PKG"
+                  applicationId "PKG_PLACEHOLDER"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -173,6 +135,7 @@ jobs:
               implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
+          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/build.gradle
           touch app/proguard-rules.pro
 
       - name: Create Gradle files
@@ -192,7 +155,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "App"
+          rootProject.name = "CounterApp"
           include ':app'
           EOF
 
@@ -205,6 +168,7 @@ jobs:
           cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
           android.useAndroidX=true
+          android.enableJetifier=false
           EOF
 
       - name: Setup Gradle
@@ -223,18 +187,18 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: counter-app
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }}
+          tag_name: counter-${{ github.run_number }}
+          name: Counter App
           body: |
-            App: ${{ github.event.inputs.app_name }}
-            Package: ${{ github.event.inputs.package_name }}
+            **App:** ${{ github.event.inputs.app_name }}
+            **Package:** ${{ github.event.inputs.package_name }}
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
