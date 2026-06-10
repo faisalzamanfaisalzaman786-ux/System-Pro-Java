@@ -1,4 +1,4 @@
-name: Build APK from Repository
+name: Build APK from build_assets
 
 on:
   workflow_dispatch:
@@ -58,73 +58,112 @@ jobs:
           fi
           echo "app_name=$APP" >> $GITHUB_OUTPUT
 
-      - name: Create Directories
+      - name: Create Project Structure
         env:
           PKG_PATH: ${{ steps.params.outputs.path }}
         run: |
+          rm -rf app
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Process Custom Icon
-        run: |
-          if [ -f "build_assets/app_icon.png" ]; then
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png 2>/dev/null || true
-          fi
-
-      - name: Fix Package Names in Java Files
+      - name: Move Files from build_assets to Correct Location
         env:
           PKG: ${{ steps.params.outputs.name }}
-        run: |
-          if [ -d "app/src/main/java" ]; then
-            find app/src/main/java -name "*.java" -type f | while read file; do
-              echo "Fixing package in: $file"
-              sed -i "s/^package .*;/package $PKG;/" "$file"
-            done
-          fi
-
-      - name: Update App Name
-        env:
+          PKG_PATH: ${{ steps.params.outputs.path }}
           APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
+          echo "=== Moving files from build_assets ==="
+          
+          # Check if build_assets directory exists
+          if [ ! -d "build_assets" ]; then
+            echo "⚠️ build_assets directory not found!"
+            exit 1
           fi
-          if [ -f "app/src/main/res/values/strings.xml" ]; then
-            sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">$APP_NAME</" app/src/main/res/values/strings.xml
+          
+          # Move and process MainActivity.java
+          if [ -f "build_assets/MainActivity.java" ]; then
+            echo "Moving MainActivity.java"
+            # Fix package name
+            sed "s/package .*;/package $PKG;/" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "✅ MainActivity.java moved and package fixed"
+          else
+            echo "❌ MainActivity.java not found in build_assets"
+            exit 1
           fi
-
-      - name: Create Default Resource Files
-        run: |
-          if [ ! -f "app/src/main/res/values/colors.xml" ]; then
+          
+          # Move activity_main.xml
+          if [ -f "build_assets/activity_main.xml" ]; then
+            echo "Moving activity_main.xml"
+            cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "✅ activity_main.xml moved"
+          else
+            echo "❌ activity_main.xml not found in build_assets"
+            exit 1
+          fi
+          
+          # Move AndroidManifest.xml
+          if [ -f "build_assets/AndroidManifest.xml" ]; then
+            echo "Moving AndroidManifest.xml"
+            # Remove package attribute to avoid conflict
+            sed -i 's/package="[^"]*"//g' build_assets/AndroidManifest.xml
+            # Update app name
+            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" build_assets/AndroidManifest.xml
+            cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            echo "✅ AndroidManifest.xml moved"
+          else
+            echo "❌ AndroidManifest.xml not found in build_assets"
+            exit 1
+          fi
+          
+          # Move strings.xml (optional)
+          if [ -f "build_assets/strings.xml" ]; then
+            echo "Moving strings.xml"
+            sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">$APP_NAME</" build_assets/strings.xml
+            cp build_assets/strings.xml app/src/main/res/values/strings.xml
+            echo "✅ strings.xml moved"
+          else
+            # Create default strings.xml
+            cat > app/src/main/res/values/strings.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+            echo "✅ Default strings.xml created"
+          fi
+          
+          # Move colors.xml (optional)
+          if [ -f "build_assets/colors.xml" ]; then
+            echo "Moving colors.xml"
+            cp build_assets/colors.xml app/src/main/res/values/colors.xml
+            echo "✅ colors.xml moved"
+          else
+            # Create default colors.xml
             cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="colorPrimaryDark">#3700B3</color>
               <color name="colorAccent">#03DAC6</color>
-              <color name="background">#FFFFFF</color>
           </resources>
           EOF
+            echo "✅ Default colors.xml created"
           fi
           
-          if [ ! -f "app/src/main/res/values/themes.xml" ]; then
+          # Move themes.xml (optional)
+          if [ -f "build_assets/themes.xml" ]; then
+            echo "Moving themes.xml"
+            cp build_assets/themes.xml app/src/main/res/values/themes.xml
+            echo "✅ themes.xml moved"
+          else
+            # Create default themes.xml
             cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -135,7 +174,43 @@ jobs:
               </style>
           </resources>
           EOF
+            echo "✅ Default themes.xml created"
           fi
+          
+          # Process Icon
+          if [ -f "build_assets/app_icon.png" ]; then
+            echo "Processing custom icon"
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+            echo "✅ Custom icon applied"
+          fi
+          
+          echo "=== Files moved successfully ==="
+
+      - name: Verify Moved Files
+        run: |
+          echo "=== Verification ==="
+          echo "Package: ${{ steps.params.outputs.name }}"
+          echo "App Name: ${{ steps.params.outputs.app_name }}"
+          echo ""
+          echo "Java files:"
+          find app/src/main/java -name "*.java" -type f
+          echo ""
+          echo "Layout files:"
+          find app/src/main/res/layout -name "*.xml" -type f
+          echo ""
+          echo "Manifest:"
+          cat app/src/main/AndroidManifest.xml
 
       - name: Create build.gradle
         env:
@@ -149,7 +224,6 @@ jobs:
           android {
               namespace "$PKG"
               compileSdk 34
-              compileSdkVersion 34
 
               defaultConfig {
                   applicationId "$PKG"
@@ -179,7 +253,7 @@ jobs:
           GRADLE_EOF
           touch app/proguard-rules.pro
 
-      - name: Create Root Gradle Files
+      - name: Create Gradle Files
         run: |
           cat > settings.gradle << 'EOF'
           pluginManagement {
@@ -196,7 +270,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "MyApp"
+          rootProject.name = "App"
           include ':app'
           EOF
 
@@ -222,20 +296,6 @@ jobs:
           fi
           chmod +x gradlew
 
-      - name: Verify Build Files
-        run: |
-          echo "=== Verification ==="
-          echo "Package: ${{ steps.params.outputs.name }}"
-          echo ""
-          echo "build.gradle content:"
-          cat app/build.gradle
-          echo ""
-          echo "Java files:"
-          find app/src/main/java -name "*.java" -type f
-          echo ""
-          echo "Layout files:"
-          find app/src/main/res/layout -name "*.xml" -type f
-
       - name: Build APK
         run: ./gradlew clean assembleDebug --no-daemon --stacktrace
 
@@ -246,7 +306,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: build-${{ github.run_number }}
@@ -254,6 +314,7 @@ jobs:
           body: |
             **App:** ${{ steps.params.outputs.app_name }}
             **Package:** ${{ steps.params.outputs.name }}
+            **Build:** Successful
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
