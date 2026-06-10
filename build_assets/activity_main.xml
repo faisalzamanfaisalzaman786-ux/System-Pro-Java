@@ -4,45 +4,35 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:background="#1a1a2e">
     
     <TextView
-        android:id="@+id/counterTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="0"
-        android:textSize="80sp"
+        android:text="Torch Light"
+        android:textSize="32sp"
         android:textStyle="bold"
-        android:textColor="#6200EE"
+        android:textColor="#FFFFFF"
         android:layout_marginBottom="40dp"/>
     
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="20dp">
-        
-        <Button
-            android:id="@+id/decrementButton"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:text="-"
-            android:textSize="32sp"
-            android:layout_marginEnd="20dp"/>
-        
-        <Button
-            android:id="@+id/incrementButton"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:text="+"
-            android:textSize="32sp"/>
-    </LinearLayout>
-    
     <Button
-        android:id="@+id/resetButton"
+        android:id="@+id/torchButton"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:text="Turn ON Flashlight"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#6200EE"
+        android:gravity="center"
+        style="@style/Widget.Material3.Button"/>
+    
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="RESET"
-        android:textSize="18sp"/>
-    
+        android:text="Click button to turn flashlight ON/OFF"
+        android:textSize="14sp"
+        android:textColor="#888888"
+        android:layout_marginTop="30dp"/>
 </LinearLayout>
