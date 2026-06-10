@@ -1,90 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp"
-    android:background="@color/background">
+    android:padding="24dp">
     
-    <!-- Title -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Counter App"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:textColor="@color/colorPrimary"
-        android:layout_marginBottom="40dp"/>
-    
-    <!-- Counter Display -->
     <TextView
         android:id="@+id/counterTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="0"
-        android:textSize="100sp"
+        android:textSize="80sp"
         android:textStyle="bold"
-        android:textColor="@color/colorPrimary"
-        android:layout_marginBottom="40dp"
-        android:padding="30dp"
-        android:minWidth="200dp"
-        android:gravity="center"
-        android:background="@android:drawable/edit_text"/>
+        android:textColor="#6200EE"
+        android:layout_marginBottom="40dp"/>
     
-    <!-- Buttons Row -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="30dp">
+        android:layout_marginBottom="20dp">
         
-        <!-- Decrement Button -->
         <Button
             android:id="@+id/decrementButton"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:text="-"
-            android:textSize="40sp"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:backgroundTint="#F44336"
+            android:textSize="32sp"
             android:layout_marginEnd="20dp"/>
         
-        <!-- Increment Button -->
         <Button
             android:id="@+id/incrementButton"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:text="+"
-            android:textSize="40sp"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:backgroundTint="#4CAF50"/>
-        
+            android:textSize="32sp"/>
     </LinearLayout>
     
-    <!-- Reset Button -->
     <Button
         android:id="@+id/resetButton"
-        android:layout_width="200dp"
-        android:layout_height="60dp"
-        android:text="RESET"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"
-        android:backgroundTint="#FF9800"/>
-    
-    <!-- Counter Info -->
-    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Click + to increase\nClick - to decrease\nClick RESET to zero"
-        android:textSize="12sp"
-        android:textColor="#757575"
-        android:gravity="center"
-        android:layout_marginTop="30dp"
-        android:lineSpacingExtra="4dp"/>
+        android:text="RESET"
+        android:textSize="18sp"/>
     
 </LinearLayout>
