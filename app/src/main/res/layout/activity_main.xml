@@ -7,51 +7,12 @@
     android:padding="24dp">
 
     <TextView
-        android:id="@+id/counterText"
+        android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="0"
-        android:textSize="80sp"
+        android:text="Hello World!"
+        android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="#333333"
-        android:layout_marginBottom="40dp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/decrementBtn"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="-"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/resetBtn"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="Reset"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp" />
-
-        <Button
-            android:id="@+id/incrementBtn"
-            android:layout_width="0dp"
-            android:layout_height="60dp"
-            android:layout_weight="1"
-            android:text="+"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:layout_marginStart="8dp" />
-
-    </LinearLayout>
+        android:textColor="#6200EE" />
 
 </LinearLayout>
