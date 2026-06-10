@@ -1,22 +1,18 @@
-name: Build APK
+name: Build with Dynamic Package Name
 
 on:
   workflow_dispatch:
     inputs:
-      package_name:
-        description: Package Name
+      base_package:
+        description: 'Base Package (e.g., com.myapp)'
         required: false
-        default: com.example.app
+        default: 'com.example.app'
       app_name:
-        description: App Name
+        description: 'App Name'
         required: false
-        default: MyApp
+        default: 'MyApp'
   repository_dispatch:
     types: [trigger_b64_build]
-
-permissions:
-  contents: write
-  actions: write
 
 jobs:
   build:
@@ -25,7 +21,68 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup JDK
+      - name: Generate Unique Package Name
+        id: pkg
+        run: |
+          BASE_PKG="${{ github.event.inputs.base_package }}"
+          if [ -z "$BASE_PKG" ] || [ "$BASE_PKG" = "null" ]; then
+            BASE_PKG="com.example.app"
+          fi
+          
+          # Generate unique suffix using timestamp and run number
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          RUN_NUM=${{ github.run_number }}
+          RANDOM_ID=$(openssl rand -hex 4)
+          
+          # Option 1: Using timestamp
+          UNIQUE_PKG="${BASE_PKG}.${TIMESTAMP}"
+          
+          # Option 2: Using run number
+          # UNIQUE_PKG="${BASE_PKG}.build.${RUN_NUM}"
+          
+          # Option 3: Using random ID
+          # UNIQUE_PKG="${BASE_PKG}.${RANDOM_ID}"
+          
+          echo "package_name=$UNIQUE_PKG" >> $GITHUB_OUTPUT
+          echo "package_path=$(echo $UNIQUE_PKG | tr '.' '/')" >> $GITHUB_OUTPUT
+          echo "Generated Unique Package: $UNIQUE_PKG"
+
+      - name: Replace Package Name in Files
+        env:
+          PKG: ${{ steps.pkg.outputs.package_name }}
+          PKG_PATH: ${{ steps.pkg.outputs.package_path }}
+        run: |
+          echo "Replacing package name with: $PKG"
+          
+          # Create correct directory structure
+          mkdir -p app/src/main/java/$PKG_PATH
+          
+          # Move files to new package directory if they exist
+          if [ -d "app/src/main/java/com" ]; then
+            # Copy all Java files to new package
+            find app/src/main/java/com -name "*.java" -type f | while read file; do
+              filename=$(basename "$file")
+              cp "$file" "app/src/main/java/$PKG_PATH/$filename"
+            done
+          fi
+          
+          # Update package names in all Java files
+          find app/src/main/java -name "*.java" -type f -exec sed -i "s/^package .*;/package $PKG;/" {} \;
+          
+          # Update build.gradle
+          if [ -f "app/build.gradle" ]; then
+            sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
+            sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
+          fi
+          
+          # Update AndroidManifest.xml (remove package attribute)
+          if [ -f "app/src/main/AndroidManifest.xml" ]; then
+            sed -i 's/package="[^"]*"//' app/src/main/AndroidManifest.xml
+          fi
+          
+          echo "✅ Package name updated to: $PKG"
+
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -34,65 +91,9 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Get Package Name
-        id: pkg
-        run: |
-          PKG="com.example.app"
-          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
-            PKG="${{ github.event.client_payload.package_name }}"
-          elif [ -n "${{ github.event.inputs.package_name }}" ]; then
-            PKG="${{ github.event.inputs.package_name }}"
-          fi
-          echo "name=$PKG" >> $GITHUB_OUTPUT
-          echo "path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
-
-      - name: Get App Name
-        id: app
-        run: |
-          APP="MyApp"
-          if [ -n "${{ github.event.client_payload.app_name }}" ]; then
-            APP="${{ github.event.client_payload.app_name }}"
-          elif [ -n "${{ github.event.inputs.app_name }}" ]; then
-            APP="${{ github.event.inputs.app_name }}"
-          fi
-          echo "name=$APP" >> $GITHUB_OUTPUT
-
-      - name: Fix Java Package Names
-        run: |
-          if [ -d "app/src/main/java" ]; then
-            find app/src/main/java -name "*.java" -exec sed -i "s/^package .*;/package ${{ steps.pkg.outputs.name }};/" {} \;
-          fi
-
-      - name: Update Manifest Label
-        run: |
-          if [ -f "app/src/main/AndroidManifest.xml" ]; then
-            sed -i "s/android:label=\".*\"/android:label=\"${{ steps.app.outputs.name }}\"/" app/src/main/AndroidManifest.xml
-          fi
-
-      - name: Update Strings
-        run: |
-          if [ -f "app/src/main/res/values/strings.xml" ]; then
-            sed -i "s/<string name=\"app_name\">.*</<string name=\"app_name\">${{ steps.app.outputs.name }}</" app/src/main/res/values/strings.xml
-          fi
-
-      - name: Process Icon
-        run: |
-          if [ -f "build_assets/app_icon.png" ]; then
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            mkdir -p app/src/main/res/mipmap-mdpi
-            mkdir -p app/src/main/res/mipmap-hdpi
-            mkdir -p app/src/main/res/mipmap-xhdpi
-            mkdir -p app/src/main/res/mipmap-xxhdpi
-            mkdir -p app/src/main/res/mipmap-xxxhdpi
-            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
-
       - name: Create build.gradle
+        env:
+          PKG: ${{ steps.pkg.outputs.package_name }}
         run: |
           cat > app/build.gradle << EOF
           plugins {
@@ -100,11 +101,11 @@ jobs:
           }
 
           android {
-              namespace "${{ steps.pkg.outputs.name }}"
+              namespace "$PKG"
               compileSdk 34
 
               defaultConfig {
-                  applicationId "${{ steps.pkg.outputs.name }}"
+                  applicationId "$PKG"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -123,11 +124,10 @@ jobs:
               implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
-          touch app/proguard-rules.pro
 
-      - name: Create settings.gradle
+      - name: Create Gradle Files
         run: |
-          cat > settings.gradle << EOF
+          cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -146,17 +146,13 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create build.gradle root
-        run: |
-          cat > build.gradle << EOF
+          cat > build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << EOF
+          cat > gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx4096m
           android.useAndroidX=true
           android.enableJetifier=false
@@ -165,7 +161,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Make Gradlew Executable
+      - name: Generate Wrapper
         run: |
           if [ ! -f "gradlew" ]; then
             gradle wrapper --gradle-version 8.5
@@ -178,7 +174,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-${{ steps.pkg.outputs.package_name }}
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
@@ -188,8 +184,9 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
           body: |
-            App: ${{ steps.app.outputs.name }}
-            Package: ${{ steps.pkg.outputs.name }}
+            **Package:** ${{ steps.pkg.outputs.package_name }}
+            **App Name:** ${{ github.event.inputs.app_name }}
+            **Unique ID:** ${{ github.run_number }}
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
