@@ -1,644 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#050b17">
-
-    <!-- Main Content -->
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="@color/background">
+    
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Counter App"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="@color/colorPrimary"
+        android:layout_marginBottom="40dp"/>
+    
+    <!-- Counter Display -->
+    <TextView
+        android:id="@+id/counterTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textSize="100sp"
+        android:textStyle="bold"
+        android:textColor="@color/colorPrimary"
+        android:layout_marginBottom="40dp"
+        android:background="@drawable/circle_background"
+        android:padding="30dp"
+        android:minWidth="200dp"
+        android:gravity="center"/>
+    
+    <!-- Buttons Row -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
-
-        <!-- Top Bar -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="10dp"
-            android:background="#0A0F1F"
-            android:gravity="center_vertical">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/menuLeftBtn"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:text="📁"
-                    android:background="#1e2a3a"
-                    android:textSize="16sp" />
-
-                <Button
-                    android:id="@+id/saveAllBtn"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:text="💾"
-                    android:background="#1e2a3a"
-                    android:textSize="16sp" />
-
-                <Button
-                    android:id="@+id/copyAllBtn"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:text="📋"
-                    android:background="#1e2a3a"
-                    android:textSize="16sp" />
-
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚡ CodeForge Pro"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#00FFCC" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/settingsRightBtn"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:text="⚙️"
-                    android:background="#1e2a3a"
-                    android:textSize="16sp" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-        <!-- Main Work Area -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:padding="12dp">
-
-            <!-- Editor Panel -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <!-- File Info Bar -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:background="#010612cc"
-                    android:padding="8dp"
-                    android:layout_marginBottom="8dp"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:id="@+id/currentFilePath"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📄 No file"
-                        android:textSize="11sp"
-                        android:textColor="#00FFCC"
-                        android:background="#0a1022"
-                        android:padding="4dp"
-                        android:paddingLeft="12dp"
-                        android:paddingRight="12dp" />
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/saveCurrentBtn"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Save File"
-                            android:textSize="11sp"
-                            android:paddingLeft="12dp"
-                            android:paddingRight="12dp"
-                            android:paddingTop="6dp"
-                            android:paddingBottom="6dp"
-                            android:background="#0fc"/>
-
-                        <Button
-                            android:id="@+id/resetEditorBtn"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="Reset"
-                            android:textSize="11sp"
-                            android:paddingLeft="12dp"
-                            android:paddingRight="12dp"
-                            android:paddingTop="6dp"
-                            android:paddingBottom="6dp"
-                            android:background="#4a5a7a"/>
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-                <!-- Code Editor -->
-                <EditText
-                    android:id="@+id/codeEditor"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="#030617"
-                    android:padding="14dp"
-                    android:textSize="12sp"
-                    android:fontFamily="monospace"
-                    android:textColor="#e2eaff"
-                    android:textColorHint="#666666"
-                    android:lineSpacingExtra="3dp"
-                    android:gravity="top"
-                    android:inputType="textMultiLine"
-                    android:hint="Select a file from left drawer" />
-
-            </LinearLayout>
-
-            <!-- Build Status -->
-            <LinearLayout
-                android:id="@+id/buildStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp"
-                android:padding="6dp"
-                android:background="#0a1022"
-                android:layout_marginBottom="8dp">
-
-                <View
-                    android:id="@+id/statusDot"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:background="#666666" />
-
-                <TextView
-                    android:id="@+id/statusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Ready"
-                    android:textSize="12sp"
-                    android:layout_marginStart="8dp"/>
-
-                <TextView
-                    android:id="@+id/statusDetail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textSize="10sp"
-                    android:textColor="#94a3b8"
-                    android:layout_marginStart="8dp"/>
-
-            </LinearLayout>
-
-            <!-- Build Button -->
-            <Button
-                android:id="@+id/buildAndTriggerBtn"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="🚀 Save & Trigger Build"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:backgroundTint="#0fc"
-                android:textColor="#02040c" />
-
-            <!-- Download Buttons -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="8dp">
-
-                <Button
-                    android:id="@+id/downloadApkBtn"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="6dp"
-                    android:text="📱 Download APK"
-                    android:textSize="12sp"
-                    android:enabled="false"
-                    android:backgroundTint="#10b981"
-                    android:textColor="#ffffff" />
-
-                <Button
-                    android:id="@+id/downloadAabBtn"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    android:text="📦 Download AAB"
-                    android:textSize="12sp"
-                    android:enabled="false"
-                    android:backgroundTint="#8b5cf6"
-                    android:textColor="#ffffff" />
-
-            </LinearLayout>
-
-            <!-- Progress Bar -->
-            <FrameLayout
-                android:id="@+id/progressBar"
-                android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:layout_marginTop="8dp"
-                android:visibility="gone">
-
-                <View
-                    android:id="@+id/progressFill"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:background="#0fc" />
-
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="⚡ Edit files → Click 'Save & Trigger Build' → Files upload automatically → Build triggers → Download APK/AAB"
-                android:textSize="10sp"
-                android:textColor="#ffaa44"
-                android:background="#1a2a3a"
-                android:padding="6dp"
-                android:gravity="center"/>
-
-        </LinearLayout>
-
-        <!-- Console -->
-        <LinearLayout
-            android:id="@+id/consoleDrawer"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:orientation="vertical"
-            android:background="#010612ee">
-
-            <LinearLayout
-                android:id="@+id/consoleHeader"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="8dp"
-                android:background="#01101f"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📟 Live Logs"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:textColor="#00FFCC" />
-
-                <TextView
-                    android:id="@+id/buildStatusBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="idle"
-                    android:textSize="10sp"
-                    android:padding="4dp"
-                    android:paddingLeft="8dp"
-                    android:paddingRight="8dp"
-                    android:background="#0a1222"
-                    android:layout_marginEnd="8dp" />
-
-                <Button
-                    android:id="@+id/clearConsoleBtn"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:text="🗑"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/toggleConsoleBtn"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:text="▼"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-
-            <ScrollView
-                android:id="@+id/consoleScroll"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:padding="8dp">
-
-                <TextView
-                    android:id="@+id/consoleContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace"
-                    android:textColor="#a5f3fc"
-                    android:lineSpacingExtra="2dp" />
-
-            </ScrollView>
-
-        </LinearLayout>
-
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="30dp">
+        
+        <!-- Decrement Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/decrementButton"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:text="-"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            app:backgroundTint="@color/button_negative"
+            android:layout_marginEnd="20dp"
+            app:cornerRadius="40dp"/>
+        
+        <!-- Increment Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/incrementButton"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:text="+"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            app:backgroundTint="@color/button_positive"
+            app:cornerRadius="40dp"/>
+        
     </LinearLayout>
-
-    <!-- Left Drawer -->
-    <LinearLayout
-        android:id="@+id/leftDrawer"
-        android:layout_width="280dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="start"
-        android:orientation="vertical"
-        android:background="#010b1ae0">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="16dp"
-            android:gravity="center_vertical">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📂 Files"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#00FFCC" />
-
-            <Button
-                android:id="@+id/closeLeftDrawer"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:text="✕"
-                android:background="?attr/selectableItemBackgroundBorderless" />
-
-        </LinearLayout>
-
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:padding="8dp">
-
-            <LinearLayout
-                android:id="@+id/fileListContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-        </ScrollView>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Quick Add File:"
-                android:textSize="10sp"
-                android:textColor="#00FFCC"
-                android:layout_marginBottom="4dp"/>
-
-            <EditText
-                android:id="@+id/newFilePath"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="path/to/NewFile.java"
-                android:textSize="11sp"
-                android:background="#030617"
-                android:padding="8dp" />
-
-            <Button
-                android:id="@+id/createNewFileBtn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="+ New"
-                android:textSize="11sp"
-                android:background="#0fc"
-                android:textColor="#02040c"
-                android:padding="8dp" />
-
-            <Button
-                android:id="@+id/newEmptyProjectBtn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="🗑 Empty Project"
-                android:background="#aa2e2e"
-                android:textColor="#ffffff"
-                android:padding="8dp" />
-
-            <Button
-                android:id="@+id/resetDemoProjectBtn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="🔄 Reset Demo"
-                android:background="#2a3a60"
-                android:textColor="#ffffff"
-                android:padding="8dp" />
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- Right Drawer -->
-    <LinearLayout
-        android:id="@+id/rightDrawer"
-        android:layout_width="300dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="end"
-        android:orientation="vertical"
-        android:background="#010b1ae0">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="16dp"
-            android:gravity="center_vertical">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="⚙️ Settings"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#00FFCC" />
-
-            <Button
-                android:id="@+id/closeRightDrawer"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:text="✕"
-                android:background="?attr/selectableItemBackgroundBorderless" />
-
-        </LinearLayout>
-
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:padding="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="GitHub Repo (owner/repo)"
-                    android:textSize="11sp"
-                    android:textColor="#00FFCC"
-                    android:layout_marginTop="12dp" />
-
-                <EditText
-                    android:id="@+id/ghRepo"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="yourname/repo"
-                    android:background="#030617"
-                    android:padding="10dp"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="GitHub Token"
-                    android:textSize="11sp"
-                    android:textColor="#00FFCC"
-                    android:layout_marginTop="12dp" />
-
-                <EditText
-                    android:id="@+id/ghToken"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="ghp_..."
-                    android:inputType="textPassword"
-                    android:background="#030617"
-                    android:padding="10dp"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Package Name"
-                    android:textSize="11sp"
-                    android:textColor="#00FFCC"
-                    android:layout_marginTop="12dp" />
-
-                <EditText
-                    android:id="@+id/pkgName"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="com.example.app"
-                    android:background="#030617"
-                    android:padding="10dp"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="App Name"
-                    android:textSize="11sp"
-                    android:textColor="#00FFCC"
-                    android:layout_marginTop="12dp" />
-
-                <EditText
-                    android:id="@+id/appName"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="My App"
-                    android:background="#030617"
-                    android:padding="10dp"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="App Icon"
-                    android:textSize="11sp"
-                    android:textColor="#00FFCC"
-                    android:layout_marginTop="12dp" />
-
-                <LinearLayout
-                    android:id="@+id/iconUploadArea"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="#0d1426"
-                    android:padding="16dp"
-                    android:gravity="center"
-                    android:layout_marginTop="4dp"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="☁️ Click to select image"
-                        android:textSize="11sp"
-                        android:textColor="#9bb3e0" />
-
-                    <LinearLayout
-                        android:id="@+id/iconPreviewContainer"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:layout_marginTop="8dp" />
-
-                    <TextView
-                        android:id="@+id/iconInfo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text=""
-                        android:textSize="10sp"
-                        android:textColor="#00FFCC"
-                        android:layout_marginTop="4dp" />
-
-                </LinearLayout>
-
-                <Button
-                    android:id="@+id/saveSettingsBtn"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:text="💾 Save Settings"
-                    android:backgroundTint="#0fc"
-                    android:textColor="#02040c"
-                    android:textSize="14sp"
-                    android:padding="12dp" />
-
-            </LinearLayout>
-
-        </ScrollView>
-
-    </LinearLayout>
-
-</androidx.drawerlayout.widget.DrawerLayout>
+    
+    <!-- Reset Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/resetButton"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:text="RESET"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        app:backgroundTint="@color/button_reset"
+        app:cornerRadius="30dp"
+        android:icon="@android:drawable/ic_menu_close_clear_cancel"
+        android:iconGravity="textStart"/>
+    
+    <!-- Counter Info -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Click + to increase\nClick - to decrease\nClick RESET to zero"
+        android:textSize="12sp"
+        android:textColor="@color/text_secondary"
+        android:gravity="center"
+        android:layout_marginTop="30dp"
+        android:lineSpacingExtra="4dp"/>
+    
+</LinearLayout>
