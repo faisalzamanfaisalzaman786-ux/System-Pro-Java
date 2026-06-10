@@ -1,4 +1,4 @@
-name: Build APK with Dynamic Package
+name: Build APK from Repository
 
 on:
   workflow_dispatch:
@@ -36,8 +36,8 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Get Package Name
-        id: pkg
+      - name: Get Parameters
+        id: params
         run: |
           PKG="${{ github.event.client_payload.package_name }}"
           if [ -z "$PKG" ] || [ "$PKG" = "null" ]; then
@@ -48,10 +48,7 @@ jobs:
           fi
           echo "name=$PKG" >> $GITHUB_OUTPUT
           echo "path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
-
-      - name: Get App Name
-        id: app
-        run: |
+          
           APP="${{ github.event.client_payload.app_name }}"
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="${{ github.event.inputs.app_name }}"
@@ -59,11 +56,11 @@ jobs:
           if [ -z "$APP" ] || [ "$APP" = "null" ]; then
             APP="MyApp"
           fi
-          echo "name=$APP" >> $GITHUB_OUTPUT
+          echo "app_name=$APP" >> $GITHUB_OUTPUT
 
-      - name: Create Directory Structure
+      - name: Create Directories
         env:
-          PKG_PATH: ${{ steps.pkg.outputs.path }}
+          PKG_PATH: ${{ steps.params.outputs.path }}
         run: |
           rm -rf app
           mkdir -p app/src/main/java/$PKG_PATH
@@ -75,10 +72,37 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Create MainActivity.java with Correct Package
+      - name: Process Custom Icon from Repository
+        run: |
+          echo "=== Processing Custom Icon ==="
+          
+          if [ -f "build_assets/app_icon.png" ]; then
+            echo "✅ Custom icon found!"
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+            
+            convert build_assets/app_icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert build_assets/app_icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            
+            # Round icons
+            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+            
+            echo "✅ Custom icon applied!"
+          else
+            echo "⚠️ No custom icon found, using default"
+          fi
+
+      - name: Create MainActivity
         env:
-          PKG: ${{ steps.pkg.outputs.name }}
-          PKG_PATH: ${{ steps.pkg.outputs.path }}
+          PKG: ${{ steps.params.outputs.name }}
+          PKG_PATH: ${{ steps.params.outputs.path }}
         run: |
           cat > app/src/main/java/$PKG_PATH/MainActivity.java << JAVA_EOF
           package $PKG;
@@ -92,13 +116,13 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  TextView textView = findViewById(R.id.textView);
-                  textView.setText("Hello World!");
+                  TextView tv = findViewById(R.id.textView);
+                  tv.setText("Hello World!");
               }
           }
           JAVA_EOF
 
-      - name: Create activity_main.xml
+      - name: Create Layout
         run: |
           cat > app/src/main/res/layout/activity_main.xml << XML_EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -119,9 +143,9 @@ jobs:
           </LinearLayout>
           XML_EOF
 
-      - name: Create strings.xml with App Name
+      - name: Create strings.xml
         env:
-          APP_NAME: ${{ steps.app.outputs.name }}
+          APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
           cat > app/src/main/res/values/strings.xml << XML_EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -154,9 +178,9 @@ jobs:
           </resources>
           XML_EOF
 
-      - name: Create AndroidManifest.xml
+      - name: Create Manifest
         env:
-          APP_NAME: ${{ steps.app.outputs.name }}
+          APP_NAME: ${{ steps.params.outputs.app_name }}
         run: |
           cat > app/src/main/AndroidManifest.xml << XML_EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -178,9 +202,9 @@ jobs:
           </manifest>
           XML_EOF
 
-      - name: Create build.gradle with Correct Package
+      - name: Create build.gradle
         env:
-          PKG: ${{ steps.pkg.outputs.name }}
+          PKG: ${{ steps.params.outputs.name }}
         run: |
           cat > app/build.gradle << GRADLE_EOF
           plugins {
@@ -246,42 +270,6 @@ jobs:
           android.enableJetifier=false
           EOF
 
-      - name: Generate Icons
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          
-          for size in 48 72 96 144 192; do
-            case $size in
-              48) d=mdpi ;;
-              72) d=hdpi ;;
-              96) d=xhdpi ;;
-              144) d=xxhdpi ;;
-              192) d=xxxhdpi ;;
-            esac
-            convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
-              app/src/main/res/mipmap-$d/ic_launcher.png 2>/dev/null || true
-          done
-
-      - name: Verify All Files
-        run: |
-          echo "=== Verification ==="
-          echo "Package: ${{ steps.pkg.outputs.name }}"
-          echo "App Name: ${{ steps.app.outputs.name }}"
-          echo ""
-          echo "Java file package:"
-          find app/src/main/java -name "*.java" -exec head -1 {} \;
-          echo ""
-          echo "build.gradle namespace:"
-          grep "namespace" app/build.gradle
-          echo ""
-          echo "strings.xml:"
-          grep "app_name" app/src/main/res/values/strings.xml
-          echo ""
-          echo "AndroidManifest label:"
-          grep "android:label" app/src/main/AndroidManifest.xml
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
@@ -302,18 +290,15 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Create Release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
           body: |
-            ## Build Successful!
-            
-            **Package:** ${{ steps.pkg.outputs.name }}
-            **App Name:** ${{ steps.app.outputs.name }}
-            
-            Download APK below.
+            **App:** ${{ steps.params.outputs.app_name }}
+            **Package:** ${{ steps.params.outputs.name }}
+            **Icon:** ✅ Custom icon applied
           files: app/build/outputs/apk/debug/*.apk
           draft: false
           prerelease: true
