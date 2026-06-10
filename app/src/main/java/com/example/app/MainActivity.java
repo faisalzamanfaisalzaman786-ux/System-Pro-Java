@@ -1,4 +1,4 @@
-package com.counter.app;
+package com.calculator.app;
 
 import android.os.Bundle;
 import android.view.View;
@@ -7,41 +7,86 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
-    private TextView counterTextView;
-    private Button incrementButton;
-    private Button decrementButton;
-    private Button resetButton;
-    private int counter = 0;
+    
+    private TextView displayTextView;
+    private String currentInput = "";
+    private String operator = "";
+    private double firstNumber = 0;
+    private boolean isNewInput = true;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        counterTextView = findViewById(R.id.counterTextView);
-        incrementButton = findViewById(R.id.incrementButton);
-        decrementButton = findViewById(R.id.decrementButton);
-        resetButton = findViewById(R.id.resetButton);
+        displayTextView = findViewById(R.id.displayTextView);
         
-        updateCounterDisplay();
+        // Number buttons
+        int[] numberIds = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4,
+                           R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9};
         
-        incrementButton.setOnClickListener(v -> {
-            counter++;
-            updateCounterDisplay();
-        });
+        for (int id : numberIds) {
+            Button btn = findViewById(id);
+            btn.setOnClickListener(v -> {
+                Button b = (Button) v;
+                appendNumber(b.getText().toString());
+            });
+        }
         
-        decrementButton.setOnClickListener(v -> {
-            counter--;
-            updateCounterDisplay();
-        });
+        // Operator buttons
+        findViewById(R.id.btnAdd).setOnClickListener(v -> setOperator("+"));
+        findViewById(R.id.btnSubtract).setOnClickListener(v -> setOperator("-"));
+        findViewById(R.id.btnMultiply).setOnClickListener(v -> setOperator("×"));
+        findViewById(R.id.btnDivide).setOnClickListener(v -> setOperator("÷"));
         
-        resetButton.setOnClickListener(v -> {
-            counter = 0;
-            updateCounterDisplay();
-        });
+        // Equals button
+        findViewById(R.id.btnEquals).setOnClickListener(v -> calculateResult());
+        
+        // Clear button
+        findViewById(R.id.btnClear).setOnClickListener(v -> clearAll());
     }
     
-    private void updateCounterDisplay() {
-        counterTextView.setText(String.valueOf(counter));
+    private void appendNumber(String number) {
+        if (isNewInput) {
+            currentInput = "";
+            isNewInput = false;
+        }
+        currentInput += number;
+        displayTextView.setText(currentInput);
+    }
+    
+    private void setOperator(String op) {
+        if (!currentInput.isEmpty()) {
+            firstNumber = Double.parseDouble(currentInput);
+            operator = op;
+            isNewInput = true;
+        }
+    }
+    
+    private void calculateResult() {
+        if (!currentInput.isEmpty() && !operator.isEmpty()) {
+            double secondNumber = Double.parseDouble(currentInput);
+            double result = 0;
+            
+            switch (operator) {
+                case "+": result = firstNumber + secondNumber; break;
+                case "-": result = firstNumber - secondNumber; break;
+                case "×": result = firstNumber * secondNumber; break;
+                case "÷": result = secondNumber != 0 ? firstNumber / secondNumber : 0; break;
+            }
+            
+            displayTextView.setText(String.valueOf(result));
+            currentInput = String.valueOf(result);
+            operator = "";
+            isNewInput = true;
+        }
+    }
+    
+    private void clearAll() {
+        currentInput = "";
+        operator = "";
+        firstNumber = 0;
+        isNewInput = true;
+        displayTextView.setText("0");
     }
 }
