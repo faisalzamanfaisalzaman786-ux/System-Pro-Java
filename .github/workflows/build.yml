@@ -1,334 +1,165 @@
-name: Build Android APK
+name: CodeForge Pro Builder
 
 on:
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name (e.g., com.counter.app)'
-        required: true
-        default: 'com.counter.app'
-        type: string
-      app_name:
-        description: 'App Name (e.g., Counter App)'
-        required: true
-        default: 'Counter App'
-        type: string
-
-permissions:
-  contents: write
-  actions: write
+  repository_dispatch:
+    types: [trigger_b64_build]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        ref: main
 
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+        cache: 'gradle'
 
-      - name: Setup Android SDK
-        run: |
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
 
-      - name: Get Parameters
-        id: params
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          echo "package_name=$PKG" >> $GITHUB_OUTPUT
-          echo "package_path=$(echo $PKG | tr '.' '/')" >> $GITHUB_OUTPUT
-          
-          APP="${{ github.event.inputs.app_name }}"
-          echo "app_name=$APP" >> $GITHUB_OUTPUT
-          
-          echo "Package: $PKG"
-          echo "App Name: $APP"
+    - name: Initialize Android Structure
+      run: |
+        mkdir -p app/src/main/java
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Create Project Structure
-        env:
-          PKG_PATH: ${{ steps.params.outputs.package_path }}
-        run: |
-          rm -rf app
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+    - name: Process Package Structure & Move Java Files
+      run: |
+        PKG_NAME="${{ github.event.client_payload.package_name }}"
+        DIR_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+        TARGET_DIR="app/src/main/java/$DIR_PATH"
+        mkdir -p "$TARGET_DIR"
+        
+        if [ -d "build_assets" ]; then
+          find build_assets/ -name "*.java" -exec cp {} "$TARGET_DIR/" \;
+        fi
 
-      - name: Create App Icons
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          
-          # Create simple colored icons for all densities
-          for size in 48 72 96 144 192; do
-            case $size in
-              48) density="mdpi" ;;
-              72) density="hdpi" ;;
-              96) density="xhdpi" ;;
-              144) density="xxhdpi" ;;
-              192) density="xxxhdpi" ;;
-            esac
-            
-            # Create a simple colored circle with text
-            convert -size ${size}x${size} xc:#6200EE -gravity center \
-              -font Helvetica -pointsize $((size/3)) -fill white -annotate 0 "A" \
-              app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
-              
-            cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
-          done
-          
-          echo "✅ App icons created"
+    - name: Move Android Resources & Manifest
+      run: |
+        if [ -f "build_assets/activity_main.xml" ]; then
+          cp build_assets/activity_main.xml app/src/main/res/layout/
+        fi
+        if [ -f "build_assets/strings.xml" ]; then
+          cp build_assets/strings.xml app/src/main/res/values/
+        fi
+        if [ -f "build_assets/colors.xml" ]; then
+          cp build_assets/colors.xml app/src/main/res/values/
+        fi
+        if [ -f "build_assets/themes.xml" ]; then
+          cp build_assets/themes.xml app/src/main/res/values/
+        fi
+        if [ -f "build_assets/AndroidManifest.xml" ]; then
+          cp build_assets/AndroidManifest.xml app/src/main//
+        fi
 
-      - name: Create Counter App Files
-        env:
-          PKG: ${{ steps.params.outputs.package_name }}
-          PKG_PATH: ${{ steps.params.outputs.package_path }}
-          APP_NAME: ${{ steps.params.outputs.app_name }}
-        run: |
-          # MainActivity.java
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'JAVA_EOF'
-          package PKG_PLACEHOLDER;
-          
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-          
-          public class MainActivity extends AppCompatActivity {
-              private TextView counterTextView;
-              private Button incrementButton, decrementButton, resetButton;
-              private int counter = 0;
-              
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  
-                  counterTextView = findViewById(R.id.counterTextView);
-                  incrementButton = findViewById(R.id.incrementButton);
-                  decrementButton = findViewById(R.id.decrementButton);
-                  resetButton = findViewById(R.id.resetButton);
-                  
-                  updateDisplay();
-                  
-                  incrementButton.setOnClickListener(v -> { counter++; updateDisplay(); });
-                  decrementButton.setOnClickListener(v -> { counter--; updateDisplay(); });
-                  resetButton.setOnClickListener(v -> { counter = 0; updateDisplay(); });
-              }
-              
-              private void updateDisplay() {
-                  counterTextView.setText(String.valueOf(counter));
-              }
-          }
-          JAVA_EOF
-          
-          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # activity_main.xml
-          cat > app/src/main/res/layout/activity_main.xml << 'XML_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="24dp">
-              
-              <TextView
-                  android:id="@+id/counterTextView"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="0"
-                  android:textSize="80sp"
-                  android:textStyle="bold"
-                  android:textColor="#6200EE"
-                  android:layout_marginBottom="40dp"/>
-              
-              <LinearLayout
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:layout_marginBottom="20dp">
-                  <Button android:id="@+id/decrementButton" android:layout_width="80dp" android:layout_height="80dp" android:text="-" android:textSize="32sp" android:layout_marginEnd="20dp"/>
-                  <Button android:id="@+id/incrementButton" android:layout_width="80dp" android:layout_height="80dp" android:text="+" android:textSize="32sp"/>
-              </LinearLayout>
-              
-              <Button android:id="@+id/resetButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RESET" android:textSize="18sp"/>
-          </LinearLayout>
-          XML_EOF
-          
-          # AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << MANIFEST_EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="APP_NAME_PLACEHOLDER"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          MANIFEST_EOF
-          
-          sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/AndroidManifest.xml
-          
-          # colors.xml
-          cat > app/src/main/res/values/colors.xml << 'COLORS_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC6</color>
-          </resources>
-          COLORS_EOF
-          
-          # themes.xml
-          cat > app/src/main/res/values/themes.xml << 'THEMES_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
-              </style>
-          </resources>
-          THEMES_EOF
-          
-          # strings.xml
-          cat > app/src/main/res/values/strings.xml << STRINGS_EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">APP_NAME_PLACEHOLDER</string>
-          </resources>
-          STRINGS_EOF
-          
-          sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/res/values/strings.xml
-          
-          echo "✅ All files created with package: $PKG"
+    - name: Decode and Inject Custom App Icon
+      run: |
+        ICON_B64="${{ github.event.client_payload.icon }}"
+        if [ ! -z "$ICON_B64" ]; then
+          echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        elif [ -f "build_assets/app_icon.png" ]; then
+          cp build_assets/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        fi
 
-      - name: Create build.gradle
-        env:
-          PKG: ${{ steps.params.outputs.package_name }}
-        run: |
-          cat > app/build.gradle << 'GRADLE_EOF'
-          plugins {
-              id 'com.android.application' version '8.2.2'
-          }
+    - name: Generate Dynamic Build Configuration
+      run: |
+        PKG_NAME="${{ github.event.client_payload.package_name }}"
+        APP_NAME="${{ github.event.client_payload.app_name }}"
+        
+        cat <<EOF > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "$APP_NAME"
+        include ':app'
+        EOF
 
-          android {
-              namespace "PKG_PLACEHOLDER"
-              compileSdk 34
+        cat <<EOF > build.gradle
+        plugins {
+            id 'com.android.application' version '8.2.2' apply false
+            id 'com.android.library' version '8.2.2' apply false
+        }
+        EOF
 
-              defaultConfig {
-                  applicationId "PKG_PLACEHOLDER"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
+        cat <<EOF > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
 
-              buildTypes {
-                  debug {
-                      debuggable true
-                  }
-              }
-          }
+        android {
+            namespace "$PKG_NAME"
+            compileSdk 34
 
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          GRADLE_EOF
-          
-          sed -i "s/PKG_PLACEHOLDER/$PKG/g" app/build.gradle
-          touch app/proguard-rules.pro
+            defaultConfig {
+                applicationId "$PKG_NAME"
+                minSdk 24
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+            }
 
-      - name: Create Gradle Files
-        run: |
-          cat > settings.gradle << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "App"
-          include ':app'
-          EOF
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
 
-          cat > build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.11.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+        }
+        EOF
 
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx4096m
-          android.useAndroidX=true
-          EOF
+    - name: Setup Wrapper and Build Project
+      run: |
+        gradle wrapper --gradle-version 8.5
+        chmod +x gradlew
+        ./gradlew assembleRelease
+        ./gradlew bundleRelease
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+    - name: Clear Prior Releases
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release delete latest-release --yes || true
+        git push --delete origin latest-release || true
 
-      - name: Generate Gradle Wrapper
-        run: |
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --gradle-version 8.5
-          fi
-          chmod +x gradlew
-
-      - name: Build APK
-        run: ./gradlew clean assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.params.outputs.package_name }}
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: ${{ steps.params.outputs.app_name }} - Build ${{ github.run_number }}
-          body: |
-            ## 🎉 Build Successful!
-            
-            **App Name:** ${{ steps.params.outputs.app_name }}
-            **Package:** ${{ steps.params.outputs.package_name }}
-            
-            ### Features:
-            - Counter App with +, -, Reset buttons
-            - Material Design
-            - Works on Android 5.0+
-            
-            Download APK below.
-          files: app/build/outputs/apk/debug/*.apk
-          draft: false
-          prerelease: true
+    - name: Deploy Production Artifacts
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest-release
+        name: "Latest Production Build"
+        draft: false
+        prerelease: false
+        files: |
+          app/build/outputs/apk/release/app-release.unsigned.apk
+          app/build/outputs/bundle/release/app-release.aab
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
