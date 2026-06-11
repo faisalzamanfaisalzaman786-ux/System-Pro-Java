@@ -57,7 +57,7 @@ jobs:
           cp build_assets/themes.xml app/src/main/res/values/
         fi
         if [ -f "build_assets/AndroidManifest.xml" ]; then
-          cp build_assets/AndroidManifest.xml app/src/main//
+          cp build_assets/AndroidManifest.xml app/src/main/
         fi
 
     - name: Decode and Inject Custom App Icon
@@ -121,7 +121,9 @@ jobs:
             buildTypes {
                 release {
                     minifyEnabled false
+                    shrinkResources false
                     proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                    signingConfig signingConfigs.debug
                 }
             }
             compileOptions {
@@ -141,8 +143,8 @@ jobs:
       run: |
         gradle wrapper --gradle-version 8.5
         chmod +x gradlew
-        ./gradlew assembleRelease
-        ./gradlew bundleRelease
+        ./gradlew assembleRelease --stacktrace
+        ./gradlew bundleRelease --stacktrace
 
     - name: Clear Prior Releases
       env:
@@ -159,7 +161,7 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          app/build/outputs/apk/release/app-release.unsigned.apk
+          app/build/outputs/apk/release/app-release.apk
           app/build/outputs/bundle/release/app-release.aab
       env:
         GITHUB_TOKEN: ${{ github.token }}
