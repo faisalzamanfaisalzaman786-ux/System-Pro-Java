@@ -26,7 +26,7 @@ jobs:
 
     - name: Clean and Initialize Android Structure
       run: |
-        rm -rf app settings.gradle build.gradle
+        rm -rf app settings.gradle build.gradle gradle.properties
         mkdir -p app/src/main/java
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
@@ -75,6 +75,12 @@ jobs:
         PKG_NAME="${{ github.event.client_payload.package_name }}"
         APP_NAME="${{ github.event.client_payload.app_name }}"
         
+        cat <<EOF > gradle.properties
+        android.useAndroidX=true
+        android.enableJetifier=true
+        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+        EOF
+
         cat <<EOF > settings.gradle
         pluginManagement {
             repositories {
@@ -144,8 +150,8 @@ jobs:
       run: |
         gradle wrapper --gradle-version 8.5
         chmod +x gradlew
-        ./gradlew assembleRelease --stacktrace --full-stacktrace
-        ./gradlew bundleRelease --stacktrace --full-stacktrace
+        ./gradlew assembleRelease --stacktrace
+        ./gradlew bundleRelease --stacktrace
 
     - name: Clear Prior Releases
       env:
