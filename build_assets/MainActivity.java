@@ -15,7 +15,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isNewInput = true;
 
     @Override
-    protected void bundleState(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
