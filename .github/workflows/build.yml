@@ -24,8 +24,9 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Initialize Android Structure
+    - name: Clean and Initialize Android Structure
       run: |
+        rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
@@ -95,8 +96,8 @@ jobs:
 
         cat <<EOF > build.gradle
         plugins {
-            id 'com.android.application' version '8.2.2' apply false
-            id 'com.android.library' version '8.2.2' apply false
+            id 'com.android.application' version '8.3.0' apply false
+            id 'com.android.library' version '8.3.0' apply false
         }
         EOF
 
@@ -143,8 +144,8 @@ jobs:
       run: |
         gradle wrapper --gradle-version 8.5
         chmod +x gradlew
-        ./gradlew assembleRelease --stacktrace
-        ./gradlew bundleRelease --stacktrace
+        ./gradlew assembleRelease --stacktrace --full-stacktrace
+        ./gradlew bundleRelease --stacktrace --full-stacktrace
 
     - name: Clear Prior Releases
       env:
