@@ -51,8 +51,8 @@ jobs:
         fi
         
         if [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
-          cat > "$TARGET_DIR/MainActivity.java" << 'EOF'
-package PKG_PLACEHOLDER;
+          cat > "$TARGET_DIR/MainActivity.java" << JAVAEOF
+package $PKG_NAME;
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -64,11 +64,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         TextView tv = findViewById(R.id.textView);
-        tv.setText(R.string.hello_world);
+        tv.setText("Hello World!");
     }
 }
-EOF
-          sed -i "s/PKG_PLACEHOLDER/$PKG_NAME/g" "$TARGET_DIR/MainActivity.java"
+JAVAEOF
         fi
 
     - name: Process Layout Files
@@ -76,7 +75,7 @@ EOF
         if [ -f "build_assets/activity_main.xml" ]; then
           cp build_assets/activity_main.xml app/src/main/res/layout/
         else
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          cat > app/src/main/res/layout/activity_main.xml << 'XMLEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -84,26 +83,26 @@ EOF
     android:orientation="vertical"
     android:gravity="center"
     android:padding="24dp"
-    android:background="@color/background">
+    android:background="#F5F5F5">
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/hello_world"
+        android:text="Hello World!"
         android:textSize="24sp"
         android:textStyle="bold"
-        android:textColor="@color/text_primary" />
+        android:textColor="#212121" />
 </LinearLayout>
-EOF
+XMLEOF
         fi
 
-    - name: Process Resource Files (colors, strings, themes)
+    - name: Process Resource Files
       run: |
         # Colors
         if [ -f "build_assets/colors.xml" ]; then
           cp build_assets/colors.xml app/src/main/res/values/
         else
-          cat > app/src/main/res/values/colors.xml << 'EOF'
+          cat > app/src/main/res/values/colors.xml << 'COLOREOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorPrimary">#6200EE</color>
@@ -114,7 +113,7 @@ EOF
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 </resources>
-EOF
+COLOREOF
         fi
         
         # Strings
@@ -123,19 +122,19 @@ EOF
         if [ -f "build_assets/strings.xml" ]; then
           cp build_assets/strings.xml app/src/main/res/values/
         else
-          cat > app/src/main/res/values/strings.xml << EOF
+          cat > app/src/main/res/values/strings.xml << STRINGEOF
 <resources>
     <string name="app_name">$APP_NAME</string>
     <string name="hello_world">Hello World!</string>
 </resources>
-EOF
+STRINGEOF
         fi
         
         # Themes
         if [ -f "build_assets/themes.xml" ]; then
           cp build_assets/themes.xml app/src/main/res/values/
         else
-          cat > app/src/main/res/values/themes.xml << 'EOF'
+          cat > app/src/main/res/values/themes.xml << 'THEMEEOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -144,7 +143,7 @@ EOF
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 </resources>
-EOF
+THEMEEOF
         fi
 
     - name: Process AndroidManifest
@@ -155,18 +154,17 @@ EOF
         if [ -z "$APP_NAME" ]; then APP_NAME="MyApp"; fi
         
         if [ -f "build_assets/AndroidManifest.xml" ]; then
-          # Remove roundIcon if present (to avoid missing icon error)
           sed -i 's/ android:roundIcon="[^"]*"//g' build_assets/AndroidManifest.xml
           cp build_assets/AndroidManifest.xml app/src/main/
         else
-          cat > app/src/main/AndroidManifest.xml << EOF
+          cat > app/src/main/AndroidManifest.xml << MANIFESTEOF
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="$PKG_NAME">
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="$APP_NAME"
         android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -176,43 +174,38 @@ EOF
         </activity>
     </application>
 </manifest>
-EOF
+MANIFESTEOF
         fi
 
-    - name: Handle App Icon (Auto-create both regular and round)
+    - name: Handle App Icon
       run: |
         ICON_B64="${{ github.event.client_payload.icon }}"
         
-        # Create regular icon in xxxhdpi
         if [ ! -z "$ICON_B64" ]; then
           echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
         else
-          # Create simple placeholder icon
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
         fi
         
-        # Copy to all densities AND create round icons
         for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
           if [ "$density" != "xxxhdpi" ]; then
             cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
           fi
-          # Create round icon by copying regular icon (fixes the missing round icon error)
           cp app/src/main/res/mipmap-${density}/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher_round.png 2>/dev/null || true
         done
 
-    - name: Generate Gradle Files (Using Working Versions - AGP 8.2.2, Gradle 8.5)
+    - name: Generate Gradle Files
       run: |
         PKG_NAME="${{ github.event.client_payload.package_name }}"
         if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
         
-        cat > gradle.properties << 'EOF'
+        cat > gradle.properties << 'PROPEOF'
 android.useAndroidX=true
 android.enableJetifier=true
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-android.nonTransitiveRClass=false
-EOF
+PROPEOF
 
-        cat > settings.gradle << 'EOF'
+        cat > settings.gradle << 'SETEOF'
 pluginManagement {
     repositories {
         google()
@@ -229,16 +222,16 @@ dependencyResolutionManagement {
 }
 rootProject.name = "CodeForgeApp"
 include ':app'
-EOF
+SETEOF
 
-        cat > build.gradle << 'EOF'
+        cat > build.gradle << 'BUILDEOF'
 plugins {
     id 'com.android.application' version '8.2.2' apply false
     id 'com.android.library' version '8.2.2' apply false
 }
-EOF
+BUILDEOF
 
-        cat > app/build.gradle << EOF
+        cat > app/build.gradle << APPEOF
 plugins {
     id 'com.android.application'
 }
@@ -274,18 +267,18 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.multidex:multidex:2.0.1'
 }
-EOF
+APPEOF
 
-    - name: Setup Gradle Wrapper (Gradle 8.5)
+    - name: Setup Gradle Wrapper
       run: |
         mkdir -p gradle/wrapper
-        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        cat > gradle/wrapper/gradle-wrapper.properties << 'WRAPEOF'
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
 zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
-EOF
+WRAPEOF
         curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
         echo '#!/bin/sh' > gradlew
         echo 'exec java -cp "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
