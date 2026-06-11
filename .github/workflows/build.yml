@@ -1,4 +1,4 @@
-name: CodeForge Pro Builder (Self-Healing)
+name: CodeForge Pro Builder
 
 on:
   repository_dispatch:
@@ -33,7 +33,7 @@ jobs:
         mkdir -p app/src/main/res/mipmap-xxhdpi
         mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-    - name: Process Java Files with Package Structure
+    - name: Process Java Files
       run: |
         PKG_NAME="${{ github.event.client_payload.package_name }}"
         if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
@@ -42,161 +42,117 @@ jobs:
         mkdir -p "$TARGET_DIR"
         
         if [ -d "build_assets" ]; then
-          # Copy Java files
           find build_assets/ -name "*.java" -exec cp {} "$TARGET_DIR/" \; 2>/dev/null || true
-          
-          # If no Java files found, create default MainActivity
-          if [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
-            cat > "$TARGET_DIR/MainActivity.java" << 'JAVAEOF'
-package PKG_PLACEHOLDER;
-
-import android.os.Bundle;
-import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        TextView tv = findViewById(R.id.textView);
-        tv.setText("Hello World!");
-    }
-}
-JAVAEOF
-            sed -i "s/PKG_PLACEHOLDER/$PKG_NAME/g" "$TARGET_DIR/MainActivity.java"
-          fi
+        fi
+        
+        if [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
+          echo "package $PKG_NAME;" > "$TARGET_DIR/MainActivity.java"
+          echo "" >> "$TARGET_DIR/MainActivity.java"
+          echo "import android.os.Bundle;" >> "$TARGET_DIR/MainActivity.java"
+          echo "import android.widget.TextView;" >> "$TARGET_DIR/MainActivity.java"
+          echo "import androidx.appcompat.app.AppCompatActivity;" >> "$TARGET_DIR/MainActivity.java"
+          echo "" >> "$TARGET_DIR/MainActivity.java"
+          echo "public class MainActivity extends AppCompatActivity {" >> "$TARGET_DIR/MainActivity.java"
+          echo "    @Override" >> "$TARGET_DIR/MainActivity.java"
+          echo "    protected void onCreate(Bundle savedInstanceState) {" >> "$TARGET_DIR/MainActivity.java"
+          echo "        super.onCreate(savedInstanceState);" >> "$TARGET_DIR/MainActivity.java"
+          echo "        setContentView(R.layout.activity_main);" >> "$TARGET_DIR/MainActivity.java"
+          echo "        TextView tv = findViewById(R.id.textView);" >> "$TARGET_DIR/MainActivity.java"
+          echo "        tv.setText(\"Hello World!\");" >> "$TARGET_DIR/MainActivity.java"
+          echo "    }" >> "$TARGET_DIR/MainActivity.java"
+          echo "}" >> "$TARGET_DIR/MainActivity.java"
         fi
 
-    - name: Setup Layout Files (Auto-create missing)
+    - name: Setup Layout Files
       run: |
-        # activity_main.xml
         if [ -f "build_assets/activity_main.xml" ]; then
           cp build_assets/activity_main.xml app/src/main/res/layout/
         else
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!"
-        android:textSize="24sp"
-        android:textStyle="bold" />
-    <Button
-        android:id="@+id/button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Click Me" />
-</LinearLayout>
-EOF
-        fi
-        
-        # Copy any other layout files from build_assets
-        if [ -d "build_assets" ]; then
-          find build_assets/ -name "*.xml" -path "*/layout/*" -exec cp {} app/src/main/res/layout/ \; 2>/dev/null || true
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+          echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
+          echo '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
+          echo '    android:layout_height="match_parent"' >> app/src/main/res/layout/activity_main.xml
+          echo '    android:orientation="vertical"' >> app/src/main/res/layout/activity_main.xml
+          echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
+          echo '    android:padding="24dp">' >> app/src/main/res/layout/activity_main.xml
+          echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:id="@+id/textView"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:text="Hello World!"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:textSize="24sp"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:textStyle="bold" />' >> app/src/main/res/layout/activity_main.xml
+          echo '    <Button' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:layout_marginTop="24dp"' >> app/src/main/res/layout/activity_main.xml
+          echo '        android:text="Click Me" />' >> app/src/main/res/layout/activity_main.xml
+          echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
         fi
 
-    - name: Setup Drawable Resources (Auto-create missing)
+    - name: Setup Drawable Resources
       run: |
-        # Auto-create ALL missing drawables that might be referenced
         cat > app/src/main/res/drawable/button_rounded.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/accent" />
-    <corners android:radius="30dp" />
-    <padding android:left="20dp" android:top="12dp" 
-             android:right="20dp" android:bottom="12dp" />
-</shape>
-EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android"
+            android:shape="rectangle">
+            <solid android:color="#03DAC6" />
+            <corners android:radius="30dp" />
+            <padding android:left="20dp" android:top="12dp" 
+                     android:right="20dp" android:bottom="12dp" />
+        </shape>
+        EOF
 
-        cat > app/src/main/res/drawable/gradient_background.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <gradient
-        android:startColor="@color/primary"
-        android:endColor="@color/primary_dark"
-        android:angle="45" />
-    <corners android:radius="8dp" />
-</shape>
-EOF
-
-        cat > app/src/main/res/drawable/ic_launcher_background.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/primary" />
-</shape>
-EOF
-
-        # Copy any user-provided drawables
-        if [ -d "build_assets/drawable" ]; then
-          cp -r build_assets/drawable/*.xml app/src/main/res/drawable/ 2>/dev/null || true
-        fi
-
-    - name: Setup Values Resources (Auto-create missing)
+    - name: Setup Colors
       run: |
-        # colors.xml
         if [ -f "build_assets/colors.xml" ]; then
           cp build_assets/colors.xml app/src/main/res/values/
         else
           cat > app/src/main/res/values/colors.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="primary">#6200EE</color>
-    <color name="primary_dark">#3700B3</color>
-    <color name="accent">#03DAC6</color>
-    <color name="background">#F5F5F5</color>
-    <color name="text_primary">#212121</color>
-    <color name="white">#FFFFFF</color>
-    <color name="black">#000000</color>
-    <color name="error">#B00020</color>
-    <color name="success">#4CAF50</color>
-    <color name="warning">#FFC107</color>
-</resources>
-EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <color name="primary">#6200EE</color>
+            <color name="primary_dark">#3700B3</color>
+            <color name="accent">#03DAC6</color>
+            <color name="background">#F5F5F5</color>
+            <color name="white">#FFFFFF</color>
+        </resources>
+        EOF
         fi
-        
-        # strings.xml
+
+    - name: Setup Strings
+      run: |
         APP_NAME="${{ github.event.client_payload.app_name }}"
         if [ -z "$APP_NAME" ]; then APP_NAME="MyApp"; fi
         if [ -f "build_assets/strings.xml" ]; then
           cp build_assets/strings.xml app/src/main/res/values/
         else
           cat > app/src/main/res/values/strings.xml << EOF
-<resources>
-    <string name="app_name">$APP_NAME</string>
-    <string name="hello_world">Hello World!</string>
-</resources>
-EOF
+        <resources>
+            <string name="app_name">$APP_NAME</string>
+            <string name="hello_world">Hello World!</string>
+        </resources>
+        EOF
         fi
-        
-        # themes.xml
+
+    - name: Setup Themes
+      run: |
         if [ -f "build_assets/themes.xml" ]; then
           cp build_assets/themes.xml app/src/main/res/values/
         else
           cat > app/src/main/res/values/themes.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
-    </style>
-</resources>
-EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                <item name="colorPrimary">@color/primary</item>
+                <item name="colorPrimaryDark">@color/primary_dark</item>
+                <item name="colorAccent">@color/accent</item>
+            </style>
+        </resources>
+        EOF
         fi
 
-    - name: Setup AndroidManifest.xml (Auto-fix common issues)
+    - name: Setup AndroidManifest
       run: |
         PKG_NAME="${{ github.event.client_payload.package_name }}"
         if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
@@ -204,205 +160,138 @@ EOF
         if [ -z "$APP_NAME" ]; then APP_NAME="MyApp"; fi
         
         if [ -f "build_assets/AndroidManifest.xml" ]; then
-          # Auto-fix: remove roundIcon if present
           sed -i 's/ android:roundIcon="[^"]*"//g' build_assets/AndroidManifest.xml
-          # Auto-fix: add package if missing
-          if ! grep -q 'package=' build_assets/AndroidManifest.xml; then
-            sed -i "s/<manifest /<manifest package=\"$PKG_NAME\" /" build_assets/AndroidManifest.xml
-          fi
           cp build_assets/AndroidManifest.xml app/src/main/
         else
           cat > app/src/main/AndroidManifest.xml << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="$PKG_NAME">
-    <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="$APP_NAME"
-        android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="$PKG_NAME">
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="$APP_NAME"
+                android:theme="@style/AppTheme">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
         fi
 
-    - name: Handle App Icon (Auto-generate all densities)
+    - name: Handle App Icon
       run: |
         ICON_B64="${{ github.event.client_payload.icon }}"
         
-        # Create placeholder icon using ImageMagick if available, otherwise use base64
-        create_icon() {
-          local size=$1
-          local density=$2
-          local output="app/src/main/res/mipmap-${density}/ic_launcher.png"
-          
-          if command -v convert &> /dev/null; then
-            convert -size ${size}x${size} xc:'#6200EE' \
-              -gravity center -pointsize $((size/5)) -fill white -annotate 0 "APP" \
-              "$output" 2>/dev/null || true
-          fi
-        }
-        
-        # If user provided icon
         if [ ! -z "$ICON_B64" ]; then
           echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          # Copy to all densities
-          for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png \
-               app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
-          done
-        else
-          # Create placeholder icons for all densities
-          for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-            case $density in
-              mdpi) size=48 ;;
-              hdpi) size=72 ;;
-              xhdpi) size=96 ;;
-              xxhdpi) size=144 ;;
-              xxxhdpi) size=192 ;;
-            esac
-            create_icon $size $density
-          done
+          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
         fi
         
-        # Create round icon copy (same as regular icon)
-        for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-          if [ -f "app/src/main/res/mipmap-${density}/ic_launcher.png" ]; then
-            cp "app/src/main/res/mipmap-${density}/ic_launcher.png" \
-               "app/src/main/res/mipmap-${density}/ic_launcher_round.png" 2>/dev/null || true
+        for density in hdpi mdpi xhdpi xxhdpi; do
+          mkdir -p app/src/main/res/mipmap-${density}
+          if [ -f "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" ]; then
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-${density}/ic_launcher.png 2>/dev/null || true
           fi
         done
 
-    - name: Generate Gradle Build Files (Compatible versions)
+    - name: Generate Gradle Files
       run: |
         PKG_NAME="${{ github.event.client_payload.package_name }}"
         if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
         APP_NAME="${{ github.event.client_payload.app_name }}"
         if [ -z "$APP_NAME" ]; then APP_NAME="MyApp"; fi
         
-        cat <<EOF > gradle.properties
-android.useAndroidX=true
-android.enableJetifier=true
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-EOF
-
-        cat <<EOF > settings.gradle
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-rootProject.name = "$APP_NAME"
-include ':app'
-EOF
-
-        cat <<EOF > build.gradle
-plugins {
-    id 'com.android.application' version '8.1.4' apply false
-    id 'com.android.library' version '8.1.4' apply false
-}
-EOF
-
-        cat <<EOF > app/build.gradle
-plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace "$PKG_NAME"
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "$PKG_NAME"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        echo "android.useAndroidX=true" > gradle.properties
+        echo "android.enableJetifier=true" >> gradle.properties
+        echo "org.gradle.jvmargs=-Xmx2048m" >> gradle.properties
+        
+        cat > settings.gradle << 'EOF'
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
         }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-}
-EOF
+        dependencyResolutionManagement {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "MyApp"
+        include ':app'
+        EOF
+        
+        cat > build.gradle << 'EOF'
+        plugins {
+            id 'com.android.application' version '8.1.4' apply false
+        }
+        EOF
+        
+        cat > app/build.gradle << EOF
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            namespace "$PKG_NAME"
+            compileSdk 34
+            defaultConfig {
+                applicationId "$PKG_NAME"
+                minSdk 24
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
 
     - name: Setup Gradle Wrapper
       run: |
-        # Create gradle wrapper manually (avoid download issues)
         mkdir -p gradle/wrapper
-        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-distributionBase=GRADLE_USER_HOME
-distributionPath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
-zipStoreBase=GRADLE_USER_HOME
-zipStorePath=wrapper/dists
-EOF
-        # Create gradlew script
-        cat > gradlew << 'EOF'
-#!/bin/sh
-exec java -cp "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
-EOF
+        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+        
+        echo '#!/bin/sh' > gradlew
+        echo 'exec java -cp "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
         chmod +x gradlew
-        # Download gradle-wrapper.jar
-        curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo "Wrapper jar download skipped"
 
-    - name: Build with Gradle
+    - name: Build APK
       run: |
         chmod +x gradlew
-        ./gradlew assembleRelease --stacktrace --no-daemon || {
-          echo "Build failed, trying with debug build..."
-          ./gradlew assembleDebug --stacktrace --no-daemon
-        }
-        ./gradlew bundleRelease --stacktrace --no-daemon || {
-          echo "Bundle failed, continuing..."
-        }
+        ./gradlew assembleRelease --stacktrace --no-daemon || ./gradlew assembleDebug --stacktrace --no-daemon
 
-    - name: Clear Prior Releases
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        gh release delete latest-release --yes || true
-        git push --delete origin latest-release || true
-
-    - name: Deploy Production Artifacts
+    - name: Deploy Artifacts
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest-release
-        name: "Latest Production Build"
+        name: "Latest Build"
         draft: false
         prerelease: false
         files: |
           app/build/outputs/apk/release/app-release.apk
-          app/build/outputs/bundle/release/app-release.aab
           app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ github.token }}
