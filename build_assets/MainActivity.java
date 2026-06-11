@@ -26,28 +26,53 @@ public class MainActivity extends AppCompatActivity {
             R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9
         };
 
-        View.OnClickListener numberClickListener = v -> {
-            Button b = (Button) v;
-            if (isNewInput) {
-                currentInput = b.getText().toString();
-                isNewInput = false;
-            } else {
-                currentInput += b.getText().toString();
+        View.OnClickListener numberClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Button b = (Button) v;
+                if (isNewInput) {
+                    currentInput = b.getText().toString();
+                    isNewInput = false;
+                } else {
+                    currentInput += b.getText().toString();
+                }
+                displayTextView.setText(currentInput);
             }
-            displayTextView.setText(currentInput);
         };
 
         for (int id : numberIds) {
             findViewById(id).setOnClickListener(numberClickListener);
         }
 
-        findViewById(R.id.btnAdd).setOnClickListener(v -> setOperator("+"));
-        findViewById(R.id.btnSubtract).setOnClickListener(v -> setOperator("-"));
-        findViewById(R.id.btnMultiply).setOnClickListener(v -> setOperator("×"));
-        findViewById(R.id.btnDivide).setOnClickListener(v -> setOperator("÷"));
+        findViewById(R.id.btnAdd).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { setOperator("+"); }
+        });
 
-        findViewById(R.id.btnEquals).setOnClickListener(v -> calculateResult());
-        findViewById(R.id.btnClear).setOnClickListener(v -> clearDisplay());
+        findViewById(R.id.btnSubtract).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { setOperator("-"); }
+        });
+
+        findViewById(R.id.btnMultiply).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { setOperator("×"); }
+        });
+
+        findViewById(R.id.btnDivide).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { setOperator("÷"); }
+        });
+
+        findViewById(R.id.btnEquals).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { calculateResult(); }
+        });
+
+        findViewById(R.id.btnClear).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) { clearDisplay(); }
+        });
     }
 
     private void setOperator(String op) {
