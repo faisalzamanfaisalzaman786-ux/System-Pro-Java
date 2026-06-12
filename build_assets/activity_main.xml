@@ -4,20 +4,15 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp"
-    android:background="@color/background">
+    android:padding="24dp">
+
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Java-UI!"
+        android:text="Hello World!"
         android:textSize="32sp"
         android:textStyle="bold"
-        android:textColor="@color/primary" />
-    <Button
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Click Me"
-        android:background="@drawable/button_rounded" />
+        android:textColor="#6200EE" />
+
 </LinearLayout>
