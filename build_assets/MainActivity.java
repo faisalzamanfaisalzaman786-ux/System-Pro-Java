@@ -1,4 +1,4 @@
-package com.helloworld.app;
+package com.system.titan.pro;
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -9,8 +9,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        
-        TextView textView = findViewById(R.id.textView);
-        textView.setText("Hello World!");
+        TextView tv = findViewById(R.id.textView);
+        tv.setText("System Pro Titan!");
     }
 }
