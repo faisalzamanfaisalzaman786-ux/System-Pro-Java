@@ -1,4 +1,4 @@
-package com.example.app;
+package com.helloworld.app;
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -9,7 +9,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        TextView tv = findViewById(R.id.textView);
-        tv.setText("MyApp!");
+        
+        TextView textView = findViewById(R.id.textView);
+        textView.setText("Hello World!");
     }
 }
