@@ -1,4 +1,4 @@
-name: CodeForge Pro Builder
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -9,235 +9,219 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        ref: main
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Clean and Setup Structure
-      run: |
-        rm -rf build_assets app settings.gradle build.gradle gradle.properties gradle wrapper 2>/dev/null || true
-        mkdir -p app/src/main/java
-        mkdir -p app/src/main/res/layout
-        mkdir -p app/src/main/res/values
-        mkdir -p app/src/main/res/mipmap-hdpi
-        mkdir -p app/src/main/res/mipmap-mdpi
-        mkdir -p app/src/main/res/mipmap-xhdpi
-        mkdir -p app/src/main/res/mipmap-xxhdpi
-        mkdir -p app/src/main/res/mipmap-xxxhdpi
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: zulu
-        java-version: 17
+      - name: Base Payload Decode
+        run: |
+          mkdir -p output_report
+          rm -rf app/src/main/java app/src/main/res app/build
+          rm -f gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
+          
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip || true
+          if [ -s app_payload.zip ]; then
+            unzip -o app_payload.zip -d extracted_payload/ || true
+          fi
 
-    - name: Process Java Files
-      run: |
-        PKG_NAME="${{ github.event.client_payload.package_name }}"
-        if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
-        DIR_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-        TARGET_DIR="app/src/main/java/$DIR_PATH"
-        mkdir -p "$TARGET_DIR"
-        
-        if [ -d "build_assets" ]; then
-          find build_assets/ -maxdepth 1 -name "*.java" -exec cp {} "$TARGET_DIR/" \; 2>/dev/null || true
-        fi
-        
-        if [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
-          echo "package $PKG_NAME;" > "$TARGET_DIR/MainActivity.java"
-          echo "" >> "$TARGET_DIR/MainActivity.java"
-          echo "import android.os.Bundle;" >> "$TARGET_DIR/MainActivity.java"
-          echo "import android.widget.TextView;" >> "$TARGET_DIR/MainActivity.java"
-          echo "import androidx.appcompat.app.AppCompatActivity;" >> "$TARGET_DIR/MainActivity.java"
-          echo "" >> "$TARGET_DIR/MainActivity.java"
-          echo "public class MainActivity extends AppCompatActivity {" >> "$TARGET_DIR/MainActivity.java"
-          echo "    @Override" >> "$TARGET_DIR/MainActivity.java"
-          echo "    protected void onCreate(Bundle savedInstanceState) {" >> "$TARGET_DIR/MainActivity.java"
-          echo "        super.onCreate(savedInstanceState);" >> "$TARGET_DIR/MainActivity.java"
-          echo "        setContentView(R.layout.activity_main);" >> "$TARGET_DIR/MainActivity.java"
-          echo "        TextView tv = findViewById(R.id.textView);" >> "$TARGET_DIR/MainActivity.java"
-          echo "        tv.setText(\"Hello World!\");" >> "$TARGET_DIR/MainActivity.java"
-          echo "    }" >> "$TARGET_DIR/MainActivity.java"
-          echo "}" >> "$TARGET_DIR/MainActivity.java"
-        fi
+      - name: Force Custom Resources Integration
+        run: |
+          if [ -d extracted_payload ]; then
+              find extracted_payload -type f -name "activity_main.xml" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
+              find extracted_payload -type f -name "layout_config.txt" -exec cp -f {} app/src/main/res/layout/activity_main.xml \;
+              find extracted_payload -type f -name "colors.xml" -exec cp -f {} app/src/main/res/values/colors.xml \;
+              find extracted_payload -type f -name "*.xml" ! -name "AndroidManifest.xml" -exec cp -n {} app/src/main/res/layout/ \; 2>/dev/null || true
+          fi
 
-    - name: Setup Layout
-      run: |
-        if [ -f "build_assets/activity_main.xml" ]; then
-          cp build_assets/activity_main.xml app/src/main/res/layout/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
-          echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
-          echo '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
-          echo '    android:layout_height="match_parent"' >> app/src/main/res/layout/activity_main.xml
-          echo '    android:orientation="vertical"' >> app/src/main/res/layout/activity_main.xml
-          echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
-          echo '    android:padding="24dp">' >> app/src/main/res/layout/activity_main.xml
-          echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:id="@+id/textView"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:text="Hello World!"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:textSize="32sp"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:textStyle="bold"' >> app/src/main/res/layout/activity_main.xml
-          echo '        android:textColor="#6200EE" />' >> app/src/main/res/layout/activity_main.xml
-          echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
-        fi
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android"><TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          fi
 
-    - name: Setup Colors
-      run: |
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
-        echo '<resources>' >> app/src/main/res/values/colors.xml
-        echo '    <color name="colorPrimary">#6200EE</color>' >> app/src/main/res/values/colors.xml
-        echo '    <color name="colorPrimaryDark">#3700B3</color>' >> app/src/main/res/values/colors.xml
-        echo '    <color name="colorAccent">#03DAC6</color>' >> app/src/main/res/values/colors.xml
-        echo '</resources>' >> app/src/main/res/values/colors.xml
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
+          fi
 
-    - name: Setup Strings
-      run: |
-        APP_NAME="${{ github.event.client_payload.app_name }}"
-        if [ -z "$APP_NAME" ]; then APP_NAME="Hello World"; fi
-        echo '<resources>' > app/src/main/res/values/strings.xml
-        echo "    <string name=\"app_name\">$APP_NAME</string>" >> app/src/main/res/values/strings.xml
-        echo '</resources>' >> app/src/main/res/values/strings.xml
+      - name: Deploy Source Components
+        run: |
+          if [ -d extracted_payload ]; then
+            find extracted_payload -type f -name "*.java" -exec cp -f {} app/src/main/java/${{ env.TARGET_PATH }}/ \;
+          fi
 
-    - name: Setup Themes
-      run: |
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
-        echo '<resources>' >> app/src/main/res/values/themes.xml
-        echo '    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">' >> app/src/main/res/values/themes.xml
-        echo '        <item name="colorPrimary">@color/colorPrimary</item>' >> app/src/main/res/values/themes.xml
-        echo '        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>' >> app/src/main/res/values/themes.xml
-        echo '        <item name="colorAccent">@color/colorAccent</item>' >> app/src/main/res/values/themes.xml
-        echo '    </style>' >> app/src/main/res/values/themes.xml
-        echo '</resources>' >> app/src/main/res/values/themes.xml
+      - name: Build Main Class
+        run: |
+          if [ -d "app/src/main/java/${{ env.TARGET_PATH }}" ]; then
+            find app/src/main/java/${{ env.TARGET_PATH }} -type f -name "*.java" -exec sed -i "s|^package .*|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+          fi
+          
+          if [ ! -f "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java" ]; then
+            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          package ${{ env.TARGET_PACKAGE }};
 
-    - name: Setup AndroidManifest
-      run: |
-        PKG_NAME="${{ github.event.client_payload.package_name }}"
-        if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
-        APP_NAME="${{ github.event.client_payload.app_name }}"
-        if [ -z "$APP_NAME" ]; then APP_NAME="Hello World"; fi
-        
-        if [ -f "build_assets/AndroidManifest.xml" ]; then
-          sed -i 's/ android:roundIcon="[^"]*"//g' build_assets/AndroidManifest.xml
-          cp build_assets/AndroidManifest.xml app/src/main/
-        else
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-          echo "    package=\"$PKG_NAME\">" >> app/src/main/AndroidManifest.xml
-          echo '    <application' >> app/src/main/AndroidManifest.xml
-          echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
-          echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
-          echo "        android:label=\"$APP_NAME\"" >> app/src/main/AndroidManifest.xml
-          echo '        android:theme="@style/AppTheme">' >> app/src/main/AndroidManifest.xml
-          echo '        <activity android:name=".MainActivity" android:exported="true">' >> app/src/main/AndroidManifest.xml
-          echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-          echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '        </activity>' >> app/src/main/AndroidManifest.xml
-          echo '    </application>' >> app/src/main/AndroidManifest.xml
-          echo '</manifest>' >> app/src/main/AndroidManifest.xml
-        fi
+          import android.Manifest;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.Settings;
+          import androidx.annotation.NonNull;
+          import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import java.util.ArrayList;
+          import java.util.List;
 
-    - name: Handle App Icon
-      run: |
-        ICON_B64="${{ github.event.client_payload.icon }}"
-        if [ ! -z "$ICON_B64" ]; then
-          echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-        fi
+          public class MainActivity extends AppCompatActivity {
+              private static final int PERMISSION_REQ_CODE = 2026;
+              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
 
-    - name: Generate Gradle Files
-      run: |
-        PKG_NAME="${{ github.event.client_payload.package_name }}"
-        if [ -z "$PKG_NAME" ]; then PKG_NAME="com.example.app"; fi
-        
-        echo "android.useAndroidX=true" > gradle.properties
-        echo "android.enableJetifier=true" >> gradle.properties
-        echo "org.gradle.jvmargs=-Xmx2048m" >> gradle.properties
-        
-        echo 'pluginManagement {' > settings.gradle
-        echo '    repositories {' >> settings.gradle
-        echo '        google()' >> settings.gradle
-        echo '        mavenCentral()' >> settings.gradle
-        echo '        gradlePluginPortal()' >> settings.gradle
-        echo '    }' >> settings.gradle
-        echo '}' >> settings.gradle
-        echo '' >> settings.gradle
-        echo 'dependencyResolutionManagement {' >> settings.gradle
-        echo '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' >> settings.gradle
-        echo '    repositories {' >> settings.gradle
-        echo '        google()' >> settings.gradle
-        echo '        mavenCentral()' >> settings.gradle
-        echo '    }' >> settings.gradle
-        echo '}' >> settings.gradle
-        echo '' >> settings.gradle
-        echo 'rootProject.name = "MyApp"' >> settings.gradle
-        echo 'include ":app"' >> settings.gradle
-        
-        echo 'plugins {' > build.gradle
-        echo '    id "com.android.application" version "8.1.4" apply false' >> build.gradle
-        echo '}' >> build.gradle
-        
-        echo 'plugins {' > app/build.gradle
-        echo '    id "com.android.application"' >> app/build.gradle
-        echo '}' >> app/build.gradle
-        echo '' >> app/build.gradle
-        echo 'android {' >> app/build.gradle
-        echo "    namespace \"$PKG_NAME\"" >> app/build.gradle
-        echo '    compileSdk 34' >> app/build.gradle
-        echo '' >> app/build.gradle
-        echo '    defaultConfig {' >> app/build.gradle
-        echo "        applicationId \"$PKG_NAME\"" >> app/build.gradle
-        echo '        minSdk 24' >> app/build.gradle
-        echo '        targetSdk 34' >> app/build.gradle
-        echo '        versionCode 1' >> app/build.gradle
-        echo '        versionName "1.0"' >> app/build.gradle
-        echo '    }' >> app/build.gradle
-        echo '' >> app/build.gradle
-        echo '    buildTypes {' >> app/build.gradle
-        echo '        release {' >> app/build.gradle
-        echo '            minifyEnabled false' >> app/build.gradle
-        echo '        }' >> app/build.gradle
-        echo '    }' >> app/build.gradle
-        echo '' >> app/build.gradle
-        echo '    compileOptions {' >> app/build.gradle
-        echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-        echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-        echo '    }' >> app/build.gradle
-        echo '}' >> app/build.gradle
-        echo '' >> app/build.gradle
-        echo 'dependencies {' >> app/build.gradle
-        echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
-        echo '}' >> app/build.gradle
+              @Override
+              protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  setContentView(getLayoutResourceId());
+                  checkAndRequestRuntimePermissions();
+              }
 
-    - name: Setup Gradle Wrapper and Build
-      run: |
-        mkdir -p gradle/wrapper
-        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        
-        curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
-        
-        echo '#!/bin/sh' > gradlew
-        echo 'exec java -cp "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
-        chmod +x gradlew
-        
-        ./gradlew assembleRelease --no-daemon
+              private int getLayoutResourceId() {
+                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
+              }
 
-    - name: Deploy Artifacts
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: latest-release
-        name: "Latest Build"
-        draft: false
-        prerelease: false
-        files: |
-          app/build/outputs/apk/release/app-release.apk
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
+              private void checkAndRequestRuntimePermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
+                  }
+
+                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
+                  }
+
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                  }
+
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
+                  } else {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void addPermissionIfMissing(List<String> list, String permission) {
+                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                      list.add(permission);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQ_CODE) {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void checkSpecialPermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
+                          try {
+                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                              intent.addCategory("android.intent.category.DEFAULT");
+                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          } catch (Exception e) {
+                              Intent intent = new Intent();
+                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          fi
+
+      - name: Core Environment Setup
+        run: |
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+
+          if [ -f extracted_payload/app_icon.png ]; then
+            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          else
+            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          fi
+
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+
+          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+
+      - name: Inject Master Hardware & Background Permissions
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CHANGE_WIFI_STATE"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.BLUETOOTH"
+            "android.permission.BLUETOOTH_ADMIN"
+            "android.permission.BLUETOOTH_CONNECT"
+            "android.permission.BLUETOOTH_SCAN"
+            "android.permission.BLUETOOTH_ADVERTISE"
+            "android.permission.CAMERA"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.MANAGE_EXTERNAL_STORAGE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.SYSTEM_ALERT_WINDOW"
+          )
+          for PERM in "${PERMISSIONS[@]}"; do
+            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
+            fi
+          done
+
+      - name: Setup Gradle 8.5 Explicitly
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Asset APK
+        run: |
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V2-Final
+          path: output_report/
