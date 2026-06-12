@@ -4,14 +4,13 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp"
-    android:background="#02040c">
+    android:padding="24dp">
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="System Pro Titan!"
+        android:text="MyApp!"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="#00ffcc" />
+        android:textColor="#6200EE" />
 </LinearLayout>
