@@ -1,4 +1,4 @@
-package com.system.titan.pro;
+package com.example.app;
 
 import android.os.Bundle;
 import android.widget.TextView;
@@ -10,6 +10,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         TextView tv = findViewById(R.id.textView);
-        tv.setText("System Pro Titan!");
+        tv.setText("MyApp!");
     }
 }
