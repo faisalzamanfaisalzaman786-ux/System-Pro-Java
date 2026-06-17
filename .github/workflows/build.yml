@@ -35,249 +35,228 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
-          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip commandlinetools-linux-11076708_latest.zip
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
           export ANDROID_SDK_ROOT=$PWD/android-sdk
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses > /dev/null 2>&1
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1
           echo "ANDROID_SDK_ROOT=$PWD/android-sdk" >> $GITHUB_ENV
           echo "PATH=$PATH:$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_ENV
 
-      - name: Create project structure
+      - name: Create gradle.properties
         run: |
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "gradle.properties created"
+
+      - name: Clean and create project structure
+        run: |
+          rm -rf app
           PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          echo "Directories created for ${{ github.event.inputs.package_name }}"
+          echo "Clean project structure created"
 
       - name: Process AndroidManifest.xml
         run: |
-          if [ -f "build_assets/AndroidManifest.xml" ]; then
-            sed "s/{{PACKAGE_NAME}}/${{ github.event.inputs.package_name }}/g" build_assets/AndroidManifest.xml > app/src/main/AndroidManifest.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="${{ github.event.inputs.package_name }}">
-                <application
-                    android:allowBackup="true"
-                    android:label="${{ github.event.inputs.app_name }}"
-                    android:theme="@style/Theme.AppCompat.Light">
-                    <activity android:name=".MainActivity">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>' > app/src/main/AndroidManifest.xml
-          fi
-          echo "AndroidManifest.xml processed"
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${{ github.event.inputs.package_name }}">
+              <application
+                  android:allowBackup="true"
+                  android:label="${{ github.event.inputs.app_name }}"
+                  android:theme="@style/Theme.AppCompat.Light">
+                  <activity android:name=".MainActivity">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
 
       - name: Process MainActivity.java
         run: |
           PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          if [ -f "build_assets/MainActivity.java" ]; then
-            sed "s/{{PACKAGE_NAME}}/${{ github.event.inputs.package_name }}/g" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
-          else
-            echo 'package ${{ github.event.inputs.package_name }};
-            
-            import android.os.Bundle;
-            import android.view.View;
-            import android.widget.Button;
-            import android.widget.TextView;
-            import androidx.appcompat.app.AppCompatActivity;
-            
-            public class MainActivity extends AppCompatActivity {
-                
-                private TextView displayTextView;
-                private String currentInput = "";
-                private String operator = "";
-                private double firstNumber = 0;
-                private boolean isNewInput = true;
-                
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(R.layout.activity_main);
-                    
-                    displayTextView = findViewById(R.id.displayTextView);
-                    
-                    int[] numberIds = {
-                        R.id.button0, R.id.button1, R.id.button2, R.id.button3,
-                        R.id.button4, R.id.button5, R.id.button6, R.id.button7,
-                        R.id.button8, R.id.button9
-                    };
-                    
-                    for (int id : numberIds) {
-                        Button button = findViewById(id);
-                        button.setOnClickListener(v -> {
-                            Button b = (Button) v;
-                            appendNumber(b.getText().toString());
-                        });
-                    }
-                    
-                    findViewById(R.id.buttonAdd).setOnClickListener(v -> setOperator("+"));
-                    findViewById(R.id.buttonSubtract).setOnClickListener(v -> setOperator("-"));
-                    findViewById(R.id.buttonMultiply).setOnClickListener(v -> setOperator("*"));
-                    findViewById(R.id.buttonDivide).setOnClickListener(v -> setOperator("/"));
-                    findViewById(R.id.buttonEquals).setOnClickListener(v -> calculateResult());
-                    findViewById(R.id.buttonClear).setOnClickListener(v -> clearAll());
-                }
-                
-                private void appendNumber(String number) {
-                    if (isNewInput) {
-                        currentInput = number;
-                        isNewInput = false;
-                    } else {
-                        currentInput += number;
-                    }
-                    displayTextView.setText(currentInput);
-                }
-                
-                private void setOperator(String op) {
-                    if (!currentInput.isEmpty()) {
-                        firstNumber = Double.parseDouble(currentInput);
-                        operator = op;
-                        isNewInput = true;
-                    }
-                }
-                
-                private void calculateResult() {
-                    if (!currentInput.isEmpty() && !operator.isEmpty()) {
-                        double secondNumber = Double.parseDouble(currentInput);
-                        double result = 0;
-                        
-                        switch (operator) {
-                            case "+": result = firstNumber + secondNumber; break;
-                            case "-": result = firstNumber - secondNumber; break;
-                            case "*": result = firstNumber * secondNumber; break;
-                            case "/": 
-                                if (secondNumber != 0) {
-                                    result = firstNumber / secondNumber;
-                                } else {
-                                    displayTextView.setText("Error");
-                                    return;
-                                }
-                                break;
-                        }
-                        
-                        displayTextView.setText(String.valueOf(result));
-                        currentInput = String.valueOf(result);
-                        operator = "";
-                        isNewInput = true;
-                    }
-                }
-                
-                private void clearAll() {
-                    currentInput = "";
-                    operator = "";
-                    firstNumber = 0;
-                    isNewInput = true;
-                    displayTextView.setText("0");
-                }
-            }' > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
-          echo "MainActivity.java processed"
+          echo 'package ${{ github.event.inputs.package_name }};
+          
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              
+              private TextView displayTextView;
+              private String currentInput = "";
+              private String operator = "";
+              private double firstNumber = 0;
+              private boolean isNewInput = true;
+              
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  
+                  displayTextView = findViewById(R.id.displayTextView);
+                  
+                  int[] numberIds = {
+                      R.id.button0, R.id.button1, R.id.button2, R.id.button3,
+                      R.id.button4, R.id.button5, R.id.button6, R.id.button7,
+                      R.id.button8, R.id.button9
+                  };
+                  
+                  for (int id : numberIds) {
+                      Button button = findViewById(id);
+                      button.setOnClickListener(v -> {
+                          Button b = (Button) v;
+                          appendNumber(b.getText().toString());
+                      });
+                  }
+                  
+                  findViewById(R.id.buttonAdd).setOnClickListener(v -> setOperator("+"));
+                  findViewById(R.id.buttonSubtract).setOnClickListener(v -> setOperator("-"));
+                  findViewById(R.id.buttonMultiply).setOnClickListener(v -> setOperator("*"));
+                  findViewById(R.id.buttonDivide).setOnClickListener(v -> setOperator("/"));
+                  findViewById(R.id.buttonEquals).setOnClickListener(v -> calculateResult());
+                  findViewById(R.id.buttonClear).setOnClickListener(v -> clearAll());
+              }
+              
+              private void appendNumber(String number) {
+                  if (isNewInput) {
+                      currentInput = number;
+                      isNewInput = false;
+                  } else {
+                      currentInput += number;
+                  }
+                  displayTextView.setText(currentInput);
+              }
+              
+              private void setOperator(String op) {
+                  if (!currentInput.isEmpty()) {
+                      firstNumber = Double.parseDouble(currentInput);
+                      operator = op;
+                      isNewInput = true;
+                  }
+              }
+              
+              private void calculateResult() {
+                  if (!currentInput.isEmpty() && !operator.isEmpty()) {
+                      double secondNumber = Double.parseDouble(currentInput);
+                      double result = 0;
+                      
+                      switch (operator) {
+                          case "+": result = firstNumber + secondNumber; break;
+                          case "-": result = firstNumber - secondNumber; break;
+                          case "*": result = firstNumber * secondNumber; break;
+                          case "/": 
+                              if (secondNumber != 0) {
+                                  result = firstNumber / secondNumber;
+                              } else {
+                                  displayTextView.setText("Error");
+                                  return;
+                              }
+                              break;
+                      }
+                      
+                      displayTextView.setText(String.valueOf(result));
+                      currentInput = String.valueOf(result);
+                      operator = "";
+                      isNewInput = true;
+                  }
+              }
+              
+              private void clearAll() {
+                  currentInput = "";
+                  operator = "";
+                  firstNumber = 0;
+                  isNewInput = true;
+                  displayTextView.setText("0");
+              }
+          }' > app/src/main/java/$PKG_PATH/MainActivity.java
 
       - name: Process Layout files
         run: |
-          if [ -f "build_assets/activity_main.xml" ]; then
-            cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="#f5f5f5">
-                
-                <TextView
-                    android:id="@+id/displayTextView"
-                    android:layout_width="match_parent"
-                    android:layout_height="100dp"
-                    android:background="#ffffff"
-                    android:text="0"
-                    android:textSize="48sp"
-                    android:gravity="end|center_vertical"
-                    android:padding="16dp"
-                    android:layout_marginBottom="16dp" />
-                
-                <GridLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:rowCount="4"
-                    android:columnCount="4">
-                    
-                    <Button android:id="@+id/buttonClear" android:text="C" android:layout_columnSpan="2" />
-                    <Button android:id="@+id/buttonDivide" android:text="÷" />
-                    <Button android:id="@+id/buttonMultiply" android:text="×" />
-                    
-                    <Button android:id="@+id/button7" android:text="7" />
-                    <Button android:id="@+id/button8" android:text="8" />
-                    <Button android:id="@+id/button9" android:text="9" />
-                    <Button android:id="@+id/buttonSubtract" android:text="−" />
-                    
-                    <Button android:id="@+id/button4" android:text="4" />
-                    <Button android:id="@+id/button5" android:text="5" />
-                    <Button android:id="@+id/button6" android:text="6" />
-                    <Button android:id="@+id/buttonAdd" android:text="+" />
-                    
-                    <Button android:id="@+id/button1" android:text="1" />
-                    <Button android:id="@+id/button2" android:text="2" />
-                    <Button android:id="@+id/button3" android:text="3" />
-                    <Button android:id="@+id/buttonEquals" android:text="=" android:layout_gravity="fill" />
-                    
-                    <Button android:id="@+id/button0" android:text="0" android:layout_columnSpan="3" />
-                </GridLayout>
-            </LinearLayout>' > app/src/main/res/layout/activity_main.xml
-          fi
-          echo "Layout files processed"
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="16dp"
+              android:background="#f5f5f5">
+              
+              <TextView
+                  android:id="@+id/displayTextView"
+                  android:layout_width="match_parent"
+                  android:layout_height="100dp"
+                  android:background="#ffffff"
+                  android:text="0"
+                  android:textSize="48sp"
+                  android:gravity="end|center_vertical"
+                  android:padding="16dp"
+                  android:layout_marginBottom="16dp" />
+              
+              <GridLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:rowCount="4"
+                  android:columnCount="4">
+                  
+                  <Button android:id="@+id/buttonClear" android:text="C" android:layout_columnSpan="2" />
+                  <Button android:id="@+id/buttonDivide" android:text="÷" />
+                  <Button android:id="@+id/buttonMultiply" android:text="×" />
+                  
+                  <Button android:id="@+id/button7" android:text="7" />
+                  <Button android:id="@+id/button8" android:text="8" />
+                  <Button android:id="@+id/button9" android:text="9" />
+                  <Button android:id="@+id/buttonSubtract" android:text="−" />
+                  
+                  <Button android:id="@+id/button4" android:text="4" />
+                  <Button android:id="@+id/button5" android:text="5" />
+                  <Button android:id="@+id/button6" android:text="6" />
+                  <Button android:id="@+id/buttonAdd" android:text="+" />
+                  
+                  <Button android:id="@+id/button1" android:text="1" />
+                  <Button android:id="@+id/button2" android:text="2" />
+                  <Button android:id="@+id/button3" android:text="3" />
+                  <Button android:id="@+id/buttonEquals" android:text="=" android:layout_gravity="fill" />
+                  
+                  <Button android:id="@+id/button0" android:text="0" android:layout_columnSpan="3" />
+              </GridLayout>
+          </LinearLayout>' > app/src/main/res/layout/activity_main.xml
 
       - name: Process Values files
         run: |
-          if [ -f "build_assets/strings.xml" ]; then
-            cp build_assets/strings.xml app/src/main/res/values/strings.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <string name="app_name">${{ github.event.inputs.app_name }}</string>
-            </resources>' > app/src/main/res/values/strings.xml
-          fi
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">${{ github.event.inputs.app_name }}</string>
+          </resources>' > app/src/main/res/values/strings.xml
           
-          if [ -f "build_assets/colors.xml" ]; then
-            cp build_assets/colors.xml app/src/main/res/values/colors.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <color name="purple_200">#FFBB86FC</color>
-                <color name="purple_500">#FF6200EE</color>
-                <color name="purple_700">#FF3700B3</color>
-                <color name="teal_200">#FF03DAC5</color>
-                <color name="teal_700">#FF018786</color>
-                <color name="black">#FF000000</color>
-                <color name="white">#FFFFFFFF</color>
-            </resources>' > app/src/main/res/values/colors.xml
-          fi
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="purple_200">#FFBB86FC</color>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="purple_700">#FF3700B3</color>
+              <color name="teal_200">#FF03DAC5</color>
+              <color name="teal_700">#FF018786</color>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
+          </resources>' > app/src/main/res/values/colors.xml
           
-          if [ -f "build_assets/themes.xml" ]; then
-            cp build_assets/themes.xml app/src/main/res/values/themes.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <style name="Theme.AppCompat.Light" parent="Theme.AppCompat.Light.DarkActionBar">
-                    <item name="colorPrimary">@color/purple_500</item>
-                    <item name="colorPrimaryDark">@color/purple_700</item>
-                    <item name="colorAccent">@color/teal_200</item>
-                </style>
-            </resources>' > app/src/main/res/values/themes.xml
-          fi
-          echo "Values files processed"
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.Light" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/purple_500</item>
+                  <item name="colorPrimaryDark">@color/purple_700</item>
+                  <item name="colorAccent">@color/teal_200</item>
+              </style>
+          </resources>' > app/src/main/res/values/themes.xml
 
       - name: Create Gradle files
         run: |
@@ -329,17 +308,14 @@ jobs:
           
           echo "rootProject.name = \"MyApp\"" > settings.gradle
           echo "include ':app'" >> settings.gradle
-          
-          echo "Gradle files created"
 
       - name: Create local.properties
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          echo "local.properties created"
 
-      - name: Build APK with detailed logs
+      - name: Build APK
         run: |
-          gradle assembleRelease --no-daemon --stacktrace
+          gradle assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
