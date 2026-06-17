@@ -26,6 +26,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
       - name: Create project structure
         run: |
           PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
@@ -321,35 +326,9 @@ jobs:
           
           echo "Gradle files created"
 
-      - name: Setup Gradle Wrapper
-        run: |
-          # Download gradle-wrapper.jar
-          mkdir -p gradle/wrapper
-          curl -L https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-          
-          # Create gradle-wrapper.properties
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.2-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          
-          # Create gradlew script
-          echo '#!/bin/sh' > gradlew
-          echo 'GRADLE_VERSION="8.2"' >> gradlew
-          echo 'JAR_PATH="gradle/wrapper/gradle-wrapper.jar"' >> gradlew
-          echo 'if [ ! -f "$JAR_PATH" ]; then' >> gradlew
-          echo '    echo "Downloading gradle wrapper..."' >> gradlew
-          echo '    curl -L https://raw.githubusercontent.com/gradle/gradle/v$GRADLE_VERSION/gradle/wrapper/gradle-wrapper.jar -o $JAR_PATH' >> gradlew
-          echo 'fi' >> gradlew
-          echo 'exec java -jar $JAR_PATH "$@"' >> gradlew
-          chmod +x gradlew
-          
-          echo "Gradle wrapper setup complete"
-
       - name: Build APK
         run: |
-          ./gradlew assembleRelease --no-daemon
+          gradle assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
