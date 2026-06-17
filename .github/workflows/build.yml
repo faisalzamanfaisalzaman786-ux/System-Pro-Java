@@ -50,7 +50,6 @@ jobs:
         run: |
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          echo "gradle.properties created"
 
       - name: Clean and create project structure
         run: |
@@ -60,18 +59,19 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          echo "Clean project structure created"
 
       - name: Process AndroidManifest.xml
         run: |
+          # اب package attribute ہٹا دیا گیا ہے اور exported شامل کیا گیا ہے
           echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ github.event.inputs.package_name }}">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:label="${{ github.event.inputs.app_name }}"
                   android:theme="@style/Theme.AppCompat.Light">
-                  <activity android:name=".MainActivity">
+                  <activity 
+                      android:name=".MainActivity"
+                      android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
