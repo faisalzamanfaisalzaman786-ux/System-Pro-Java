@@ -264,19 +264,20 @@ jobs:
           if [ -f "build_assets/dependencies.txt" ]; then
             DEPS=$(cat build_assets/dependencies.txt)
           else
-            DEPS="implementation '"'"'androidx.appcompat:appcompat:1.6.1'"'"'\n    implementation '"'"'com.google.android.material:material:1.10.0'"'"'"
+            DEPS="implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.10.0'"
           fi
           echo "Dependencies loaded"
 
       - name: Create Gradle files
         run: |
-          echo 'buildscript {
+          cat > build.gradle << 'EOF'
+          buildscript {
               repositories {
                   google()
                   mavenCentral()
               }
               dependencies {
-                  classpath '"'"'com.android.tools.build:gradle:8.2.0'"'"'
+                  classpath 'com.android.tools.build:gradle:8.2.0'
               }
           }
           
@@ -285,18 +286,20 @@ jobs:
                   google()
                   mavenCentral()
               }
-          }' > build.gradle
+          }
+          EOF
           
-          echo 'plugins {
-              id '"'"'com.android.application'"'"'
+          cat > app/build.gradle << EOF
+          plugins {
+              id 'com.android.application'
           }
           
           android {
-              namespace '"'"'${{ github.event.inputs.package_name }}'"'"'
+              namespace '${{ github.event.inputs.package_name }}'
               compileSdk 34
               
               defaultConfig {
-                  applicationId '"'"'${{ github.event.inputs.package_name }}'"'"'
+                  applicationId '${{ github.event.inputs.package_name }}'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -306,25 +309,31 @@ jobs:
               buildTypes {
                   release {
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile("'"'"'proguard-android-optimize.txt'"'"'"), '"'"'proguard-rules.pro'"'"'
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
           }
           
           dependencies {
-              implementation '"'"'androidx.appcompat:appcompat:1.6.1'"'"'
-              implementation '"'"'com.google.android.material:material:1.10.0'"'"'
-          }' > app/build.gradle
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+          }
+          EOF
           
-          echo 'rootProject.name = "MyApp"
-          include '"'"':app'"'"'' > settings.gradle
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "MyApp"
+          include ':app'
+          EOF
           echo "Gradle files created"
 
       - name: Create gradle wrapper
         run: |
           if [ ! -f "./gradlew" ]; then
-            echo '#!/bin/sh
-            echo "Gradle wrapper placeholder"' > gradlew
+            cat > gradlew << 'EOF'
+            #!/bin/sh
+            echo "Gradle wrapper placeholder"
+            exit 1
+            EOF
             chmod +x gradlew
           else
             chmod +x ./gradlew
