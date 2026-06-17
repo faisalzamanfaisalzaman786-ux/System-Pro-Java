@@ -69,14 +69,16 @@ jobs:
         run: |
           PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           
+          # AndroidManifest.xml کو Replace کریں (یہ نئی تبدیلی ہے)
           if [ -f "build_assets/AndroidManifest.xml" ]; then
-            cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            sed "s/{{PACKAGE_NAME}}/${{ github.event.inputs.package_name }}/g" build_assets/AndroidManifest.xml > app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
           else
             echo "❌ AndroidManifest.xml not found!"
             exit 1
           fi
           
+          # MainActivity.java کو Replace کریں
           if [ -f "build_assets/MainActivity.java" ]; then
             sed "s/{{PACKAGE_NAME}}/${{ github.event.inputs.package_name }}/g" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
             echo "✅ MainActivity.java copied"
@@ -85,6 +87,7 @@ jobs:
             exit 1
           fi
           
+          # Layout files
           if [ -f "build_assets/activity_main.xml" ]; then
             cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
             echo "✅ activity_main.xml copied"
@@ -93,6 +96,7 @@ jobs:
             exit 1
           fi
           
+          # Values files
           if [ -f "build_assets/strings.xml" ]; then
             cp build_assets/strings.xml app/src/main/res/values/strings.xml
             echo "✅ strings.xml copied"
