@@ -279,15 +279,6 @@ jobs:
           fi
           echo "Values files processed"
 
-      - name: Process Dependencies
-        run: |
-          if [ -f "build_assets/dependencies.txt" ]; then
-            DEPS=$(cat build_assets/dependencies.txt)
-          else
-            DEPS="implementation '"'"'androidx.appcompat:appcompat:1.6.1'"'"'\n    implementation '"'"'com.google.android.material:material:1.10.0'"'"'"
-          fi
-          echo "Dependencies loaded"
-
       - name: Create Gradle files
         run: |
           echo "buildscript {" > build.gradle
@@ -296,7 +287,7 @@ jobs:
           echo "        mavenCentral()" >> build.gradle
           echo "    }" >> build.gradle
           echo "    dependencies {" >> build.gradle
-          echo "        classpath '"'"'com.android.tools.build:gradle:8.2.0'"'"'" >> build.gradle
+          echo "        classpath 'com.android.tools.build:gradle:8.2.0'" >> build.gradle
           echo "    }" >> build.gradle
           echo "}" >> build.gradle
           echo "" >> build.gradle
@@ -308,41 +299,36 @@ jobs:
           echo "}" >> build.gradle
           
           echo "plugins {" > app/build.gradle
-          echo "    id '"'"'com.android.application'"'"'" >> app/build.gradle
+          echo "    id 'com.android.application'" >> app/build.gradle
           echo "}" >> app/build.gradle
           echo "" >> app/build.gradle
           echo "android {" >> app/build.gradle
-          echo "    namespace '"'"'${{ github.event.inputs.package_name }}'"'"'" >> app/build.gradle
+          echo "    namespace '${{ github.event.inputs.package_name }}'" >> app/build.gradle
           echo "    compileSdk 34" >> app/build.gradle
           echo "" >> app/build.gradle
           echo "    defaultConfig {" >> app/build.gradle
-          echo "        applicationId '"'"'${{ github.event.inputs.package_name }}'"'"'" >> app/build.gradle
+          echo "        applicationId '${{ github.event.inputs.package_name }}'" >> app/build.gradle
           echo "        minSdk 21" >> app/build.gradle
           echo "        targetSdk 34" >> app/build.gradle
           echo "        versionCode 1" >> app/build.gradle
-          echo "        versionName '"'"'1.0'"'"'" >> app/build.gradle
+          echo "        versionName \"1.0\"" >> app/build.gradle
           echo "    }" >> app/build.gradle
           echo "" >> app/build.gradle
           echo "    buildTypes {" >> app/build.gradle
           echo "        release {" >> app/build.gradle
           echo "            minifyEnabled false" >> app/build.gradle
-          echo "            proguardFiles getDefaultProguardFile('"'"'proguard-android-optimize.txt'"'"''), '"'"'proguard-rules.pro'"'"'" >> app/build.gradle
+          echo "            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'" >> app/build.gradle
           echo "        }" >> app/build.gradle
-          echo "    }" >> app/build.gradle
-          echo "" >> app/build.gradle
-          echo "    compileOptions {" >> app/build.gradle
-          echo "        sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle
-          echo "        targetCompatibility JavaVersion.VERSION_17" >> app/build.gradle
           echo "    }" >> app/build.gradle
           echo "}" >> app/build.gradle
           echo "" >> app/build.gradle
           echo "dependencies {" >> app/build.gradle
-          echo "    implementation '"'"'androidx.appcompat:appcompat:1.6.1'"'"'" >> app/build.gradle
-          echo "    implementation '"'"'com.google.android.material:material:1.10.0'"'"'" >> app/build.gradle
+          echo "    implementation 'androidx.appcompat:appcompat:1.6.1'" >> app/build.gradle
+          echo "    implementation 'com.google.android.material:material:1.10.0'" >> app/build.gradle
           echo "}" >> app/build.gradle
           
-          echo "rootProject.name = '"'"'MyApp'"'"'" > settings.gradle
-          echo "include '"'"':app'"'"'" >> settings.gradle
+          echo "rootProject.name = \"MyApp\"" > settings.gradle
+          echo "include ':app'" >> settings.gradle
           
           echo "Gradle files created"
 
@@ -351,9 +337,9 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           echo "local.properties created"
 
-      - name: Build APK
+      - name: Build APK with detailed logs
         run: |
-          gradle assembleRelease --no-daemon
+          gradle assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
