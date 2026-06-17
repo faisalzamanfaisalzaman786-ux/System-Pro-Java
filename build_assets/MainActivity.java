@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.SurfaceHolder;
@@ -32,6 +33,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private ImageView imageViewPreview;
     private int cameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
     private boolean isPreviewShowing = false;
+    private File lastPhotoFile = null;
 
     private static final int CAMERA_PERMISSION_REQUEST = 100;
 
@@ -53,7 +55,9 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) 
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, 
-                new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                new String[]{Manifest.permission.CAMERA, 
+                             Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                             Manifest.permission.READ_EXTERNAL_STORAGE},
                 CAMERA_PERMISSION_REQUEST);
         }
 
@@ -69,7 +73,6 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        // Refresh camera preview
         if (camera != null) {
             try {
                 camera.stopPreview();
@@ -93,15 +96,44 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             camera.setPreviewDisplay(surfaceHolder);
             
             Camera.Parameters params = camera.getParameters();
-            params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-            camera.setParameters(params);
             
+            // نئے Android کے لیے Parameters سیٹ کریں
+            try {
+                params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+            } catch (Exception e) {
+                // اگر AUTO Focus Support نہ کرے تو Ignore کریں
+            }
+            
+            // Preview Size سیٹ کریں
+            Camera.Size bestSize = getBestPreviewSize(params.getSupportedPreviewSizes(), 
+                    surfaceView.getWidth(), surfaceView.getHeight());
+            if (bestSize != null) {
+                params.setPreviewSize(bestSize.width, bestSize.height);
+            }
+            
+            camera.setParameters(params);
             camera.startPreview();
             isPreviewShowing = true;
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(this, "Camera error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private Camera.Size getBestPreviewSize(java.util.List<Camera.Size> sizes, int width, int height) {
+        Camera.Size bestSize = null;
+        for (Camera.Size size : sizes) {
+            if (size.width >= width && size.height >= height) {
+                if (bestSize == null || 
+                    (size.width - width) < (bestSize.width - width)) {
+                    bestSize = size;
+                }
+            }
+        }
+        if (bestSize == null && sizes.size() > 0) {
+            bestSize = sizes.get(0);
+        }
+        return bestSize;
     }
 
     private void releaseCamera() {
@@ -128,41 +160,48 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
 
         camera.takePicture(null, null, (data, camera1) -> {
-            // Save image to file
-            File pictureFile = getOutputMediaFile();
-            if (pictureFile == null) {
-                Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
             try {
+                // File save کریں
+                File pictureFile = getOutputMediaFile();
+                if (pictureFile == null) {
+                    Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
                 FileOutputStream fos = new FileOutputStream(pictureFile);
                 fos.write(data);
                 fos.close();
+                lastPhotoFile = pictureFile;
 
-                // Show preview
+                // Preview دکھائیں
                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                 imageViewPreview.setImageBitmap(bitmap);
                 imageViewPreview.setVisibility(View.VISIBLE);
                 
                 Toast.makeText(this, "Photo saved: " + pictureFile.getName(), Toast.LENGTH_LONG).show();
                 
-                // Restart preview after 3 seconds
+                // 3 سیکنڈ بعد Preview ہٹائیں
                 imageViewPreview.postDelayed(() -> {
                     imageViewPreview.setVisibility(View.GONE);
                     openCamera();
                 }, 3000);
                 
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
-                Toast.makeText(this, "Error saving photo", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Error saving photo: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     private File getOutputMediaFile() {
-        File mediaStorageDir = new File(Environment.getExternalStorageDirectory(), 
-                "CameraApp");
+        // Android 10+ کے لیے Scoped Storage
+        File mediaStorageDir;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            mediaStorageDir = new File(getExternalFilesDir(null), "CameraApp");
+        } else {
+            mediaStorageDir = new File(Environment.getExternalStorageDirectory(), "CameraApp");
+        }
+        
         if (!mediaStorageDir.exists()) {
             if (!mediaStorageDir.mkdirs()) {
                 return null;
@@ -174,11 +213,18 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     private void openGallery() {
-        imageViewPreview.setVisibility(View.VISIBLE);
-        imageViewPreview.postDelayed(() -> {
-            imageViewPreview.setVisibility(View.GONE);
-            openCamera();
-        }, 5000);
+        if (lastPhotoFile != null && lastPhotoFile.exists()) {
+            Bitmap bitmap = BitmapFactory.decodeFile(lastPhotoFile.getAbsolutePath());
+            imageViewPreview.setImageBitmap(bitmap);
+            imageViewPreview.setVisibility(View.VISIBLE);
+            
+            imageViewPreview.postDelayed(() -> {
+                imageViewPreview.setVisibility(View.GONE);
+                openCamera();
+            }, 5000);
+        } else {
+            Toast.makeText(this, "No photos found", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -192,5 +238,19 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 finish();
             }
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (camera == null && surfaceHolder != null) {
+            openCamera();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        releaseCamera();
     }
 }
