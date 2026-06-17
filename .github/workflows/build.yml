@@ -62,7 +62,6 @@ jobs:
 
       - name: Process AndroidManifest.xml
         run: |
-          # اب package attribute ہٹا دیا گیا ہے اور exported شامل کیا گیا ہے
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -293,8 +292,18 @@ jobs:
           echo "        versionName \"1.0\"" >> app/build.gradle
           echo "    }" >> app/build.gradle
           echo "" >> app/build.gradle
+          echo "    signingConfigs {" >> app/build.gradle
+          echo "        debug {" >> app/build.gradle
+          echo "            storeFile file('debug.keystore')" >> app/build.gradle
+          echo "            storePassword 'android'" >> app/build.gradle
+          echo "            keyAlias 'androiddebugkey'" >> app/build.gradle
+          echo "            keyPassword 'android'" >> app/build.gradle
+          echo "        }" >> app/build.gradle
+          echo "    }" >> app/build.gradle
+          echo "" >> app/build.gradle
           echo "    buildTypes {" >> app/build.gradle
           echo "        release {" >> app/build.gradle
+          echo "            signingConfig signingConfigs.debug" >> app/build.gradle
           echo "            minifyEnabled false" >> app/build.gradle
           echo "            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'" >> app/build.gradle
           echo "        }" >> app/build.gradle
@@ -309,16 +318,20 @@ jobs:
           echo "rootProject.name = \"MyApp\"" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
+      - name: Create Debug Keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Android, C=US"
+
       - name: Create local.properties
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Build APK
+      - name: Build Signed APK
         run: |
           gradle assembleRelease --no-daemon
 
-      - name: Upload APK
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-${{ github.event.inputs.package_name }}
-          path: app/build/outputs/apk/**/*.apk
+          path: app/build/outputs/apk/release/*.apk
