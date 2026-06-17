@@ -1,5 +1,4 @@
-package {{PACKAGE_NAME}};
-
+package com.mycompany.camera;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
