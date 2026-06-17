@@ -321,26 +321,35 @@ jobs:
           
           echo "Gradle files created"
 
-      - name: Create gradle wrapper
+      - name: Setup Gradle Wrapper
         run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "#!/bin/sh" > gradlew
-            echo "echo \"Gradle wrapper placeholder\"" >> gradlew
-            echo "exit 1" >> gradlew
-            chmod +x gradlew
-          else
-            chmod +x ./gradlew
-          fi
-          echo "gradlew ready"
+          # Download gradle-wrapper.jar
+          mkdir -p gradle/wrapper
+          curl -L https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+          
+          # Create gradle-wrapper.properties
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.2-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          
+          # Create gradlew script
+          echo '#!/bin/sh' > gradlew
+          echo 'GRADLE_VERSION="8.2"' >> gradlew
+          echo 'JAR_PATH="gradle/wrapper/gradle-wrapper.jar"' >> gradlew
+          echo 'if [ ! -f "$JAR_PATH" ]; then' >> gradlew
+          echo '    echo "Downloading gradle wrapper..."' >> gradlew
+          echo '    curl -L https://raw.githubusercontent.com/gradle/gradle/v$GRADLE_VERSION/gradle/wrapper/gradle-wrapper.jar -o $JAR_PATH' >> gradlew
+          echo 'fi' >> gradlew
+          echo 'exec java -jar $JAR_PATH "$@"' >> gradlew
+          chmod +x gradlew
+          
+          echo "Gradle wrapper setup complete"
 
       - name: Build APK
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease --no-daemon
-          else
-            mkdir -p app/build/outputs/apk/release/
-            echo "APK build attempted" > app/build/outputs/apk/release/app-release.apk
-          fi
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
