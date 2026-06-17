@@ -51,6 +51,10 @@ jobs:
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
+      - name: Create Debug Keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Android, C=US"
+
       - name: Clean and create project structure
         run: |
           rm -rf app
@@ -294,7 +298,7 @@ jobs:
           echo "" >> app/build.gradle
           echo "    signingConfigs {" >> app/build.gradle
           echo "        debug {" >> app/build.gradle
-          echo "            storeFile file('debug.keystore')" >> app/build.gradle
+          echo "            storeFile file('../debug.keystore')" >> app/build.gradle
           echo "            storePassword 'android'" >> app/build.gradle
           echo "            keyAlias 'androiddebugkey'" >> app/build.gradle
           echo "            keyPassword 'android'" >> app/build.gradle
@@ -318,17 +322,13 @@ jobs:
           echo "rootProject.name = \"MyApp\"" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-      - name: Create Debug Keystore
-        run: |
-          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Android, C=US"
-
       - name: Create local.properties
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Build Signed APK
         run: |
-          gradle assembleRelease --no-daemon
+          gradle assembleRelease --no-daemon --stacktrace
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
