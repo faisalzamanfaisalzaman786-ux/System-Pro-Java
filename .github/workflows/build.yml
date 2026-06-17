@@ -270,74 +270,68 @@ jobs:
 
       - name: Create Gradle files
         run: |
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.0'
-              }
-          }
+          echo "buildscript {" > build.gradle
+          echo "    repositories {" >> build.gradle
+          echo "        google()" >> build.gradle
+          echo "        mavenCentral()" >> build.gradle
+          echo "    }" >> build.gradle
+          echo "    dependencies {" >> build.gradle
+          echo "        classpath 'com.android.tools.build:gradle:8.2.0'" >> build.gradle
+          echo "    }" >> build.gradle
+          echo "}" >> build.gradle
+          echo "" >> build.gradle
+          echo "allprojects {" >> build.gradle
+          echo "    repositories {" >> build.gradle
+          echo "        google()" >> build.gradle
+          echo "        mavenCentral()" >> build.gradle
+          echo "    }" >> build.gradle
+          echo "}" >> build.gradle
           
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+          echo "plugins {" > app/build.gradle
+          echo "    id 'com.android.application'" >> app/build.gradle
+          echo "}" >> app/build.gradle
+          echo "" >> app/build.gradle
+          echo "android {" >> app/build.gradle
+          echo "    namespace '${{ github.event.inputs.package_name }}'" >> app/build.gradle
+          echo "    compileSdk 34" >> app/build.gradle
+          echo "" >> app/build.gradle
+          echo "    defaultConfig {" >> app/build.gradle
+          echo "        applicationId '${{ github.event.inputs.package_name }}'" >> app/build.gradle
+          echo "        minSdk 21" >> app/build.gradle
+          echo "        targetSdk 34" >> app/build.gradle
+          echo "        versionCode 1" >> app/build.gradle
+          echo "        versionName \"1.0\"" >> app/build.gradle
+          echo "    }" >> app/build.gradle
+          echo "" >> app/build.gradle
+          echo "    buildTypes {" >> app/build.gradle
+          echo "        release {" >> app/build.gradle
+          echo "            minifyEnabled false" >> app/build.gradle
+          echo "            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'" >> app/build.gradle
+          echo "        }" >> app/build.gradle
+          echo "    }" >> app/build.gradle
+          echo "}" >> app/build.gradle
+          echo "" >> app/build.gradle
+          echo "dependencies {" >> app/build.gradle
+          echo "    implementation 'androidx.appcompat:appcompat:1.6.1'" >> app/build.gradle
+          echo "    implementation 'com.google.android.material:material:1.10.0'" >> app/build.gradle
+          echo "}" >> app/build.gradle
           
-          cat > app/build.gradle << EOF
-          plugins {
-              id 'com.android.application'
-          }
+          echo "rootProject.name = \"MyApp\"" > settings.gradle
+          echo "include ':app'" >> settings.gradle
           
-          android {
-              namespace '${{ github.event.inputs.package_name }}'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId '${{ github.event.inputs.package_name }}'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-          
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
-          }
-          EOF
-          
-          cat > settings.gradle << 'EOF'
-          rootProject.name = "MyApp"
-          include ':app'
-          EOF
           echo "Gradle files created"
 
       - name: Create gradle wrapper
         run: |
           if [ ! -f "./gradlew" ]; then
-            cat > gradlew << 'EOF'
-            #!/bin/sh
-            echo "Gradle wrapper placeholder"
-            exit 1
-            EOF
+            echo "#!/bin/sh" > gradlew
+            echo "echo \"Gradle wrapper placeholder\"" >> gradlew
+            echo "exit 1" >> gradlew
             chmod +x gradlew
           else
             chmod +x ./gradlew
           fi
+          echo "gradlew ready"
 
       - name: Build APK
         run: |
