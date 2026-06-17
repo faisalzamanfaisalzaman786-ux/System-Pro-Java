@@ -69,34 +69,30 @@ jobs:
         run: |
           PKG_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           
-          # Copy AndroidManifest.xml (if exists)
           if [ -f "build_assets/AndroidManifest.xml" ]; then
             cp build_assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
           else
-            echo "❌ AndroidManifest.xml not found in build_assets!"
+            echo "❌ AndroidManifest.xml not found!"
             exit 1
           fi
           
-          # Copy MainActivity.java (if exists)
           if [ -f "build_assets/MainActivity.java" ]; then
             sed "s/{{PACKAGE_NAME}}/${{ github.event.inputs.package_name }}/g" build_assets/MainActivity.java > app/src/main/java/$PKG_PATH/MainActivity.java
             echo "✅ MainActivity.java copied"
           else
-            echo "❌ MainActivity.java not found in build_assets!"
+            echo "❌ MainActivity.java not found!"
             exit 1
           fi
           
-          # Copy layout files (if exists)
           if [ -f "build_assets/activity_main.xml" ]; then
             cp build_assets/activity_main.xml app/src/main/res/layout/activity_main.xml
             echo "✅ activity_main.xml copied"
           else
-            echo "❌ activity_main.xml not found in build_assets!"
+            echo "❌ activity_main.xml not found!"
             exit 1
           fi
           
-          # Copy values files (if exists)
           if [ -f "build_assets/strings.xml" ]; then
             cp build_assets/strings.xml app/src/main/res/values/strings.xml
             echo "✅ strings.xml copied"
@@ -114,7 +110,6 @@ jobs:
 
       - name: Generate build.gradle files
         run: |
-          # Root build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -133,7 +128,9 @@ jobs:
           }
           EOF
           
-          # App build.gradle with signing config
+          # Read dependencies from dependencies.txt
+          DEPS=$(cat build_assets/dependencies.txt 2>/dev/null || echo "implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.10.0'")
+          
           cat > app/build.gradle << EOF
           plugins {
               id 'com.android.application'
@@ -170,19 +167,7 @@ jobs:
           }
           
           dependencies {
-              // Read dependencies from build_assets/dependencies.txt if exists
-              def depsFile = file('../build_assets/dependencies.txt')
-              if (depsFile.exists()) {
-                  def deps = depsFile.text.split('\\n')
-                  deps.each { dep ->
-                      if (dep.trim()) {
-                          implementation dep.trim()
-                      }
-                  }
-              } else {
-                  implementation 'androidx.appcompat:appcompat:1.6.1'
-                  implementation 'com.google.android.material:material:1.10.0'
-              }
+              $DEPS
           }
           EOF
           
