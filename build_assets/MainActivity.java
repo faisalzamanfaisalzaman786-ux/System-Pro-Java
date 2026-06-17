@@ -1,99 +1,196 @@
 package {{PACKAGE_NAME}};
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.hardware.Camera;
 import android.os.Bundle;
+import android.os.Environment;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
-import android.widget.TextView;
+import android.widget.ImageView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
-    
-    private TextView displayTextView;
-    private String currentInput = "";
-    private String operator = "";
-    private double firstNumber = 0;
-    private boolean isNewInput = true;
-    
+public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
+
+    private Camera camera;
+    private SurfaceView surfaceView;
+    private SurfaceHolder surfaceHolder;
+    private Button btnCapture, btnSwitch, btnGallery;
+    private ImageView imageViewPreview;
+    private int cameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
+    private boolean isPreviewShowing = false;
+
+    private static final int CAMERA_PERMISSION_REQUEST = 100;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        
-        displayTextView = findViewById(R.id.displayTextView);
-        
-        // Number buttons
-        int[] numberIds = {
-            R.id.button0, R.id.button1, R.id.button2, R.id.button3,
-            R.id.button4, R.id.button5, R.id.button6, R.id.button7,
-            R.id.button8, R.id.button9
-        };
-        
-        for (int id : numberIds) {
-            Button button = findViewById(id);
-            button.setOnClickListener(v -> {
-                Button b = (Button) v;
-                appendNumber(b.getText().toString());
-            });
+
+        surfaceView = findViewById(R.id.surfaceView);
+        btnCapture = findViewById(R.id.btnCapture);
+        btnSwitch = findViewById(R.id.btnSwitch);
+        btnGallery = findViewById(R.id.btnGallery);
+        imageViewPreview = findViewById(R.id.imageViewPreview);
+
+        surfaceHolder = surfaceView.getHolder();
+        surfaceHolder.addCallback(this);
+
+        // Check permissions
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) 
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, 
+                new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                CAMERA_PERMISSION_REQUEST);
         }
-        
-        // Operator buttons
-        findViewById(R.id.buttonAdd).setOnClickListener(v -> setOperator("+"));
-        findViewById(R.id.buttonSubtract).setOnClickListener(v -> setOperator("-"));
-        findViewById(R.id.buttonMultiply).setOnClickListener(v -> setOperator("*"));
-        findViewById(R.id.buttonDivide).setOnClickListener(v -> setOperator("/"));
-        findViewById(R.id.buttonEquals).setOnClickListener(v -> calculateResult());
-        findViewById(R.id.buttonClear).setOnClickListener(v -> clearAll());
+
+        btnCapture.setOnClickListener(v -> takePicture());
+        btnSwitch.setOnClickListener(v -> switchCamera());
+        btnGallery.setOnClickListener(v -> openGallery());
     }
-    
-    private void appendNumber(String number) {
-        if (isNewInput) {
-            currentInput = number;
-            isNewInput = false;
-        } else {
-            currentInput += number;
-        }
-        displayTextView.setText(currentInput);
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        openCamera();
     }
-    
-    private void setOperator(String op) {
-        if (!currentInput.isEmpty()) {
-            firstNumber = Double.parseDouble(currentInput);
-            operator = op;
-            isNewInput = true;
-        }
-    }
-    
-    private void calculateResult() {
-        if (!currentInput.isEmpty() && !operator.isEmpty()) {
-            double secondNumber = Double.parseDouble(currentInput);
-            double result = 0;
-            
-            switch (operator) {
-                case "+": result = firstNumber + secondNumber; break;
-                case "-": result = firstNumber - secondNumber; break;
-                case "*": result = firstNumber * secondNumber; break;
-                case "/": 
-                    if (secondNumber != 0) {
-                        result = firstNumber / secondNumber;
-                    } else {
-                        displayTextView.setText("Error");
-                        return;
-                    }
-                    break;
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        // Refresh camera preview
+        if (camera != null) {
+            try {
+                camera.stopPreview();
+                camera.setPreviewDisplay(holder);
+                camera.startPreview();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            
-            displayTextView.setText(String.valueOf(result));
-            currentInput = String.valueOf(result);
-            operator = "";
-            isNewInput = true;
         }
     }
-    
-    private void clearAll() {
-        currentInput = "";
-        operator = "";
-        firstNumber = 0;
-        isNewInput = true;
-        displayTextView.setText("0");
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        releaseCamera();
+    }
+
+    private void openCamera() {
+        try {
+            releaseCamera();
+            camera = Camera.open(cameraId);
+            camera.setPreviewDisplay(surfaceHolder);
+            
+            Camera.Parameters params = camera.getParameters();
+            params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+            camera.setParameters(params);
+            
+            camera.startPreview();
+            isPreviewShowing = true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Camera error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void releaseCamera() {
+        if (camera != null) {
+            camera.release();
+            camera = null;
+            isPreviewShowing = false;
+        }
+    }
+
+    private void switchCamera() {
+        if (cameraId == Camera.CameraInfo.CAMERA_FACING_BACK) {
+            cameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+        } else {
+            cameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
+        }
+        openCamera();
+    }
+
+    private void takePicture() {
+        if (camera == null) {
+            Toast.makeText(this, "Camera not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        camera.takePicture(null, null, (data, camera1) -> {
+            // Save image to file
+            File pictureFile = getOutputMediaFile();
+            if (pictureFile == null) {
+                Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            try {
+                FileOutputStream fos = new FileOutputStream(pictureFile);
+                fos.write(data);
+                fos.close();
+
+                // Show preview
+                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                imageViewPreview.setImageBitmap(bitmap);
+                imageViewPreview.setVisibility(View.VISIBLE);
+                
+                Toast.makeText(this, "Photo saved: " + pictureFile.getName(), Toast.LENGTH_LONG).show();
+                
+                // Restart preview after 3 seconds
+                imageViewPreview.postDelayed(() -> {
+                    imageViewPreview.setVisibility(View.GONE);
+                    openCamera();
+                }, 3000);
+                
+            } catch (IOException e) {
+                e.printStackTrace();
+                Toast.makeText(this, "Error saving photo", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private File getOutputMediaFile() {
+        File mediaStorageDir = new File(Environment.getExternalStorageDirectory(), 
+                "CameraApp");
+        if (!mediaStorageDir.exists()) {
+            if (!mediaStorageDir.mkdirs()) {
+                return null;
+            }
+        }
+
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        return new File(mediaStorageDir.getPath() + File.separator + "IMG_" + timeStamp + ".jpg");
+    }
+
+    private void openGallery() {
+        imageViewPreview.setVisibility(View.VISIBLE);
+        imageViewPreview.postDelayed(() -> {
+            imageViewPreview.setVisibility(View.GONE);
+            openCamera();
+        }, 5000);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                Toast.makeText(this, "Camera permission required", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
     }
 }
